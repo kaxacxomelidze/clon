@@ -1,6 +1,20 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "builds": [{ "src": "server.js", "use": "@vercel/node" }],
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "public/**",
+          "templates/**",
+          "packages/cloner/dist/**",
+          "packages/cloner/templates/**",
+          "db.js"
+        ]
+      }
+    }
+  ],
   "routes": [{ "src": "/(.*)", "dest": "server.js" }]
 }
