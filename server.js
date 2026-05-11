@@ -1937,11 +1937,24 @@ async function handleRequest(req, res) {
   }
 }
 
-(async () => {
+let _initialized = false;
+async function ensureInit() {
+  if (_initialized) return;
+  _initialized = true;
   await initSettings();
-  createServer(handleRequest).listen(PORT, () => {
-    console.log(`\n🌐 Web Cloner running at: http://localhost:${PORT}\n`);
-  });
   runDunning().catch(() => {});
   setInterval(runDunning, 3600000);
-})();
+}
+
+if (!process.env.VERCEL) {
+  ensureInit().then(() => {
+    createServer(handleRequest).listen(PORT, () => {
+      console.log(`\n🌐 Web Cloner running at: http://localhost:${PORT}\n`);
+    });
+  });
+}
+
+export default async function handler(req, res) {
+  await ensureInit();
+  return handleRequest(req, res);
+}
