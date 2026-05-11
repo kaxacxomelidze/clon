@@ -1,0 +1,88 @@
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+
+let ROUTE_MAP: Record<string, string> = {};
+try {
+  ROUTE_MAP = JSON.parse(readFileSync(join(process.cwd(), 'route-map.json'), 'utf8'));
+} catch { /* missing on first run */ }
+const PAGES_DIR = join(process.cwd(), 'captured-pages');
+const TARGET_ORIGIN = {{{targetOriginJson}}};
+
+const REPLAY_PATCH = `<script>
+(() => {
+  const targetOrigin = ${JSON.stringify(TARGET_ORIGIN)};
+  const localize = (value) => {
+    try {
+      const url = new URL(String(value), window.location.href);
+      if (url.origin === targetOrigin) return url.pathname + url.search + url.hash;
+    } catch {}
+    return value;
+  };
+
+  const nativeFetch = window.fetch;
+  window.fetch = function(input, init) {
+    if (typeof input === 'string' || input instanceof URL) {
+      return nativeFetch.call(this, localize(input), init);
+    }
+    if (input && typeof input === 'object' && 'url' in input) {
+      try { input = new Request(localize(input.url), input); } catch {}
+    }
+    return nativeFetch.call(this, input, init);
+  };
+
+  const nativeOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    return nativeOpen.call(this, method, localize(url), ...rest);
+  };
+
+  if (navigator.sendBeacon) {
+    const nativeBeacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = (url, data) => nativeBeacon(localize(url), data);
+  }
+})();
+</script>`;
+
+function injectReplayPatch(html: string): string {
+  if (html.includes('data-web-cloner-replay')) return html;
+  const patch = REPLAY_PATCH.replace('<script>', '<script data-web-cloner-replay>');
+  if (html.includes('</head>')) return html.replace('</head>', `${patch}</head>`);
+  return patch + html;
+}
+
+// Always render dynamically so each request gets the correct snapshot.
+export const dynamic = 'force-dynamic';
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ slug?: string[] }> },
+) {
+  const { slug } = await params;
+  const pathname = slug && slug.length > 0 ? `/${slug.join('/')}` : '/';
+
+  // Try exact match, then without trailing slash, then fallback to root
+  const filename =
+    ROUTE_MAP[pathname] ??
+    ROUTE_MAP[pathname.replace(/\/$/, '') || '/'] ??
+    ROUTE_MAP['/'];
+
+  if (!filename) {
+    const available = Object.keys(ROUTE_MAP).join(', ');
+    return new Response(
+      `<!doctype html><html lang="en"><head><title>404 — Not captured</title></head><body><h1>404 — Page not captured</h1><p>No snapshot exists for <code>${pathname}</code>.</p><p>Available routes: ${available}</p></body></html>`,
+      { status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } },
+    );
+  }
+
+  const htmlPath = join(PAGES_DIR, filename);
+  if (!existsSync(htmlPath)) {
+    return new Response(
+      `<!doctype html><html lang="en"><body><p>Snapshot file missing: ${filename}</p></body></html>`,
+      { status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } },
+    );
+  }
+
+  const html = injectReplayPatch(readFileSync(htmlPath, 'utf8'));
+  return new Response(html, {
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
+}

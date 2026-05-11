@@ -1,0 +1,10 @@
+node_modules/
+dist/
+output/
+*.db
+.env
+data/
+CLAUDE.zip
+dist-electron/
+.claude/
+browsers/

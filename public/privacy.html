@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy · Web Cloner</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#07071a;color:#e8e8ff;font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.7;padding:0}
+.topbar{height:52px;background:rgba(8,8,8,.95);border-bottom:1px solid #181818;display:flex;align-items:center;padding:0 24px;gap:14px;position:sticky;top:0;z-index:10;backdrop-filter:blur(10px)}
+.logo{display:flex;align-items:center;gap:9px;text-decoration:none}
+.logo-mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#5b8def,#a855f7);display:flex;align-items:center;justify-content:center}
+.logo-mark svg{width:14px;height:14px;color:#fff}
+.logo-name{font-size:13px;font-weight:700;background:linear-gradient(135deg,#5b8def,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.back-btn{margin-left:auto;color:#7a7a7a;font-size:12px;font-weight:600;padding:5px 10px;border:1px solid #222;border-radius:6px;background:#0f0f0f;text-decoration:none}
+.back-btn:hover{color:#f2f2f2;border-color:#2e2e2e}
+.wrap{max-width:760px;margin:0 auto;padding:48px 24px 80px}
+.doc-title{font-size:32px;font-weight:900;letter-spacing:-.6px;margin-bottom:8px}
+.doc-meta{font-size:13px;color:#7a7a7a;margin-bottom:40px}
+h2{font-size:18px;font-weight:800;letter-spacing:-.3px;margin:36px 0 12px;color:#f2f2f2;padding-top:24px;border-top:1px solid #181818}
+h2:first-of-type{border-top:none;padding-top:0}
+p{color:rgba(255,255,255,.6);margin-bottom:14px}
+ul{color:rgba(255,255,255,.6);padding-left:20px;margin-bottom:14px;display:flex;flex-direction:column;gap:6px}
+strong{color:rgba(255,255,255,.85);font-weight:600}
+.highlight{background:rgba(31,209,122,.05);border:1px solid rgba(31,209,122,.1);border-radius:8px;padding:14px 18px;color:rgba(255,255,255,.7);margin-bottom:20px}
+.table-wrap{overflow-x:auto;margin-bottom:20px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#0f0f0f;padding:10px 14px;text-align:left;font-weight:700;color:#7a7a7a;border-bottom:1px solid #181818;white-space:nowrap}
+td{padding:10px 14px;color:rgba(255,255,255,.6);border-bottom:1px solid #181818;vertical-align:top}
+.footer{margin-top:48px;padding-top:24px;border-top:1px solid #181818;color:#3a3a3a;font-size:12px;display:flex;gap:16px;flex-wrap:wrap}
+.footer a{color:#5b8def;text-decoration:none}
+.footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="/">
+    <div class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+    <span class="logo-name">Web Cloner</span>
+  </a>
+  <a href="/" class="back-btn">← Back</a>
+</div>
+<div class="wrap">
+  <div class="doc-title">Privacy Policy</div>
+  <div class="doc-meta">Last updated: May 5, 2026 · GDPR-aligned</div>
+
+  <div class="highlight">
+    We believe in minimal data collection. Web Cloner is a self-hosted tool — your cloned content never leaves your server.
+  </div>
+
+  <h2>1. What We Collect</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>Data</th><th>Why</th><th>Stored where</th></tr>
+      <tr><td><strong>Name &amp; email</strong></td><td>Account creation, communication</td><td>Local server (data/users.json)</td></tr>
+      <tr><td><strong>Password hash</strong></td><td>Authentication (bcrypt, never plaintext)</td><td>Local server</td></tr>
+      <tr><td><strong>Plan &amp; billing info</strong></td><td>Subscription management</td><td>Local server (data/payments.json)</td></tr>
+      <tr><td><strong>Clone history</strong></td><td>Usage tracking, plan limits</td><td>Local server (data/clones.json)</td></tr>
+      <tr><td><strong>IP address</strong></td><td>Rate limiting only (not stored persistently)</td><td>Memory, cleared every 5 min</td></tr>
+    </table>
+  </div>
+
+  <h2>2. What We Don't Collect</h2>
+  <ul>
+    <li>Analytics or tracking cookies</li>
+    <li>Browser fingerprinting</li>
+    <li>Cloned website content (stored only on your device)</li>
+    <li>Third-party advertising data</li>
+  </ul>
+
+  <h2>3. How We Use Your Data</h2>
+  <p>Your data is used exclusively to:</p>
+  <ul>
+    <li>Authenticate and manage your account</li>
+    <li>Enforce plan limits (clone counts, page caps)</li>
+    <li>Send transactional emails (verification, password reset, billing)</li>
+    <li>Process manual payment confirmations</li>
+  </ul>
+  <p>We do <strong>not</strong> sell, share, or rent your personal data to any third party.</p>
+
+  <h2>4. Email Communications</h2>
+  <p>We send emails only for:</p>
+  <ul>
+    <li>Email address verification</li>
+    <li>Password reset requests</li>
+    <li>Subscription expiry and renewal reminders</li>
+    <li>Payment status updates (confirmed/rejected)</li>
+  </ul>
+  <p>We do not send marketing emails unless you explicitly opt in.</p>
+
+  <h2>5. Data Retention</h2>
+  <p>Your data is retained as long as your account is active. You may request deletion by contacting us — we will delete your account and all associated data within 7 days. Clone history and error logs are automatically capped (5,000 and 2,000 records respectively) and older entries are purged automatically.</p>
+
+  <h2>6. Security</h2>
+  <p>Passwords are hashed using <strong>bcrypt</strong> (cost factor 12) — we cannot recover your password. All session tokens are random UUIDs. Rate limiting protects against brute-force attacks. The server should be run behind HTTPS in production.</p>
+
+  <h2>7. Your Rights (GDPR)</h2>
+  <p>If you are in the EU/EEA, you have the right to:</p>
+  <ul>
+    <li><strong>Access</strong> — request a copy of your personal data</li>
+    <li><strong>Correction</strong> — update your name or email in <a href="/dashboard">Dashboard</a></li>
+    <li><strong>Deletion</strong> — request full account deletion</li>
+    <li><strong>Portability</strong> — receive your data in JSON format</li>
+    <li><strong>Object</strong> — object to processing of your data</li>
+  </ul>
+  <p>To exercise these rights, contact us via the email on your account.</p>
+
+  <h2>8. Cookies</h2>
+  <p>Web Cloner does not use cookies. Authentication uses a token stored in <code>localStorage</code> on your device, which you can clear at any time.</p>
+
+  <h2>9. Changes to This Policy</h2>
+  <p>We may update this Privacy Policy occasionally. Material changes will be communicated via email. Continued use of the Service constitutes acceptance.</p>
+
+  <h2>10. Contact</h2>
+  <p>For privacy-related requests, contact us at the email registered on your account. We respond within 48 hours.</p>
+
+  <div class="footer">
+    <span>© 2026 Web Cloner</span>
+    <a href="/tos">Terms of Service</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/">App</a>
+  </div>
+</div>
+</body>
+</html>

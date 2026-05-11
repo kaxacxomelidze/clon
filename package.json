@@ -1,0 +1,25 @@
+{
+  "name": "web-cloner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/cloner",
+    "ui": "node server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.9.0",
+    "dotenv": "^17.4.2",
+    "handlebars": "^4.7.8",
+    "mime-types": "^2.1.35",
+    "nodemailer": "^8.0.7",
+    "playwright": "^1.44.0",
+    "stripe": "^22.1.1"
+  }
+}
