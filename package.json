@@ -3,11 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "build": "npm run build -w packages/cloner",
+    "build": "npm install --prefix packages/cloner && npm run build --prefix packages/cloner",
     "ui": "node server.js",
     "start": "node server.js"
   },

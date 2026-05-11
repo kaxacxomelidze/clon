@@ -12,7 +12,6 @@
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@web-cloner/runtime": "*",
     "commander": "^12.1.0",
     "content-type": "^1.0.5",
     "handlebars": "^4.7.8",
