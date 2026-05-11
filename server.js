@@ -459,7 +459,7 @@ function netlifyAPIRequest(method, path, token, body, contentType) {
 
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
-  const ip = req.socket.remoteAddress || 'unknown';
+  const ip = req.socket?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
   const reqOrigin = req.headers['origin'] || '';
   res.setHeader('Access-Control-Allow-Origin', reqOrigin || '*');
   if (reqOrigin) res.setHeader('Vary', 'Origin');
