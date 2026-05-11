@@ -1,20 +1,10 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "builds": [
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "public/**",
-          "templates/**",
-          "packages/cloner/dist/**",
-          "packages/cloner/templates/**",
-          "db.js"
-        ]
-      }
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,db.js"
     }
-  ],
-  "routes": [{ "src": "/(.*)", "dest": "/api/index.js" }]
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
 }
