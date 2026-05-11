@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
   "functions": {
     "api/index.js": {
       "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,db.js"
