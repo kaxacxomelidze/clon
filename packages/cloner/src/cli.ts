@@ -3,7 +3,7 @@ import { program } from 'commander';
 import { resolve } from 'path';
 import { logger } from './logger.js';
 import { runClone } from './runClone.js';
-import { startServer } from './server.js';
+import { startServer } from './_server.js';
 
 program
   .name('cloner')
