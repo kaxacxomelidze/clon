@@ -841,6 +841,19 @@ function cleanGitPath(input) {
   return cleaned.join('/');
 }
 
+function normalizeTargetUrl(input) {
+  let raw = String(input || '').trim();
+  if (!raw) throw new Error('Enter a website URL');
+  raw = raw.replace(/^https?:\/(?!\/)/i, m => m.toLowerCase() + '/');
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw.replace(/^\/+/, '');
+  const parsed = new URL(raw);
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Use an http or https URL');
+  if (!parsed.hostname || !parsed.hostname.includes('.') || ['http', 'https'].includes(parsed.hostname.toLowerCase())) {
+    throw new Error('Enter a valid website domain');
+  }
+  return parsed;
+}
+
 function listOutputFiles(outDir) {
   const files = [];
   const walk = (dir) => {
@@ -1180,7 +1193,10 @@ async function handleRequest(req, res) {
     req.on('end', async () => {
       let parsed;
       try { parsed = JSON.parse(body); } catch { return json(res, { error: 'bad json' }, 400); }
-      const { url: targetUrl, depth = '3', ignoreRobots = false } = parsed;
+      let target;
+      try { target = normalizeTargetUrl(parsed.url); } catch (err) { return json(res, { error: err.message || 'Invalid URL' }, 400); }
+      const targetUrl = target.href;
+      const { depth = '3', ignoreRobots = false } = parsed;
       let { maxPages = '20' } = parsed;
 
       if (cloneUser) {
@@ -1202,15 +1218,12 @@ async function handleRequest(req, res) {
         maxPages = String(Math.min(parseInt(maxPages, 10) || SERVERLESS_MAX_PAGES, SERVERLESS_MAX_PAGES));
       }
 
-      let origin;
-      try { origin = new URL(targetUrl).origin; } catch { return json(res, { error: 'Invalid URL' }, 400); }
-
       const id = randomUUID();
-      const hostname = new URL(targetUrl).hostname.replace(/\./g, '-');
+      const hostname = target.hostname.replace(/\./g, '-');
       const outDir = resolve(OUTPUT_DIR, `${hostname}-${id.slice(0, 6)}`);
 
       const job = {
-        id, url: targetUrl, hostname: new URL(targetUrl).hostname,
+        id, url: targetUrl, hostname: target.hostname,
         status: 'running', logs: [], outDir,
         startedAt: new Date().toISOString(),
         pages: null, apiRoutes: null, assets: null,
