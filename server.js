@@ -363,9 +363,9 @@ async function persistCloneOutput(outDir) {
   let uploaded = 0;
   let fallbackSaved = 0;
   const failures = [];
-  for (const file of files) {
+  const uploadOne = async (file) => {
     const size = statSync(file.abs).size;
-    if (size > 50 * 1024 * 1024) continue;
+    if (size > 50 * 1024 * 1024) return;
     const storagePath = cloneStoragePath(outDir, file.rel);
     const data = readFileSync(file.abs);
     try {
@@ -382,7 +382,26 @@ async function persistCloneOutput(outDir) {
         }
       }
     }
+  };
+  const runLimited = async (items, limit = 8) => {
+    for (let i = 0; i < items.length; i += limit) {
+      await Promise.all(items.slice(i, i + limit).map(uploadOne));
+    }
+  };
+
+  const criticalFiles = files.filter(file => file.rel === 'route-map.json' || file.rel.startsWith('captured-pages/'));
+  const assetFiles = files.filter(file => !criticalFiles.includes(file));
+  await runLimited(criticalFiles, 8);
+  try {
+    await saveCloneTextFile(cloneFileListStoragePath(outDir), JSON.stringify(criticalFiles.map(file => ({
+      rel: file.rel,
+      size: statSync(file.abs).size,
+      contentType: contentTypeForPath(file.rel),
+    }))));
+  } catch (err) {
+    failures.push(`__files.json critical: ${err?.message || err}`);
   }
+  await runLimited(assetFiles, 8);
   try {
     await saveCloneTextFile(cloneFileListStoragePath(outDir), JSON.stringify(files.map(file => ({
       rel: file.rel,
@@ -528,6 +547,17 @@ async function loadRouteMapAsync(outDir) {
   if (!data) return null;
   try { return JSON.parse(data.toString('utf8')); }
   catch { return null; }
+}
+
+async function verifyCloneReadable(outDir) {
+  const map = await loadRouteMapAsync(outDir);
+  if (!map || !Object.keys(map).length) return { ok: false, error: 'route-map.json is not readable' };
+  for (const filename of Object.values(map)) {
+    if (!filename) return { ok: false, error: 'A captured route has no page file' };
+    const page = await readCloneFile(outDir, join('captured-pages', filename));
+    if (!page || !page.length) return { ok: false, error: `Captured page missing: ${filename}` };
+  }
+  return { ok: true, pages: Object.keys(map).length };
 }
 
 function rewritePreviewAssetUrls(html, outDir) {
@@ -904,10 +934,15 @@ async function handleRequest(req, res) {
     const labelByDir = Object.fromEntries(userClones.filter(c => c.out_dir && c.label).map(c => [c.out_dir, c.label]));
     const localByDir = Object.fromEntries(getOutputs().map(o => [o.dir, o]));
     return json(res, userClones.filter(c => c.out_dir).map(c => ({
+      id: c.id,
       name: c.out_dir.split(/[\\/]/).pop(),
       dir: c.out_dir,
       targetOrigin: c.url,
       capturedAt: c.completed_at || c.started_at,
+      status: c.status,
+      pages: c.pages,
+      assets: c.assets,
+      apiRoutes: c.api_routes,
       ...(localByDir[c.out_dir] || {}),
       label: labelByDir[c.out_dir] || null,
     })));
@@ -1167,6 +1202,17 @@ async function handleRequest(req, res) {
       };
       jobs.set(id, job);
       persistJob(job);
+      try {
+        await insertClone({
+          id: job.id, userId: job.userId, userName: job.userName,
+          url: job.url, outDir: job.outDir, status: job.status,
+          pages: job.pages, assets: job.assets, apiRoutes: job.apiRoutes,
+          startedAt: job.startedAt, completedAt: null,
+        });
+      } catch (dbErr) {
+        job.logs.push(`[WARN] Could not create initial clone record: ${dbErr?.message || dbErr}`);
+        persistJob(job);
+      }
 
       if (cloneUser) audit(cloneUser.id, cloneUser.name, 'clone_start', targetUrl, ip);
 
@@ -1210,18 +1256,24 @@ async function handleRequest(req, res) {
           } catch { job.pages = 0; }
         }
         const completedAt = new Date().toISOString();
+        let cloneReadable = code !== 0 ? { ok: false, error: 'Clone process failed' } : null;
         if (code === 0) {
           try {
             await persistCloneOutput(job.outDir);
+            cloneReadable = await verifyCloneReadable(job.outDir);
+            if (!cloneReadable.ok) {
+              job.logs.push(`[ERROR] Clone output is not ready for preview: ${cloneReadable.error}`);
+            }
           } catch (storageErr) {
             job.logs.push(`[WARN] Could not persist all clone files: ${storageErr?.message || storageErr}`);
+            cloneReadable = { ok: false, error: storageErr?.message || String(storageErr) };
           }
         }
         let cloneRecordSaved = false;
         try {
           await insertClone({
             id: job.id, userId: job.userId, userName: job.userName,
-            url: job.url, outDir: job.outDir, status: code === 0 ? 'done' : 'error',
+            url: job.url, outDir: job.outDir, status: code === 0 && cloneReadable?.ok ? 'done' : 'error',
             pages: job.pages, assets: job.assets, apiRoutes: job.apiRoutes,
             startedAt: job.startedAt, completedAt,
           });
@@ -1229,7 +1281,7 @@ async function handleRequest(req, res) {
         } catch (dbErr) {
           job.logs.push(`[ERROR] Could not save clone record: ${dbErr?.message || dbErr}`);
         }
-        if (code === 0) job.status = cloneRecordSaved ? 'done' : 'error';
+        if (code === 0) job.status = cloneRecordSaved && cloneReadable?.ok ? 'done' : 'error';
         persistJob(job);
         if (code !== 0) {
           try {

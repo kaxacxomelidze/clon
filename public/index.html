@@ -2778,16 +2778,16 @@ async function loadHistory() {
         let hostname = o.name;
         try { hostname = new URL(o.targetOrigin).hostname; } catch {}
         return {
-          id: 'output-' + i,
+          id: o.id || 'output-' + i,
           url: o.targetOrigin || o.name,
           hostname,
           label: o.label || null,
-          status: 'done',
+          status: o.status || 'done',
           logs: [],
           outDir: o.dir,
           startedAt: o.capturedAt || new Date().toISOString(),
           pages: o.pages ?? null,
-          apiRoutes: 0,
+          apiRoutes: o.apiRoutes ?? 0,
           assets: o.assets ?? null,
           fromDisk: true,
         };
