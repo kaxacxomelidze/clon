@@ -1169,14 +1169,16 @@ async function handleRequest(req, res) {
     const { outDir } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(previewUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
     if (IS_VERCEL) {
+      const map = await loadRouteMapAsync(outDir);
+      if (!map) return json(res, { error: 'Preview pages not found' }, 404);
       return json(res, {
         ok: true,
         url: `/api/page?outDir=${encodeURIComponent(outDir)}&route=${encodeURIComponent('/')}`,
         hosted: true,
       });
     }
+    if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
     try {
       const needsInstall = !existsSync(join(outDir, 'node_modules'));
       const cmd = needsInstall ? 'npm install && npm run dev' : 'npm run dev';
@@ -1378,7 +1380,7 @@ async function handleRequest(req, res) {
     const { outDir, route, password, expiresInDays } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(shareUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    const map = loadRouteMap(outDir);
+    const map = await loadRouteMapAsync(outDir);
     if (!map) return json(res, { error: 'No clone found' }, 404);
     const shareId = randomUUID().replace(/-/g, '').slice(0, 14);
     let passwordHash = null, salt = null;
