@@ -11,7 +11,7 @@ import {
   getUserByVerifyToken, getUserByResetToken,
   getUserByGoogleId, getUserByStripeCustomerId, insertOAuthUser,
   getSession, insertSession, deleteSession, deleteUserSessions, cleanExpiredSessions,
-  insertClone, updateCloneLabel, getClonesByUser, getAllClones, deleteCloneById, deleteUserClones, getCloneCountThisMonth,
+  insertClone, updateCloneLabel, updateCloneStatus, getClonesByUser, getAllClones, deleteCloneById, deleteUserClones, getCloneCountThisMonth,
   getAllPayments, getPaymentsByUser, getPaymentById, insertPayment, updatePayment, getPendingPaymentByUserPlan,
   getSettings, saveSettings,
   getShare, insertShare,
@@ -933,19 +933,36 @@ async function handleRequest(req, res) {
     const userClones = await getClonesByUser(user.id);
     const labelByDir = Object.fromEntries(userClones.filter(c => c.out_dir && c.label).map(c => [c.out_dir, c.label]));
     const localByDir = Object.fromEntries(getOutputs().map(o => [o.dir, o]));
-    return json(res, userClones.filter(c => c.out_dir).map(c => ({
+    const normalized = [];
+    for (const c of userClones.filter(c => c.out_dir)) {
+      let status = c.status;
+      let pages = c.pages;
+      if (status === 'done') {
+        const readable = await verifyCloneReadable(c.out_dir).catch(err => ({ ok: false, error: err?.message || String(err) }));
+        if (!readable.ok) {
+          status = 'error';
+          pages = 0;
+          updateCloneStatus({ id: c.id, status: 'error', pages: 0 }).catch(() => {});
+        } else if (readable.pages && readable.pages !== pages) {
+          pages = readable.pages;
+          updateCloneStatus({ id: c.id, pages }).catch(() => {});
+        }
+      }
+      normalized.push({
       id: c.id,
       name: c.out_dir.split(/[\\/]/).pop(),
       dir: c.out_dir,
       targetOrigin: c.url,
       capturedAt: c.completed_at || c.started_at,
-      status: c.status,
-      pages: c.pages,
+      status,
+      pages,
       assets: c.assets,
       apiRoutes: c.api_routes,
       ...(localByDir[c.out_dir] || {}),
       label: labelByDir[c.out_dir] || null,
-    })));
+      });
+    }
+    return json(res, normalized);
   }
   if (req.method === 'GET' && url.pathname === '/api/jobs') {
     const user = await getSessionUser(req);

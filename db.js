@@ -138,6 +138,18 @@ export const updateCloneLabel = async ({ id, label }) => {
   await supabase.from('clones').update({ label: label ?? null }).eq('id', id);
 };
 
+export const updateCloneStatus = async ({ id, status, pages, assets, apiRoutes, completedAt }) => {
+  const update = {};
+  if (status !== undefined) update.status = status;
+  if (pages !== undefined) update.pages = pages;
+  if (assets !== undefined) update.assets = assets;
+  if (apiRoutes !== undefined) update.api_routes = apiRoutes;
+  if (completedAt !== undefined) update.completed_at = completedAt;
+  if (!Object.keys(update).length) return;
+  const { error } = await supabase.from('clones').update(update).eq('id', id);
+  if (error) throw new Error(error.message);
+};
+
 export const getClonesByUser = (userId) =>
   all(supabase.from('clones').select('*').eq('user_id', userId).order('started_at', { ascending: false }));
 
