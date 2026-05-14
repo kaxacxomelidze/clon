@@ -344,7 +344,7 @@ async function ensureCloneFilesBucket() {
     public: false,
     fileSizeLimit: 50 * 1024 * 1024,
   });
-  if (error && !/already exists|duplicate/i.test(error.message || '')) {
+  if (error && !/already exists|already owned|duplicate|resource already exists/i.test(error.message || '')) {
     throw new Error(error.message);
   }
   _cloneBucketReady = true;
@@ -363,6 +363,19 @@ export async function downloadCloneFile(path) {
   const { data, error } = await supabase.storage.from(CLONE_FILES_BUCKET).download(path);
   if (error || !data) return null;
   return Buffer.from(await data.arrayBuffer());
+}
+
+function cloneTextKey(path) {
+  return `clonefile:${path}`;
+}
+
+export async function saveCloneTextFile(path, text) {
+  await supabase.from('settings').upsert({ key: cloneTextKey(path), value: String(text ?? '') });
+}
+
+export async function getCloneTextFile(path) {
+  const { data } = await supabase.from('settings').select('value').eq('key', cloneTextKey(path)).maybeSingle();
+  return data?.value ?? null;
 }
 
 export async function audit(userId, userName, action, details, ip) {
