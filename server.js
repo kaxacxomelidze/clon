@@ -879,7 +879,7 @@ async function handleRequest(req, res) {
 
       const proc = spawn(process.execPath, [CLI, ...args], {
         cwd: __dirname,
-        env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: '0' },
+        env: process.env,
       });
       proc.stdout.on('data', (c) => c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l)));
       proc.stderr.on('data', (c) => c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`)));

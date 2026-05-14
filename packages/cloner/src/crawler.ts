@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import sparticuzChromium from '@sparticuz/chromium';
 import PQueue from 'p-queue';
 import { capturePage } from './capture.js';
 import { logger } from './logger.js';
@@ -83,9 +84,12 @@ export async function crawl(
   const queue = new PQueue({ concurrency: opts.concurrency });
   const records: PageRecord[] = [];
 
+  const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
   const browser = await chromium.launch({
     headless: true,
+    executablePath: isVercel ? await sparticuzChromium.executablePath() : undefined,
     args: [
+      ...(isVercel ? sparticuzChromium.args : []),
       '--disable-blink-features=AutomationControlled',
       '--no-sandbox',
       '--disable-setuid-sandbox',

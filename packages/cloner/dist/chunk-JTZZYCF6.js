@@ -220,6 +220,7 @@ async function checkRobots(targetUrl) {
 
 // src/crawler.ts
 import { chromium } from "playwright";
+import sparticuzChromium from "@sparticuz/chromium";
 
 // node_modules/eventemitter3/index.mjs
 var import_index = __toESM(require_eventemitter3(), 1);
@@ -1594,9 +1595,12 @@ async function crawl(opts, assetsDir, onPage) {
   const visited = /* @__PURE__ */ new Set();
   const queue = new PQueue({ concurrency: opts.concurrency });
   const records = [];
+  const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true";
   const browser = await chromium.launch({
     headless: true,
+    executablePath: isVercel ? await sparticuzChromium.executablePath() : void 0,
     args: [
+      ...isVercel ? sparticuzChromium.args : [],
       "--disable-blink-features=AutomationControlled",
       "--no-sandbox",
       "--disable-setuid-sandbox"
@@ -10330,4 +10334,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-EZABET3L.js.map
+//# sourceMappingURL=chunk-JTZZYCF6.js.map

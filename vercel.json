@@ -2,7 +2,8 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,packages/cloner/node_modules/playwright-core/.local-browsers/**,db.js"
+      "maxDuration": 60,
+      "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,packages/cloner/node_modules/@sparticuz/chromium/**,db.js"
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]

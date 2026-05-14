@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
-    "build": "npm install --prefix packages/cloner && node scripts/install-playwright.mjs && npm run build --prefix packages/cloner",
+    "build": "npm install --prefix packages/cloner && npm run build --prefix packages/cloner",
     "ui": "node server.js",
     "start": "node server.js"
   },
