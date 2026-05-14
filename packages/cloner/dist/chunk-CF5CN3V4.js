@@ -919,11 +919,12 @@ window.hbspt = window.hbspt || {};
 window.hbspt.forms = window.hbspt.forms || {};
 window.hbspt.forms.create = window.hbspt.forms.create || function () {};
 `;
-var NAVIGATION_TIMEOUT = 3e4;
-var ROUTE_FETCH_TIMEOUT = 15e3;
+var IS_SERVERLESS = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+var NAVIGATION_TIMEOUT = IS_SERVERLESS ? 12e3 : 3e4;
+var ROUTE_FETCH_TIMEOUT = IS_SERVERLESS ? 5e3 : 15e3;
 var USER_AGENT2 = "WebCloner/0.1 (+local archival)";
-var MAX_ASSET_BYTES = 50 * 1024 * 1024;
-var MAX_CSS_BYTES = 25 * 1024 * 1024;
+var MAX_ASSET_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
+var MAX_CSS_BYTES = (IS_SERVERLESS ? 5 : 25) * 1024 * 1024;
 var TRANSPARENT_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax3p9QAAAAASUVORK5CYII=",
   "base64"
@@ -1231,7 +1232,7 @@ async function capturePage(context, pageUrl, assetsDir) {
     try {
       await page.goto(pageUrl, { waitUntil: "load", timeout: NAVIGATION_TIMEOUT });
       logger.debug(`  [NAV] load fired for ${pageUrl}`);
-      await page.waitForLoadState("networkidle", { timeout: 15e3 }).catch(() => {
+      await page.waitForLoadState("networkidle", { timeout: IS_SERVERLESS ? 2e3 : 15e3 }).catch(() => {
       });
       logger.debug(`  [NAV] networkidle settled for ${pageUrl}`);
     } catch (err) {
@@ -1242,28 +1243,28 @@ async function capturePage(context, pageUrl, assetsDir) {
     }
     await page.evaluate(() => document.fonts.ready).catch(() => {
     });
-    await page.evaluate(async () => {
+    await page.evaluate(async (fast) => {
       const delay = (ms) => new Promise((r) => setTimeout(r, ms));
       const step = Math.max(window.innerHeight, 400);
       const started = Date.now();
-      const maxSteps = 28;
+      const maxSteps = fast ? 8 : 28;
       let y = 0;
       let steps = 0;
-      while (y < document.body.scrollHeight && steps < maxSteps && Date.now() - started < 6e3) {
+      while (y < document.body.scrollHeight && steps < maxSteps && Date.now() - started < (fast ? 1200 : 6e3)) {
         window.scrollTo(0, y);
-        await delay(80);
+        await delay(fast ? 30 : 80);
         y += step;
         steps++;
       }
       window.scrollTo(0, document.body.scrollHeight);
-      await delay(120);
+      await delay(fast ? 40 : 120);
       window.scrollTo(0, 0);
-    });
+    }, IS_SERVERLESS);
     try {
       await page.waitForFunction(() => {
         const imgs = Array.from(document.querySelectorAll('img[loading="lazy"], img[data-src]'));
         return imgs.every((img) => img.complete);
-      }, void 0, { timeout: 2e3 });
+      }, void 0, { timeout: IS_SERVERLESS ? 600 : 2e3 });
     } catch {
     }
     const domAssetUrls = await page.evaluate(() => {
@@ -1306,13 +1307,14 @@ async function capturePage(context, pageUrl, assetsDir) {
     if (domAssetUrls.length > 0) {
       logger.debug(`  [DOM ASSETS] ${domAssetUrls.length} lazy/data asset refs found`);
     }
-    for (const u of domAssetUrls) {
+    const domAssetUrlsToFetch = IS_SERVERLESS ? domAssetUrls.slice(0, 30) : domAssetUrls;
+    for (const u of domAssetUrlsToFetch) {
       if (!assetMap.has(u) && !shouldSkipAsset(u) && !ABORT_PATTERNS.some((p) => p.test(u))) {
         pendingAssets.push(async () => {
           try {
             const absUrl = new URL(u, pageUrl).href;
             if (assetMap.has(absUrl)) return;
-            const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(1e4) });
+            const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3e3 : 1e4) });
             if (r.ok) {
               const contentType = r.headers.get("content-type") ?? "";
               if (contentType.includes("text/html")) {
@@ -1356,13 +1358,14 @@ async function capturePage(context, pageUrl, assetsDir) {
     if (inlineStyleUrls.length > 0) {
       logger.debug(`  [INLINE CSS] ${inlineStyleUrls.length} url() refs in inline styles`);
     }
-    for (const u of inlineStyleUrls) {
+    const inlineStyleUrlsToFetch = IS_SERVERLESS ? inlineStyleUrls.slice(0, 20) : inlineStyleUrls;
+    for (const u of inlineStyleUrlsToFetch) {
       if (!assetMap.has(u) && !shouldSkipAsset(u) && !ABORT_PATTERNS.some((p) => p.test(u))) {
         pendingAssets.push(async () => {
           try {
             const absUrl = new URL(u, pageUrl).href;
             if (assetMap.has(absUrl)) return;
-            const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(1e4) });
+            const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3e3 : 1e4) });
             if (r.ok) {
               const contentType = r.headers.get("content-type") ?? "";
               if (contentType.includes("text/html")) {
@@ -1385,7 +1388,7 @@ async function capturePage(context, pageUrl, assetsDir) {
         });
       }
     }
-    const PENDING_BATCH = 10;
+    const PENDING_BATCH = IS_SERVERLESS ? 4 : 10;
     let failedPending = 0;
     let pendingIndex = 0;
     while (pendingIndex < pendingAssets.length) {
@@ -1414,7 +1417,7 @@ async function capturePage(context, pageUrl, assetsDir) {
         logger.debug(`  [CSS REWRITE ERR] ${sourceUrl}: ${err.message}`);
       }
     }
-    try {
+    if (!IS_SERVERLESS) try {
       const interactiveSelectors = [
         '[role="tab"]',
         "[data-toggle]",
@@ -1455,9 +1458,9 @@ async function capturePage(context, pageUrl, assetsDir) {
       }
     } catch {
     }
-    await page.waitForLoadState("networkidle", { timeout: 8e3 }).catch(() => {
+    await page.waitForLoadState("networkidle", { timeout: IS_SERVERLESS ? 1e3 : 8e3 }).catch(() => {
     });
-    if (cmsJsonStubs.size > 0) {
+    if (!IS_SERVERLESS && cmsJsonStubs.size > 0) {
       logger.debug(`  [TWO-PASS] ${cmsJsonStubs.size} CMS JSON stub(s) detected; reloading for clean snapshot`);
       try {
         await page.goto(pageUrl, { waitUntil: "load", timeout: NAVIGATION_TIMEOUT });
@@ -1529,8 +1532,9 @@ async function capturePage(context, pageUrl, assetsDir) {
 }
 
 // src/crawler.ts
-var NAV_DELAY_MS = 250;
-var PAGE_CAPTURE_TIMEOUT = 18e4;
+var IS_SERVERLESS2 = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+var NAV_DELAY_MS = IS_SERVERLESS2 ? 50 : 250;
+var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 18e3 : 18e4;
 var USER_AGENT3 = "WebCloner/0.1 (+local archival)";
 var TRACKING_PARAM = /^(utm_|fbclid|gclid|msclkid|_ga|_gl|mc_eid|yclid|dclid|zanpid|igshid|twclid|li_fat_id|ttclid)/i;
 var AUTH_PATH = /^\/(login|logout|signin|sign-in|sign-out|signout|register|signup|sign-up|forgot-password|reset-password|change-password|verify-email|confirm-email|auth|oauth|sso|account\/activate|account\/confirm)(\/|$|\?)/i;
@@ -1564,7 +1568,7 @@ async function fetchSitemap(origin) {
         if (fetchedSitemaps.has(nestedUrl)) continue;
         fetchedSitemaps.add(nestedUrl);
         try {
-          const r = await fetch(nestedUrl, { headers: { "User-Agent": USER_AGENT3 }, signal: AbortSignal.timeout(8e3) });
+          const r = await fetch(nestedUrl, { headers: { "User-Agent": USER_AGENT3 }, signal: AbortSignal.timeout(IS_SERVERLESS2 ? 3e3 : 8e3) });
           if (r.ok) await parseSitemapText(nestedUrl, await r.text());
         } catch {
         }
@@ -1578,7 +1582,7 @@ async function fetchSitemap(origin) {
     if (fetchedSitemaps.has(url)) continue;
     fetchedSitemaps.add(url);
     try {
-      const res = await fetch(url, { headers: { "User-Agent": USER_AGENT3 }, signal: AbortSignal.timeout(8e3) });
+      const res = await fetch(url, { headers: { "User-Agent": USER_AGENT3 }, signal: AbortSignal.timeout(IS_SERVERLESS2 ? 3e3 : 8e3) });
       if (!res.ok) continue;
       await parseSitemapText(url, await res.text());
       if (found.length > 0) {
@@ -1595,12 +1599,11 @@ async function crawl(opts, assetsDir, onPage) {
   const visited = /* @__PURE__ */ new Set();
   const queue = new PQueue({ concurrency: opts.concurrency });
   const records = [];
-  const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true";
   const browser = await chromium.launch({
     headless: true,
-    executablePath: isVercel ? await sparticuzChromium.executablePath() : void 0,
+    executablePath: IS_SERVERLESS2 ? await sparticuzChromium.executablePath() : void 0,
     args: [
-      ...isVercel ? sparticuzChromium.args : [],
+      ...IS_SERVERLESS2 ? sparticuzChromium.args : [],
       "--disable-blink-features=AutomationControlled",
       "--no-sandbox",
       "--disable-setuid-sandbox"
@@ -10334,4 +10337,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-JTZZYCF6.js.map
+//# sourceMappingURL=chunk-CF5CN3V4.js.map

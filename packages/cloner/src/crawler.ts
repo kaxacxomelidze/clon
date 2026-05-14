@@ -5,8 +5,9 @@ import { capturePage } from './capture.js';
 import { logger } from './logger.js';
 import type { ClonerOptions, PageRecord } from './types.js';
 
-const NAV_DELAY_MS = 250;
-const PAGE_CAPTURE_TIMEOUT = 180_000; // 3 min hard cap per page
+const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+const NAV_DELAY_MS = IS_SERVERLESS ? 50 : 250;
+const PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS ? 18_000 : 180_000; // Vercel functions have a hard wall clock limit.
 const USER_AGENT = 'WebCloner/0.1 (+local archival)';
 
 // Strip common tracking/UTM query params so the same page isn't crawled multiple times
@@ -48,7 +49,7 @@ async function fetchSitemap(origin: string): Promise<string[]> {
         if (fetchedSitemaps.has(nestedUrl)) continue;
         fetchedSitemaps.add(nestedUrl);
         try {
-          const r = await fetch(nestedUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(8000) });
+          const r = await fetch(nestedUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 8_000) });
           if (r.ok) await parseSitemapText(nestedUrl, await r.text());
         } catch { /* skip unreachable child sitemap */ }
       }
@@ -62,7 +63,7 @@ async function fetchSitemap(origin: string): Promise<string[]> {
     if (fetchedSitemaps.has(url)) continue;
     fetchedSitemaps.add(url);
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(8000) });
+      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 8_000) });
       if (!res.ok) continue;
       await parseSitemapText(url, await res.text());
       if (found.length > 0) {
@@ -84,12 +85,11 @@ export async function crawl(
   const queue = new PQueue({ concurrency: opts.concurrency });
   const records: PageRecord[] = [];
 
-  const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
   const browser = await chromium.launch({
     headless: true,
-    executablePath: isVercel ? await sparticuzChromium.executablePath() : undefined,
+    executablePath: IS_SERVERLESS ? await sparticuzChromium.executablePath() : undefined,
     args: [
-      ...(isVercel ? sparticuzChromium.args : []),
+      ...(IS_SERVERLESS ? sparticuzChromium.args : []),
       '--disable-blink-features=AutomationControlled',
       '--no-sandbox',
       '--disable-setuid-sandbox',

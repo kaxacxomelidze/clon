@@ -3131,8 +3131,13 @@ async function runPreview() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     const url = data.url || 'http://localhost:3000';
-    toast(`Starting dev server… opening ${url} in a few seconds`, 'ok');
-    setTimeout(() => window.open(url, '_blank'), 4000);
+    if (data.hosted) {
+      toast('Opening hosted preview', 'ok');
+      window.open(url, '_blank');
+    } else {
+      toast(`Starting dev server... opening ${url} in a few seconds`, 'ok');
+      setTimeout(() => window.open(url, '_blank'), 4000);
+    }
   } catch (e) {
     toast('Preview failed: ' + e.message, 'err');
   }

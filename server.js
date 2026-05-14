@@ -68,6 +68,8 @@ const PLAN_LIMITS = {
   pro:        { clonesPerMonth: 100,      maxPages: 200 },
   enterprise: { clonesPerMonth: Infinity, maxPages: 500 },
 };
+const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+const SERVERLESS_MAX_PAGES = 5;
 const PLAN_PRICES = {
   starter:    { monthly: 13,  annual: 112  },
   pro:        { monthly: 49,  annual: 422  },
@@ -854,6 +856,9 @@ async function handleRequest(req, res) {
         if (!checkRateLimit(`clone_anon:${ip}`, 2, 86400000)) return json(res, { error: 'Rate limit exceeded. Sign in for more clones.' }, 429);
         maxPages = String(Math.min(parseInt(maxPages, 10) || 20, PLAN_LIMITS.free.maxPages));
       }
+      if (IS_VERCEL) {
+        maxPages = String(Math.min(parseInt(maxPages, 10) || SERVERLESS_MAX_PAGES, SERVERLESS_MAX_PAGES));
+      }
 
       let origin;
       try { origin = new URL(targetUrl).origin; } catch { return json(res, { error: 'Invalid URL' }, 400); }
@@ -980,6 +985,13 @@ async function handleRequest(req, res) {
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(previewUser, outDir)) return json(res, { error: 'Not found' }, 404);
     if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
+    if (IS_VERCEL) {
+      return json(res, {
+        ok: true,
+        url: `/api/page?outDir=${encodeURIComponent(outDir)}&route=${encodeURIComponent('/')}`,
+        hosted: true,
+      });
+    }
     try {
       const needsInstall = !existsSync(join(outDir, 'node_modules'));
       const cmd = needsInstall ? 'npm install && npm run dev' : 'npm run dev';

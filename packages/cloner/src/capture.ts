@@ -123,11 +123,12 @@ window.hbspt.forms = window.hbspt.forms || {};
 window.hbspt.forms.create = window.hbspt.forms.create || function () {};
 `;
 
-const NAVIGATION_TIMEOUT = 30_000;
-const ROUTE_FETCH_TIMEOUT = 15_000;
+const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+const NAVIGATION_TIMEOUT = IS_SERVERLESS ? 12_000 : 30_000;
+const ROUTE_FETCH_TIMEOUT = IS_SERVERLESS ? 5_000 : 15_000;
 const USER_AGENT = 'WebCloner/0.1 (+local archival)';
-const MAX_ASSET_BYTES = 50 * 1024 * 1024; // Keep larger media and download assets in full-site clones.
-const MAX_CSS_BYTES = 25 * 1024 * 1024; // CSS bundles can be larger than media icons/fonts.
+const MAX_ASSET_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024; // Keep serverless clones inside Vercel limits.
+const MAX_CSS_BYTES = (IS_SERVERLESS ? 5 : 25) * 1024 * 1024; // CSS bundles can be larger than media icons/fonts.
 const TRANSPARENT_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax3p9QAAAAASUVORK5CYII=',
   'base64',
@@ -509,7 +510,7 @@ export async function capturePage(
     await page.goto(pageUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUT });
     logger.debug(`  [NAV] load fired for ${pageUrl}`);
     // Wait for networkidle - aborted beacon patterns above help this settle quickly
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IS_SERVERLESS ? 2_000 : 15_000 }).catch(() => {});
     logger.debug(`  [NAV] networkidle settled for ${pageUrl}`);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -523,30 +524,30 @@ export async function capturePage(
 
   // Scroll to trigger lazy-loaded images and content.
   // Re-check scrollHeight each step - some sites (infinite scroll, lazy sections) grow the page as you scroll.
-  await page.evaluate(async () => {
+  await page.evaluate(async (fast: boolean) => {
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const step = Math.max(window.innerHeight, 400);
     const started = Date.now();
-    const maxSteps = 28;
+    const maxSteps = fast ? 8 : 28;
     let y = 0;
     let steps = 0;
-    while (y < document.body.scrollHeight && steps < maxSteps && Date.now() - started < 6_000) {
+    while (y < document.body.scrollHeight && steps < maxSteps && Date.now() - started < (fast ? 1_200 : 6_000)) {
       window.scrollTo(0, y);
-      await delay(80);
+      await delay(fast ? 30 : 80);
       y += step;
       steps++;
     }
     window.scrollTo(0, document.body.scrollHeight);
-    await delay(120);
+    await delay(fast ? 40 : 120);
     window.scrollTo(0, 0);
-  });
+  }, IS_SERVERLESS);
 
   // Wait for lazy images to finish loading
   try {
     await page.waitForFunction(() => {
       const imgs = Array.from(document.querySelectorAll('img[loading="lazy"], img[data-src]'));
       return imgs.every((img) => (img as HTMLImageElement).complete);
-    }, undefined, { timeout: 2_000 });
+    }, undefined, { timeout: IS_SERVERLESS ? 600 : 2_000 });
   } catch { /* timeout is fine */ }
 
   // Some sites keep images/videos only in lazy data-* attributes until custom JS runs.
@@ -600,13 +601,14 @@ export async function capturePage(
     logger.debug(`  [DOM ASSETS] ${domAssetUrls.length} lazy/data asset refs found`);
   }
 
-  for (const u of domAssetUrls) {
+  const domAssetUrlsToFetch = IS_SERVERLESS ? domAssetUrls.slice(0, 30) : domAssetUrls;
+  for (const u of domAssetUrlsToFetch) {
     if (!assetMap.has(u) && !shouldSkipAsset(u) && !ABORT_PATTERNS.some((p) => p.test(u))) {
       pendingAssets.push(async () => {
         try {
           const absUrl = new URL(u, pageUrl).href;
           if (assetMap.has(absUrl)) return;
-          const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10_000) });
+          const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 10_000) });
           if (r.ok) {
             const contentType = r.headers.get('content-type') ?? '';
             if (contentType.includes('text/html')) {
@@ -651,13 +653,14 @@ export async function capturePage(
     logger.debug(`  [INLINE CSS] ${inlineStyleUrls.length} url() refs in inline styles`);
   }
 
-  for (const u of inlineStyleUrls) {
+  const inlineStyleUrlsToFetch = IS_SERVERLESS ? inlineStyleUrls.slice(0, 20) : inlineStyleUrls;
+  for (const u of inlineStyleUrlsToFetch) {
     if (!assetMap.has(u) && !shouldSkipAsset(u) && !ABORT_PATTERNS.some((p) => p.test(u))) {
       pendingAssets.push(async () => {
         try {
           const absUrl = new URL(u, pageUrl).href;
           if (assetMap.has(absUrl)) return;
-          const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10_000) });
+          const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 10_000) });
           if (r.ok) {
             const contentType = r.headers.get('content-type') ?? '';
             if (contentType.includes('text/html')) {
@@ -682,7 +685,7 @@ export async function capturePage(
   }
 
   // Fetch pending CSS-referenced assets in batches to avoid OOM from too many parallel fetches
-  const PENDING_BATCH = 10;
+  const PENDING_BATCH = IS_SERVERLESS ? 4 : 10;
   let failedPending = 0;
   let pendingIndex = 0;
   while (pendingIndex < pendingAssets.length) {
@@ -716,7 +719,7 @@ export async function capturePage(
   }
 
   // -- Interaction pass: click tabs/accordions/nav to surface more API calls ----
-  try {
+  if (!IS_SERVERLESS) try {
     const interactiveSelectors = [
       '[role="tab"]',
       '[data-toggle]',
@@ -757,12 +760,12 @@ export async function capturePage(
   } catch { /* interaction pass is best-effort */ }
 
   // Final networkidle wait after scroll + interaction
-  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: IS_SERVERLESS ? 1_000 : 8_000 }).catch(() => {});
 
   // Two-pass: if a pageerror caused by CMS JSON was detected on the first load,
   // reload the page now that those URLs are stubbed as {} so the JS doesn't crash
   // and the HTML snapshot reflects a clean render.
-  if (cmsJsonStubs.size > 0) {
+  if (!IS_SERVERLESS && cmsJsonStubs.size > 0) {
     logger.debug(`  [TWO-PASS] ${cmsJsonStubs.size} CMS JSON stub(s) detected; reloading for clean snapshot`);
     try {
       await page.goto(pageUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUT });
