@@ -6,7 +6,7 @@ import { rewriteHtml } from './rewriter.js';
 import { analyzeTraffic } from './analyzer.js';
 import { generateNextApp, safeName } from './generator.js';
 import { initLogger, logger, setLogSink } from './logger.js';
-import type { ClonerOptions, Manifest } from './types.js';
+import type { AssetEntry, ClonerOptions, Manifest } from './types.js';
 
 export interface CloneRunEvents {
   onLog?: (line: string) => void;
@@ -68,9 +68,18 @@ export async function runClone(options: ClonerOptions, events: CloneRunEvents = 
     logger.info('\nCrawling...');
     let pagesCompleted = 0;
     const rewriteStats: Array<{ url: string; assets: number; network: number }> = [];
+    const globalAssets = new Map<string, AssetEntry>();
 
     const records = await crawl(opts, assetsDir, (page) => {
-      page.html = rewriteHtml(page, targetOrigin);
+      const assetsForRewrite = [
+        ...globalAssets.values(),
+        ...page.assets,
+      ];
+      page.html = rewriteHtml({ ...page, assets: assetsForRewrite }, targetOrigin);
+      for (const asset of page.assets) {
+        globalAssets.set(asset.originalUrl, asset);
+        globalAssets.set(asset.originalUrl.split('?')[0].split('#')[0], asset);
+      }
       pagesCompleted++;
       rewriteStats.push({ url: page.url, assets: page.assets.length, network: page.network.length });
       logger.info(`  [${pagesCompleted}/${opts.maxPages}] ✓ ${page.url}  (assets: ${page.assets.length}, network: ${page.network.length})`);

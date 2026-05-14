@@ -10289,8 +10289,17 @@ Web Cloner v0.1`);
     logger.info("\nCrawling...");
     let pagesCompleted = 0;
     const rewriteStats = [];
+    const globalAssets = /* @__PURE__ */ new Map();
     const records = await crawl(opts, assetsDir, (page) => {
-      page.html = rewriteHtml(page, targetOrigin);
+      const assetsForRewrite = [
+        ...globalAssets.values(),
+        ...page.assets
+      ];
+      page.html = rewriteHtml({ ...page, assets: assetsForRewrite }, targetOrigin);
+      for (const asset of page.assets) {
+        globalAssets.set(asset.originalUrl, asset);
+        globalAssets.set(asset.originalUrl.split("?")[0].split("#")[0], asset);
+      }
       pagesCompleted++;
       rewriteStats.push({ url: page.url, assets: page.assets.length, network: page.network.length });
       logger.info(`  [${pagesCompleted}/${opts.maxPages}] \u2713 ${page.url}  (assets: ${page.assets.length}, network: ${page.network.length})`);
@@ -10397,4 +10406,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-B4W4Q52U.js.map
+//# sourceMappingURL=chunk-S63AITO2.js.map
