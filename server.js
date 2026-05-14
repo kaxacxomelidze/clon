@@ -311,6 +311,10 @@ function cloneStoragePath(outDir, relPath) {
   return `${cloneStoragePrefix(outDir)}/${String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '')}`;
 }
 
+function cloneFileListStoragePath(outDir) {
+  return cloneStoragePath(outDir, '__files.json');
+}
+
 function contentTypeForPath(filePath) {
   const ext = filePath.match(/\.\w+$/)?.[0]?.toLowerCase();
   return {
@@ -379,6 +383,15 @@ async function persistCloneOutput(outDir) {
       }
     }
   }
+  try {
+    await saveCloneTextFile(cloneFileListStoragePath(outDir), JSON.stringify(files.map(file => ({
+      rel: file.rel,
+      size: statSync(file.abs).size,
+      contentType: contentTypeForPath(file.rel),
+    }))));
+  } catch (err) {
+    failures.push(`__files.json: ${err?.message || err}`);
+  }
   console.log(`[clone storage] uploaded ${uploaded}/${files.length} files, fallback=${fallbackSaved} for ${outDir}`);
   if (failures.length) console.warn(`[clone storage] ${failures.slice(0, 5).join(' | ')}`);
 }
@@ -394,6 +407,31 @@ async function readCloneFile(outDir, relPath) {
     if (text != null) return Buffer.from(text, 'utf8');
   }
   return null;
+}
+
+async function writeCloneFile(outDir, relPath, bytes, contentType = contentTypeForPath(relPath)) {
+  const normalized = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(String(bytes ?? ''), 'utf8');
+  if (!normalized || normalized.includes('..')) throw new Error('Invalid clone file path');
+  const localPath = join(outDir, normalized);
+  if (isInsideOutputDir(localPath) && existsSync(outDir)) {
+    mkdirSync(dirname(localPath), { recursive: true });
+    writeFileSync(localPath, buffer);
+  }
+  const storagePath = cloneStoragePath(outDir, normalized);
+  try {
+    await uploadCloneFile(storagePath, buffer, contentType);
+  } catch {
+    if (contentType.startsWith('text/') || contentType.includes('json')) {
+      await saveCloneTextFile(storagePath, buffer.toString('utf8'));
+    } else {
+      throw new Error('Could not persist clone file');
+    }
+  }
+  const files = await readPersistedCloneFileList(outDir);
+  const next = files.filter(f => f.rel !== normalized);
+  next.push({ rel: normalized, size: buffer.length, contentType });
+  await saveCloneTextFile(cloneFileListStoragePath(outDir), JSON.stringify(next));
 }
 
 function jobStoragePath(id) {
@@ -415,6 +453,63 @@ async function readPersistedJob(id) {
   const raw = await getCloneTextFile(jobStoragePath(id)).catch(() => null);
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
+}
+
+async function readPersistedCloneFileList(outDir) {
+  const raw = await getCloneTextFile(cloneFileListStoragePath(outDir)).catch(() => null);
+  if (!raw) {
+    const map = await loadRouteMapAsync(outDir);
+    if (!map) return [];
+    const rels = new Set(['route-map.json']);
+    for (const filename of Object.values(map)) {
+      if (filename) rels.add(`captured-pages/${String(filename).replace(/\\/g, '/')}`);
+    }
+    for (const rel of [...rels].filter(r => r.startsWith('captured-pages/'))) {
+      const data = await readCloneFile(outDir, rel);
+      const html = data ? data.toString('utf8') : '';
+      for (const match of html.matchAll(/["'(]\/_assets\/([^"'()?#]+)/g)) {
+        try { rels.add(`public/_assets/${decodeURIComponent(match[1])}`); }
+        catch { rels.add(`public/_assets/${match[1]}`); }
+      }
+    }
+    return [...rels].map(rel => ({ rel, size: 0, contentType: contentTypeForPath(rel) }));
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter(f => f?.rel && !String(f.rel).includes('..')).map(f => ({ ...f, rel: String(f.rel).replace(/\\/g, '/') }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function materializeCloneOutput(outDir) {
+  if (!isInsideOutputDir(outDir)) throw new Error('Invalid output folder');
+  if (existsSync(outDir)) return { dir: outDir, cleanup: () => {} };
+  const files = await readPersistedCloneFileList(outDir);
+  if (!files.length) throw new Error('Output folder not found');
+  const tempDir = join(OUTPUT_DIR, `__materialized_${randomUUID().slice(0, 8)}`);
+  mkdirSync(tempDir, { recursive: true });
+  try {
+    for (const file of files) {
+      const rel = String(file.rel || '').replace(/\\/g, '/').replace(/^\/+/, '');
+      if (!rel || rel.includes('..')) continue;
+      const data = await readCloneFile(outDir, rel);
+      if (!data) continue;
+      const dest = join(tempDir, rel);
+      if (!isInsideOutputDir(dest)) continue;
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, data);
+    }
+    return {
+      dir: tempDir,
+      cleanup: () => { try { rmSync(tempDir, { recursive: true, force: true }); } catch {} },
+    };
+  } catch (err) {
+    try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    throw err;
+  }
 }
 
 function loadRouteMap(outDir) {
@@ -625,22 +720,24 @@ function runProcess(file, args, opts = {}) {
 
 async function buildOutputZip(outDir) {
   if (!isInsideOutputDir(outDir)) throw new Error('Invalid output folder');
-  if (!existsSync(outDir)) throw new Error('Output folder not found');
+  const materialized = await materializeCloneOutput(outDir);
   const zipName = `${outDir.split(/[\\/]/).pop()}.zip`;
   const zipPath = join(OUTPUT_DIR, zipName);
   try { rmSync(zipPath, { force: true }); } catch {}
   try {
-    await runProcess('tar', ['-a', '-c', '-f', zipPath, '-C', outDir, '.']);
+    await runProcess('tar', ['-a', '-c', '-f', zipPath, '-C', materialized.dir, '.']);
   } catch {
     if (process.platform !== 'win32') {
-      await runProcess('zip', ['-qr', zipPath, '.'], { cwd: outDir });
+      await runProcess('zip', ['-qr', zipPath, '.'], { cwd: materialized.dir });
     } else {
       await runProcess('powershell', [
         '-NoProfile', '-Command',
         'Get-ChildItem -LiteralPath $args[0] -Force | Compress-Archive -DestinationPath $args[1] -Force',
-        outDir, zipPath,
+        materialized.dir, zipPath,
       ]);
     }
+  } finally {
+    materialized.cleanup();
   }
   if (!existsSync(zipPath)) throw new Error('ZIP was not created');
   return { zipName, zipPath };
@@ -948,16 +1045,7 @@ async function handleRequest(req, res) {
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const filename = map[route || '/'];
       if (!filename) return json(res, { error: 'Route not found' }, 404);
-      const htmlPath = join(outDir, 'captured-pages', filename);
-      if (!isInsideOutputDir(htmlPath)) return json(res, { error: 'Invalid path' }, 400);
-      mkdirSync(dirname(htmlPath), { recursive: true });
-      writeFileSync(htmlPath, String(html ?? ''), 'utf8');
-      const storagePath = cloneStoragePath(outDir, join('captured-pages', filename));
-      try {
-        await uploadCloneFile(storagePath, Buffer.from(String(html ?? ''), 'utf8'), 'text/html; charset=utf-8');
-      } catch {
-        await saveCloneTextFile(storagePath, String(html ?? ''));
-      }
+      await writeCloneFile(outDir, join('captured-pages', filename), String(html ?? ''), 'text/html; charset=utf-8');
       json(res, { ok: true });
     }).catch(() => json(res, { error: 'bad json' }, 400));
     return;
@@ -969,7 +1057,16 @@ async function handleRequest(req, res) {
     readJsonBody(req).then(async ({ outDir, kind }) => {
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
       if (!await userOwnsOutDir(authPageUser, outDir)) return json(res, { error: 'Not found' }, 404);
-      const page = writeAuthPage(outDir, kind === 'register' ? 'register' : 'login');
+      const pageKind = kind === 'register' ? 'register' : 'login';
+      const map = await loadRouteMapAsync(outDir);
+      if (!map) return json(res, { error: 'No clone loaded' }, 404);
+      const route = pageKind === 'register' ? '/register' : '/login';
+      const filename = routeFilename(route);
+      map[route] = filename;
+      const html = authPageHtml(outDir.split(/[\\/]/).pop() || 'site', pageKind);
+      await writeCloneFile(outDir, join('captured-pages', filename), html, 'text/html; charset=utf-8');
+      await writeCloneFile(outDir, 'route-map.json', JSON.stringify(map, null, 2), 'application/json');
+      const page = { route, filename };
       json(res, { ok: true, ...page });
     }).catch((err) => json(res, { error: err instanceof Error ? err.message : 'bad json' }, 400));
     return;
@@ -987,9 +1084,8 @@ async function handleRequest(req, res) {
       if (bytes.length > 50 * 1024 * 1024) return json(res, { error: 'File is larger than 50MB' }, 400);
       const assetsDir = join(outDir, 'public', '_assets');
       if (!isInsideOutputDir(assetsDir)) return json(res, { error: 'Invalid asset path' }, 400);
-      mkdirSync(assetsDir, { recursive: true });
       const assetName = `user-${randomUUID().slice(0, 8)}${extensionForAsset(filename, match[1])}`;
-      writeFileSync(join(assetsDir, assetName), bytes);
+      await writeCloneFile(outDir, join('public', '_assets', assetName), bytes, match[1]);
       json(res, { ok: true, path: `/_assets/${assetName}`, mimeType: match[1], size: bytes.length });
     }).catch(() => json(res, { error: 'bad json' }, 400));
     return;
@@ -1204,7 +1300,6 @@ async function handleRequest(req, res) {
     const { outDir } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(zipUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
     try {
       const { zipName, zipPath } = await buildOutputZip(outDir);
       return json(res, { ok: true, zipPath, folder: OUTPUT_DIR });
@@ -1218,7 +1313,6 @@ async function handleRequest(req, res) {
     const outDir = url.searchParams.get('outDir') || '';
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(dlUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
     try {
       const { zipName, zipPath } = await buildOutputZip(outDir);
       res.writeHead(200, {
@@ -1289,80 +1383,84 @@ async function handleRequest(req, res) {
       const { outDir, token, repo, branch = 'main', targetPath = '', commitMessage = '', cleanTarget = false } = await readJsonBody(req, 200_000);
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
       if (!await userOwnsOutDir(ghUser, outDir)) return json(res, { error: 'Not found' }, 404);
-      if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
       if (!token || String(token).length < 20) return json(res, { error: 'GitHub token is required' }, 400);
       const parsedRepo = parseGitHubRepo(repo);
       if (!parsedRepo) return json(res, { error: 'Enter a GitHub repo as owner/repo or a github.com URL' }, 400);
       const cleanBranch = String(branch || 'main').trim();
       if (!/^[A-Za-z0-9._/-]+$/.test(cleanBranch) || cleanBranch.includes('..')) return json(res, { error: 'Invalid branch name' }, 400);
-      const prefix = cleanGitPath(targetPath);
-      const files = listOutputFiles(outDir);
-      if (!files.length) return json(res, { error: 'No files found in output folder' }, 400);
-      if (files.length > 5000) return json(res, { error: `Too many files for one GitHub commit (${files.length}/5000). Try a smaller clone.` }, 400);
-      const tooLarge = files.find(f => f.size > 95 * 1024 * 1024);
-      if (tooLarge) return json(res, { error: `File is too large for GitHub API: ${tooLarge.rel}` }, 400);
-
-      const { owner, repo: repoName } = parsedRepo;
-      const refPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/ref/heads/${cleanBranch.split('/').map(encodeURIComponent).join('/')}`;
-      const repoInfo = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`, token);
-      let ref;
+      const materialized = await materializeCloneOutput(outDir);
       try {
-        ref = await githubAPIRequest('GET', refPath, token);
-      } catch {
-        const defaultBranch = repoInfo.body.default_branch || 'main';
-        const defaultRef = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/ref/heads/${encodeURIComponent(defaultBranch)}`, token);
-        await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/refs`, token, {
-          ref: `refs/heads/${cleanBranch}`,
-          sha: defaultRef.body.object.sha,
-        });
-        ref = await githubAPIRequest('GET', refPath, token);
-      }
+        const prefix = cleanGitPath(targetPath);
+        const files = listOutputFiles(materialized.dir);
+        if (!files.length) return json(res, { error: 'No files found in output folder' }, 400);
+        if (files.length > 5000) return json(res, { error: `Too many files for one GitHub commit (${files.length}/5000). Try a smaller clone.` }, 400);
+        const tooLarge = files.find(f => f.size > 95 * 1024 * 1024);
+        if (tooLarge) return json(res, { error: `File is too large for GitHub API: ${tooLarge.rel}` }, 400);
 
-      const baseCommitSha = ref.body.object.sha;
-      const baseCommit = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/commits/${baseCommitSha}`, token);
-      const baseTreeSha = baseCommit.body.tree.sha;
-      const entries = [];
-      const nextPaths = new Set();
-      for (const file of files) {
-        const gitPath = prefix ? `${prefix}/${file.rel}` : file.rel;
-        nextPaths.add(gitPath);
-        const blob = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/blobs`, token, {
-          content: readFileSync(file.abs).toString('base64'),
-          encoding: 'base64',
-        });
-        entries.push({ path: gitPath, mode: '100644', type: 'blob', sha: blob.body.sha });
-      }
+        const { owner, repo: repoName } = parsedRepo;
+        const refPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/ref/heads/${cleanBranch.split('/').map(encodeURIComponent).join('/')}`;
+        const repoInfo = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`, token);
+        let ref;
+        try {
+          ref = await githubAPIRequest('GET', refPath, token);
+        } catch {
+          const defaultBranch = repoInfo.body.default_branch || 'main';
+          const defaultRef = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/ref/heads/${encodeURIComponent(defaultBranch)}`, token);
+          await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/refs`, token, {
+            ref: `refs/heads/${cleanBranch}`,
+            sha: defaultRef.body.object.sha,
+          });
+          ref = await githubAPIRequest('GET', refPath, token);
+        }
 
-      if (cleanTarget) {
-        const tree = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/trees/${baseTreeSha}?recursive=1`, token);
-        for (const item of tree.body.tree || []) {
-          if (item.type !== 'blob') continue;
-          const inTarget = prefix ? item.path === prefix || item.path.startsWith(`${prefix}/`) : true;
-          if (inTarget && !nextPaths.has(item.path)) {
-            entries.push({ path: item.path, mode: '100644', type: 'blob', sha: null });
+        const baseCommitSha = ref.body.object.sha;
+        const baseCommit = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/commits/${baseCommitSha}`, token);
+        const baseTreeSha = baseCommit.body.tree.sha;
+        const entries = [];
+        const nextPaths = new Set();
+        for (const file of files) {
+          const gitPath = prefix ? `${prefix}/${file.rel}` : file.rel;
+          nextPaths.add(gitPath);
+          const blob = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/blobs`, token, {
+            content: readFileSync(file.abs).toString('base64'),
+            encoding: 'base64',
+          });
+          entries.push({ path: gitPath, mode: '100644', type: 'blob', sha: blob.body.sha });
+        }
+
+        if (cleanTarget) {
+          const tree = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/trees/${baseTreeSha}?recursive=1`, token);
+          for (const item of tree.body.tree || []) {
+            if (item.type !== 'blob') continue;
+            const inTarget = prefix ? item.path === prefix || item.path.startsWith(`${prefix}/`) : true;
+            if (inTarget && !nextPaths.has(item.path)) {
+              entries.push({ path: item.path, mode: '100644', type: 'blob', sha: null });
+            }
           }
         }
-      }
 
-      const newTree = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/trees`, token, {
-        base_tree: baseTreeSha,
-        tree: entries,
-      });
-      const message = String(commitMessage || '').trim() || `Import Web Cloner output (${outDir.split(/[\\/]/).pop()})`;
-      const commit = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/commits`, token, {
-        message,
-        tree: newTree.body.sha,
-        parents: [baseCommitSha],
-      });
-      await githubAPIRequest('PATCH', refPath, token, { sha: commit.body.sha, force: false });
-      return json(res, {
-        ok: true,
-        files: files.length,
-        branch: cleanBranch,
-        targetPath: prefix,
-        commitUrl: commit.body.html_url,
-        repoUrl: repoInfo.body.html_url,
-      });
+        const newTree = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/trees`, token, {
+          base_tree: baseTreeSha,
+          tree: entries,
+        });
+        const message = String(commitMessage || '').trim() || `Import Web Cloner output (${outDir.split(/[\\/]/).pop()})`;
+        const commit = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/commits`, token, {
+          message,
+          tree: newTree.body.sha,
+          parents: [baseCommitSha],
+        });
+        await githubAPIRequest('PATCH', refPath, token, { sha: commit.body.sha, force: false });
+        return json(res, {
+          ok: true,
+          files: files.length,
+          branch: cleanBranch,
+          targetPath: prefix,
+          commitUrl: commit.body.html_url,
+          repoUrl: repoInfo.body.html_url,
+        });
+      } finally {
+        materialized.cleanup();
+      }
     } catch(err) {
       return json(res, { error: err.message }, githubErrorStatus(err));
     }
@@ -1376,6 +1474,11 @@ async function handleRequest(req, res) {
     if (!await userOwnsOutDir(deleteUser, outDir)) return json(res, { error: 'Not found' }, 404);
     try {
       if (existsSync(outDir)) rmSync(outDir, { recursive: true, force: true });
+      for (const [id, job] of jobs.entries()) {
+        if (job.outDir === outDir) jobs.delete(id);
+      }
+      const clone = await getCloneByOutDir(outDir).catch(() => null);
+      if (clone?.id) await deleteCloneById(clone.id);
       return json(res, { ok: true });
     } catch(err) { return json(res, { error: err.message }, 500); }
   }
@@ -1430,13 +1533,15 @@ async function handleRequest(req, res) {
       const hash = createHash('sha256').update(share.salt + pw + 'wc_share_2025').digest('hex');
       if (hash !== share.password_hash) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.')); return; }
     }
-    const map = loadRouteMap(share.out_dir);
+    const map = await loadRouteMapAsync(share.out_dir);
     if (!map) { res.writeHead(404); res.end('Clone no longer exists'); return; }
     const filename = map[share.route] || map['/'];
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
-    const htmlPath = join(share.out_dir, 'captured-pages', filename);
-    if (!isInsideOutputDir(htmlPath) || !existsSync(htmlPath)) { res.writeHead(404); res.end('Page file missing'); return; }
-    return serveFile(res, htmlPath, 'text/html; charset=utf-8');
+    const data = await readCloneFile(share.out_dir, join('captured-pages', filename));
+    if (!data) { res.writeHead(404); res.end('Page file missing'); return; }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir));
+    return;
   }
 
   // ── Admin ──────────────────────────────────────────────────────────────────
@@ -2280,15 +2385,16 @@ async function handleRequest(req, res) {
     if (!netlifyToken) return json(res, { error: 'Netlify personal access token is required' }, 400);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(deployUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
 
     const deployTmp = join(OUTPUT_DIR, `__deploy_${randomUUID().slice(0,8)}`);
     const zipPath = deployTmp + '.zip';
+    let materialized = null;
     try {
+      materialized = await materializeCloneOutput(outDir);
       mkdirSync(deployTmp, { recursive: true });
-      const routeMapPath = join(outDir, 'route-map.json');
-      const capturedPagesDir = join(outDir, 'captured-pages');
-      const assetsDir = join(outDir, 'public', '_assets');
+      const routeMapPath = join(materialized.dir, 'route-map.json');
+      const capturedPagesDir = join(materialized.dir, 'captured-pages');
+      const assetsDir = join(materialized.dir, 'public', '_assets');
 
       if (existsSync(routeMapPath) && existsSync(capturedPagesDir)) {
         const routeMap = JSON.parse(readFileSync(routeMapPath, 'utf8'));
@@ -2340,6 +2446,7 @@ async function handleRequest(req, res) {
     } catch(err) {
       return json(res, { error: err.message }, 500);
     } finally {
+      if (materialized) materialized.cleanup();
       try { rmSync(deployTmp, { recursive: true, force: true }); } catch {}
       try { rmSync(zipPath); } catch {}
     }
