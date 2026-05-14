@@ -1189,7 +1189,7 @@ async function handleRequest(req, res) {
         if (code !== 0) {
           job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
         }
-        job.status = code === 0 ? 'done' : 'error';
+        job.status = code === 0 ? 'saving' : 'error';
         persistJob(job);
         if (code === 0) { invalidateOutputsCache(); }
         const findNum = (pat) => {
@@ -1217,15 +1217,20 @@ async function handleRequest(req, res) {
             job.logs.push(`[WARN] Could not persist all clone files: ${storageErr?.message || storageErr}`);
           }
         }
-        persistJob(job);
+        let cloneRecordSaved = false;
         try {
           await insertClone({
             id: job.id, userId: job.userId, userName: job.userName,
-            url: job.url, outDir: job.outDir, status: job.status,
+            url: job.url, outDir: job.outDir, status: code === 0 ? 'done' : 'error',
             pages: job.pages, assets: job.assets, apiRoutes: job.apiRoutes,
             startedAt: job.startedAt, completedAt,
           });
-        } catch {}
+          cloneRecordSaved = true;
+        } catch (dbErr) {
+          job.logs.push(`[ERROR] Could not save clone record: ${dbErr?.message || dbErr}`);
+        }
+        if (code === 0) job.status = cloneRecordSaved ? 'done' : 'error';
+        persistJob(job);
         if (code !== 0) {
           try {
             const errorLines = job.logs.filter(l => l.startsWith('[ERROR]') || l.toLowerCase().includes('error'));
