@@ -144,6 +144,9 @@ export const getClonesByUser = (userId) =>
 export const getAllClones = () =>
   all(supabase.from('clones').select('*').order('started_at', { ascending: false }));
 
+export const getCloneByOutDir = (outDir) =>
+  one(supabase.from('clones').select('*').eq('out_dir', outDir));
+
 export const deleteCloneById = async (id) => {
   await supabase.from('clones').delete().eq('id', id);
 };
@@ -331,6 +334,36 @@ export const getAllAnnouncements = () =>
   all(supabase.from('announcements').select('*').order('created_at', { ascending: false }));
 
 // ── Audit helper ──────────────────────────────────────────────────────────────
+
+const CLONE_FILES_BUCKET = 'clone-files';
+let _cloneBucketReady = false;
+
+async function ensureCloneFilesBucket() {
+  if (_cloneBucketReady) return;
+  const { error } = await supabase.storage.createBucket(CLONE_FILES_BUCKET, {
+    public: false,
+    fileSizeLimit: 50 * 1024 * 1024,
+  });
+  if (error && !/already exists|duplicate/i.test(error.message || '')) {
+    throw new Error(error.message);
+  }
+  _cloneBucketReady = true;
+}
+
+export async function uploadCloneFile(path, bytes, contentType = 'application/octet-stream') {
+  await ensureCloneFilesBucket();
+  const { error } = await supabase.storage
+    .from(CLONE_FILES_BUCKET)
+    .upload(path, bytes, { contentType, upsert: true });
+  if (error) throw new Error(error.message);
+}
+
+export async function downloadCloneFile(path) {
+  await ensureCloneFilesBucket();
+  const { data, error } = await supabase.storage.from(CLONE_FILES_BUCKET).download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
 
 export async function audit(userId, userName, action, details, ip) {
   try {

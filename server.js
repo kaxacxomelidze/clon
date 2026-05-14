@@ -19,6 +19,7 @@ import {
   getAllErrors, insertError, deleteError, clearErrors, pruneErrors,
   insertAudit, getAuditLog, getAuditCount, audit,
   insertAnnouncement, getAllAnnouncements,
+  getCloneByOutDir, uploadCloneFile, downloadCloneFile,
 } from './db.js';
 
 const _cjsRequire = createRequire(import.meta.url);
@@ -287,12 +288,96 @@ function isInsideOutputDir(candidate) {
   return resolved === base || resolved.startsWith(base + '\\') || resolved.startsWith(base + '/');
 }
 
+function cloneStoragePrefix(outDir) {
+  return createHash('sha1').update(String(outDir || '')).digest('hex').slice(0, 24);
+}
+
+function cloneStoragePath(outDir, relPath) {
+  return `${cloneStoragePrefix(outDir)}/${String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '')}`;
+}
+
+function contentTypeForPath(filePath) {
+  const ext = filePath.match(/\.\w+$/)?.[0]?.toLowerCase();
+  return {
+    '.html': 'text/html; charset=utf-8',
+    '.json': 'application/json',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.png': 'image/png',
+    '.ico': 'image/x-icon',
+    '.svg': 'image/svg+xml',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.eot': 'application/vnd.ms-fontobject',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.avif': 'image/avif',
+  }[ext] || 'application/octet-stream';
+}
+
+async function persistCloneOutput(outDir) {
+  if (!isInsideOutputDir(outDir) || !existsSync(outDir)) return;
+  const files = [];
+  const addFile = (rel) => {
+    const abs = join(outDir, rel);
+    if (existsSync(abs) && statSync(abs).isFile()) files.push({ rel: rel.replace(/\\/g, '/'), abs });
+  };
+  addFile('route-map.json');
+  const walk = (baseRel) => {
+    const baseAbs = join(outDir, baseRel);
+    if (!existsSync(baseAbs)) return;
+    for (const entry of readdirSync(baseAbs, { withFileTypes: true })) {
+      const rel = join(baseRel, entry.name);
+      const abs = join(outDir, rel);
+      if (entry.isDirectory()) walk(rel);
+      else if (entry.isFile()) files.push({ rel: rel.replace(/\\/g, '/'), abs });
+    }
+  };
+  walk('captured-pages');
+  walk(join('public', '_assets'));
+
+  let uploaded = 0;
+  for (const file of files) {
+    const size = statSync(file.abs).size;
+    if (size > 50 * 1024 * 1024) continue;
+    await uploadCloneFile(cloneStoragePath(outDir, file.rel), readFileSync(file.abs), contentTypeForPath(file.rel));
+    uploaded++;
+  }
+  console.log(`[clone storage] uploaded ${uploaded}/${files.length} files for ${outDir}`);
+}
+
+async function readCloneFile(outDir, relPath) {
+  const localPath = join(outDir, relPath);
+  if (isInsideOutputDir(localPath) && existsSync(localPath)) return readFileSync(localPath);
+  return downloadCloneFile(cloneStoragePath(outDir, relPath));
+}
+
 function loadRouteMap(outDir) {
   if (!isInsideOutputDir(outDir)) return null;
   const mapPath = join(outDir, 'route-map.json');
   if (!existsSync(mapPath)) return null;
   try { return JSON.parse(readFileSync(mapPath, 'utf8')); }
   catch { return null; }
+}
+
+async function loadRouteMapAsync(outDir) {
+  const local = loadRouteMap(outDir);
+  if (local) return local;
+  if (!isInsideOutputDir(outDir)) return null;
+  const data = await downloadCloneFile(cloneStoragePath(outDir, 'route-map.json'));
+  if (!data) return null;
+  try { return JSON.parse(data.toString('utf8')); }
+  catch { return null; }
+}
+
+function rewritePreviewAssetUrls(html, outDir) {
+  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&path=`;
+  return String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
 }
 
 function htmlEsc(value) {
@@ -440,6 +525,8 @@ async function canReadOutDir(user, outDir) {
   for (const job of jobs.values()) {
     if (job.userId === null && job.outDir === outDir) return true;
   }
+  const clone = await getCloneByOutDir(outDir).catch(() => null);
+  if (clone && clone.user_id == null) return true;
   return false;
 }
 
@@ -625,13 +712,34 @@ async function handleRequest(req, res) {
     res.writeHead(404); res.end(); return;
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/asset') {
+    const assetUser = await getSessionUser(req);
+    const outDir = url.searchParams.get('outDir') || '';
+    const relPath = String(url.searchParams.get('path') || '').replace(/^\/+/, '');
+    if (!isInsideOutputDir(outDir) || !relPath.startsWith('_assets/')) return json(res, { error: 'Invalid asset' }, 400);
+    const readable = await canReadOutDir(assetUser, outDir) || !!(await getCloneByOutDir(outDir).catch(() => null));
+    if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
+    const data = await readCloneFile(outDir, join('public', relPath));
+    if (!data) { res.writeHead(404); res.end('Not found'); return; }
+    res.writeHead(200, { 'Content-Type': contentTypeForPath(relPath), 'Cache-Control': 'public, max-age=3600' });
+    res.end(data);
+    return;
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/outputs') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
     const userClones = await getClonesByUser(user.id);
     const labelByDir = Object.fromEntries(userClones.filter(c => c.out_dir && c.label).map(c => [c.out_dir, c.label]));
-    const userOutDirs = new Set(userClones.map(c => c.out_dir).filter(Boolean));
-    return json(res, getOutputs().filter(o => userOutDirs.has(o.dir)).map(o => ({ ...o, label: labelByDir[o.dir] || null })));
+    const localByDir = Object.fromEntries(getOutputs().map(o => [o.dir, o]));
+    return json(res, userClones.filter(c => c.out_dir).map(c => ({
+      name: c.out_dir.split(/[\\/]/).pop(),
+      dir: c.out_dir,
+      targetOrigin: c.url,
+      capturedAt: c.completed_at || c.started_at,
+      ...(localByDir[c.out_dir] || {}),
+      label: labelByDir[c.out_dir] || null,
+    })));
   }
   if (req.method === 'GET' && url.pathname === '/api/jobs') {
     const user = await getSessionUser(req);
@@ -733,6 +841,7 @@ async function handleRequest(req, res) {
       const now = new Date().toISOString();
       writeFileSync(join(outDir, 'manifest.json'), JSON.stringify({ targetOrigin: `builder:${safeId}`, capturedAt: now, pages: [] }, null, 2), 'utf8');
       await insertClone({ id, userId: templateUser.id, userName: templateUser.name, url: `builder:${safeId}`, outDir, status: 'completed', pages: 1, assets: 0, apiRoutes: 0, startedAt: now, completedAt: now });
+      try { await persistCloneOutput(outDir); } catch {}
       invalidateOutputsCache();
       json(res, { ok: true, outDir });
     }).catch(() => json(res, { error: 'bad json' }, 400));
@@ -744,7 +853,7 @@ async function handleRequest(req, res) {
     const outDir = url.searchParams.get('outDir');
     if (!outDir) return json(res, []);
     if (!await canReadOutDir(pagesUser, outDir)) return json(res, { error: pagesUser ? 'Not found' : 'Not authenticated' }, pagesUser ? 404 : 401);
-    const map = loadRouteMap(outDir);
+    const map = await loadRouteMapAsync(outDir);
     if (!map) return json(res, []);
     return json(res, Object.keys(map));
   }
@@ -758,13 +867,15 @@ async function handleRequest(req, res) {
       res.writeHead(404); res.end('Not found'); return;
     }
     const route = url.searchParams.get('route') || '/';
-    const map = loadRouteMap(outDir);
+    const map = await loadRouteMapAsync(outDir);
     if (!map) { res.writeHead(404); res.end('No clone loaded'); return; }
     const filename = map[route] || map['/'];
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
-    const htmlPath = join(outDir, 'captured-pages', filename);
-    if (!isInsideOutputDir(htmlPath) || !existsSync(htmlPath)) { res.writeHead(404); res.end('File missing'); return; }
-    return serveFile(res, htmlPath, 'text/html; charset=utf-8');
+    const data = await readCloneFile(outDir, join('captured-pages', filename));
+    if (!data) { res.writeHead(404); res.end('File missing'); return; }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(rewritePreviewAssetUrls(data.toString('utf8'), outDir));
+    return;
   }
 
   if (req.method === 'POST' && url.pathname === '/api/save-page') {
@@ -773,13 +884,15 @@ async function handleRequest(req, res) {
     if ((saveUser.plan || 'free') === 'free') return json(res, { error: 'Visual editor requires a paid plan. Upgrade to edit pages.' }, 403);
     readJsonBody(req).then(async ({ outDir, route, html }) => {
       if (!await userOwnsOutDir(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
-      const map = loadRouteMap(outDir);
+      const map = await loadRouteMapAsync(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const filename = map[route || '/'];
       if (!filename) return json(res, { error: 'Route not found' }, 404);
       const htmlPath = join(outDir, 'captured-pages', filename);
       if (!isInsideOutputDir(htmlPath)) return json(res, { error: 'Invalid path' }, 400);
+      mkdirSync(dirname(htmlPath), { recursive: true });
       writeFileSync(htmlPath, String(html ?? ''), 'utf8');
+      await uploadCloneFile(cloneStoragePath(outDir, join('captured-pages', filename)), Buffer.from(String(html ?? ''), 'utf8'), 'text/html; charset=utf-8');
       json(res, { ok: true });
     }).catch(() => json(res, { error: 'bad json' }, 400));
     return;
@@ -892,7 +1005,7 @@ async function handleRequest(req, res) {
         if (code !== 0) {
           job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
         }
-        job.status = code === 0 ? 'done' : 'error';
+        job.status = code === 0 ? 'saving' : 'error';
         if (code === 0) { invalidateOutputsCache(); }
         const findNum = (pat) => {
           const line = job.logs.find((l) => l.includes(pat));
@@ -912,6 +1025,15 @@ async function handleRequest(req, res) {
           } catch { job.pages = 0; }
         }
         const completedAt = new Date().toISOString();
+        if (code === 0) {
+          try {
+            await persistCloneOutput(job.outDir);
+            job.status = 'done';
+          } catch (storageErr) {
+            job.status = 'error';
+            job.logs.push(`[ERROR] Could not persist clone files: ${storageErr?.message || storageErr}`);
+          }
+        }
         try {
           await insertClone({
             id: job.id, userId: job.userId, userName: job.userName,
