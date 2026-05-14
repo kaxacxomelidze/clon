@@ -381,6 +381,27 @@ async function readCloneFile(outDir, relPath) {
   return null;
 }
 
+function jobStoragePath(id) {
+  return `job:${id}`;
+}
+
+function jobSnapshot(job) {
+  return {
+    ...job,
+    logs: Array.isArray(job.logs) ? job.logs.slice(-500) : [],
+  };
+}
+
+function persistJob(job) {
+  saveCloneTextFile(jobStoragePath(job.id), JSON.stringify(jobSnapshot(job))).catch(() => {});
+}
+
+async function readPersistedJob(id) {
+  const raw = await getCloneTextFile(jobStoragePath(id)).catch(() => null);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
 function loadRouteMap(outDir) {
   if (!isInsideOutputDir(outDir)) return null;
   const mapPath = join(outDir, 'route-map.json');
