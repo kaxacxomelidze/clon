@@ -1,15 +1,25 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables');
+let _supabase = null;
+function getSupabase() {
+  if (_supabase) return _supabase;
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables');
+  }
+  _supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY,
+    { auth: { persistSession: false } }
+  );
+  return _supabase;
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY,
-  { auth: { persistSession: false } }
-);
+const supabase = new Proxy({}, {
+  get(_target, prop) {
+    return getSupabase()[prop];
+  },
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -197,6 +207,9 @@ const SETTINGS_DEFAULTS = {
 };
 
 export async function getSettings() {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    return { ...SETTINGS_DEFAULTS, smtp_secure: false };
+  }
   const { data } = await supabase.from('settings').select('key,value');
   const result = { ...SETTINGS_DEFAULTS };
   for (const { key, value } of (data || [])) result[key] = value;
