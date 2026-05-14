@@ -997,7 +997,7 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/api/status') {
     const id = url.searchParams.get('id');
-    const job = jobs.get(id);
+    const job = jobs.get(id) || await readPersistedJob(id);
     if (!job) return json(res, { error: 'not found' }, 404);
     const statusUser = await getSessionUser(req);
     const statusUserId = statusUser ? statusUser.id : null;
@@ -1054,6 +1054,7 @@ async function handleRequest(req, res) {
         userName: cloneUser ? cloneUser.name : 'Anonymous',
       };
       jobs.set(id, job);
+      persistJob(job);
 
       if (cloneUser) audit(cloneUser.id, cloneUser.name, 'clone_start', targetUrl, ip);
 
@@ -1064,13 +1065,20 @@ async function handleRequest(req, res) {
         cwd: __dirname,
         env: process.env,
       });
-      proc.stdout.on('data', (c) => c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l)));
-      proc.stderr.on('data', (c) => c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`)));
+      proc.stdout.on('data', (c) => {
+        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));
+        persistJob(job);
+      });
+      proc.stderr.on('data', (c) => {
+        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`));
+        persistJob(job);
+      });
       proc.on('close', async (code, signal) => {
         if (code !== 0) {
           job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
         }
         job.status = code === 0 ? 'done' : 'error';
+        persistJob(job);
         if (code === 0) { invalidateOutputsCache(); }
         const findNum = (pat) => {
           const line = job.logs.find((l) => l.includes(pat));
@@ -1097,6 +1105,7 @@ async function handleRequest(req, res) {
             job.logs.push(`[WARN] Could not persist all clone files: ${storageErr?.message || storageErr}`);
           }
         }
+        persistJob(job);
         try {
           await insertClone({
             id: job.id, userId: job.userId, userName: job.userName,

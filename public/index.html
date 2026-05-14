@@ -2939,7 +2939,9 @@ function startPolling(jobId) {
   pollInterval = setInterval(async () => {
     if (activeJobId !== jobId) { clearPolling(); return; }
     try {
-      const job = await apiFetch(`/api/status?id=${jobId}`).then(r => r.json());
+      const res = await apiFetch(`/api/status?id=${jobId}`);
+      const job = await res.json();
+      if (!res.ok || job.error || !job.id) throw new Error(job.error || 'Status unavailable');
       updateJobView(job);
     } catch {}
   }, 1000);
