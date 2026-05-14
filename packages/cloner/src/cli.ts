@@ -16,7 +16,7 @@ program
   .option('-o, --out <dir>', 'Output directory', './output/site')
   .option('-m, --max-pages <n>', 'Max pages to crawl', '50')
   .option('-d, --depth <n>', 'Max link depth', '3')
-  .option('-c, --concurrency <n>', 'Concurrent browser contexts', '2')
+  .option('-c, --concurrency <n>', 'Concurrent browser contexts', '1')
   .option('--ignore-robots', 'Skip robots.txt check', false)
   .option('-v, --verbose', 'Print DEBUG lines to console (all detail goes to log file regardless)', false)
   .action(async (url: string, options: {

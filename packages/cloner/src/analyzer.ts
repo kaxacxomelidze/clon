@@ -81,6 +81,12 @@ export function analyzeTraffic(entries: NetworkEntry[], targetOrigin: string): A
     // Drop GET HTML pages (navigations, not API calls). Keep non-GET HTML-ish form
     // responses because old backends often submit to .php/.asp endpoints.
     if (e.method.toUpperCase() === 'GET' && e.contentType?.includes('text/html')) return false;
+    if (e.method.toUpperCase() === 'GET' && (
+      e.contentType?.includes('text/css') ||
+      e.contentType?.includes('javascript') ||
+      e.contentType?.startsWith('image/') ||
+      e.contentType?.startsWith('font/')
+    )) return false;
     if (SKIP_PATTERNS.some((p) => p.test(e.url))) return false;
     try {
       const u = new URL(e.url);

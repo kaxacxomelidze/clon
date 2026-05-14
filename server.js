@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { spawn } from 'child_process';
 import { randomUUID, createHash } from 'crypto';
-import { resolve, join, dirname } from 'path';
+import { resolve, join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync, createReadStream, copyFileSync } from 'fs';
 import { request as httpsRequest } from 'https';
@@ -63,7 +63,7 @@ setInterval(async () => { try { await cleanExpiredSessions(Date.now()); } catch 
 
 // ── Plan limits ────────────────────────────────────────────────────────────────
 const PLAN_LIMITS = {
-  free:       { clonesPerMonth: 3,        maxPages: 10  },
+  free:       { clonesPerMonth: 3,        maxPages: 20  },
   starter:    { clonesPerMonth: 15,       maxPages: 30  },
   pro:        { clonesPerMonth: 100,      maxPages: 200 },
   enterprise: { clonesPerMonth: Infinity, maxPages: 500 },
@@ -432,6 +432,15 @@ async function userOwnsOutDir(user, outDir) {
   return clones.some(c => c.out_dir === outDir);
 }
 
+async function canReadOutDir(user, outDir) {
+  if (!outDir) return false;
+  if (user) return userOwnsOutDir(user, outDir);
+  for (const job of jobs.values()) {
+    if (job.userId === null && job.outDir === outDir) return true;
+  }
+  return false;
+}
+
 function netlifyAPIRequest(method, path, token, body, contentType) {
   return new Promise((resolve, reject) => {
     const isBuffer = Buffer.isBuffer(body);
@@ -455,6 +464,117 @@ function netlifyAPIRequest(method, path, token, body, contentType) {
     req.write(body);
     req.end();
   });
+}
+
+function runProcess(file, args, opts = {}) {
+  return new Promise((resolvePromise, reject) => {
+    const p = spawn(file, args, { stdio: 'ignore', ...opts });
+    p.on('error', reject);
+    p.on('close', code => code === 0 ? resolvePromise() : reject(new Error(`${file} exited ${code}`)));
+  });
+}
+
+async function buildOutputZip(outDir) {
+  if (!isInsideOutputDir(outDir)) throw new Error('Invalid output folder');
+  if (!existsSync(outDir)) throw new Error('Output folder not found');
+  const zipName = `${outDir.split(/[\\/]/).pop()}.zip`;
+  const zipPath = join(OUTPUT_DIR, zipName);
+  try { rmSync(zipPath, { force: true }); } catch {}
+  try {
+    await runProcess('tar', ['-a', '-c', '-f', zipPath, '-C', outDir, '.']);
+  } catch {
+    if (process.platform !== 'win32') {
+      await runProcess('zip', ['-qr', zipPath, '.'], { cwd: outDir });
+    } else {
+      await runProcess('powershell', [
+        '-NoProfile', '-Command',
+        'Get-ChildItem -LiteralPath $args[0] -Force | Compress-Archive -DestinationPath $args[1] -Force',
+        outDir, zipPath,
+      ]);
+    }
+  }
+  if (!existsSync(zipPath)) throw new Error('ZIP was not created');
+  return { zipName, zipPath };
+}
+
+function githubAPIRequest(method, path, token, body = null) {
+  return new Promise((resolvePromise, reject) => {
+    const payload = body == null ? null : Buffer.from(JSON.stringify(body));
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'web-cloner',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+    if (payload) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = payload.length;
+    }
+    const req = httpsRequest({ hostname: 'api.github.com', port: 443, path, method, headers }, (r) => {
+      const chunks = [];
+      r.on('data', c => chunks.push(c));
+      r.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let parsed = {};
+        try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { message: text }; }
+        if (r.statusCode >= 200 && r.statusCode < 300) {
+          resolvePromise({ status: r.statusCode, body: parsed });
+        } else {
+          reject(new Error(parsed.message || `GitHub API HTTP ${r.statusCode}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+function parseGitHubRepo(input) {
+  const raw = String(input || '').trim();
+  let match = raw.match(/^https?:\/\/github\.com\/([^/]+)\/([^/#?]+?)(?:\.git)?(?:[/?#].*)?$/i);
+  if (!match) match = raw.match(/^([^/\s]+)\/([^/\s]+)$/);
+  if (!match) return null;
+  const owner = match[1];
+  const repo = match[2].replace(/\.git$/i, '');
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) return null;
+  return { owner, repo };
+}
+
+function cleanGitPath(input) {
+  const cleaned = String(input || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .filter(Boolean);
+  if (cleaned.some(part => part === '.' || part === '..')) throw new Error('Invalid GitHub path');
+  return cleaned.join('/');
+}
+
+function listOutputFiles(outDir) {
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (['node_modules', '.next', '.git'].includes(entry.name)) continue;
+        walk(abs);
+      } else if (entry.isFile()) {
+        const rel = relative(outDir, abs).replace(/\\/g, '/');
+        files.push({ abs, rel, size: statSync(abs).size });
+      }
+    }
+  };
+  walk(outDir);
+  return files;
+}
+
+function githubErrorStatus(err) {
+  const msg = String(err?.message || '');
+  if (/bad credentials|requires authentication/i.test(msg)) return 401;
+  if (/not found/i.test(msg)) return 404;
+  if (/validation failed|invalid/i.test(msg)) return 400;
+  return 502;
 }
 
 async function handleRequest(req, res) {
@@ -619,10 +739,9 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/api/pages') {
     const pagesUser = await getSessionUser(req);
-    if (!pagesUser) return json(res, { error: 'Not authenticated' }, 401);
     const outDir = url.searchParams.get('outDir');
     if (!outDir) return json(res, []);
-    if (!await userOwnsOutDir(pagesUser, outDir)) return json(res, { error: 'Not found' }, 404);
+    if (!await canReadOutDir(pagesUser, outDir)) return json(res, { error: pagesUser ? 'Not found' : 'Not authenticated' }, pagesUser ? 404 : 401);
     const map = loadRouteMap(outDir);
     if (!map) return json(res, []);
     return json(res, Object.keys(map));
@@ -630,10 +749,12 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/api/page') {
     const pageUser = await getSessionUser(req);
-    if (!pageUser) return json(res, { error: 'Not authenticated' }, 401);
     const outDir = url.searchParams.get('outDir');
     if (!outDir) { res.writeHead(404); res.end('No clone specified'); return; }
-    if (!await userOwnsOutDir(pageUser, outDir)) { res.writeHead(404); res.end('Not found'); return; }
+    if (!await canReadOutDir(pageUser, outDir)) {
+      if (!pageUser) return json(res, { error: 'Not authenticated' }, 401);
+      res.writeHead(404); res.end('Not found'); return;
+    }
     const route = url.searchParams.get('route') || '/';
     const map = loadRouteMap(outDir);
     if (!map) { res.writeHead(404); res.end('No clone loaded'); return; }
@@ -753,13 +874,16 @@ async function handleRequest(req, res) {
 
       if (cloneUser) audit(cloneUser.id, cloneUser.name, 'clone_start', targetUrl, ip);
 
-      const args = ['clone', targetUrl, '--out', outDir, '--max-pages', String(maxPages), '--depth', String(depth)];
+      const args = ['clone', targetUrl, '--out', outDir, '--max-pages', String(maxPages), '--depth', String(depth), '--concurrency', '1'];
       if (ignoreRobots) args.push('--ignore-robots');
 
       const proc = spawn(process.execPath, [CLI, ...args], { cwd: __dirname });
       proc.stdout.on('data', (c) => c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l)));
       proc.stderr.on('data', (c) => c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`)));
-      proc.on('close', async (code) => {
+      proc.on('close', async (code, signal) => {
+        if (code !== 0) {
+          job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
+        }
         job.status = code === 0 ? 'done' : 'error';
         if (code === 0) { invalidateOutputsCache(); }
         const findNum = (pat) => {
@@ -870,17 +994,8 @@ async function handleRequest(req, res) {
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(zipUser, outDir)) return json(res, { error: 'Not found' }, 404);
     if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
-    const zipName = `${outDir.split(/[\\/]/).pop()}.zip`;
-    const zipPath = join(OUTPUT_DIR, zipName);
     try {
-      const isWindows = process.platform === 'win32';
-      const cmd = isWindows
-        ? `powershell -NoProfile -Command "Compress-Archive -Path '${outDir}' -DestinationPath '${zipPath}' -Force"`
-        : `zip -r '${zipPath}' '${outDir}'`;
-      await new Promise((res, rej) => {
-        const p = spawn(cmd, [], { shell: true, stdio: 'ignore' });
-        p.on('close', code => code === 0 ? res() : rej(new Error(`zip exited ${code}`)));
-      });
+      const { zipName, zipPath } = await buildOutputZip(outDir);
       return json(res, { ok: true, zipPath, folder: OUTPUT_DIR });
     } catch(err) { return json(res, { error: err.message }, 500); }
   }
@@ -888,21 +1003,13 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/download-zip') {
     const dlUser = await getSessionUser(req);
     if (!dlUser) return json(res, { error: 'Not authenticated' }, 401);
+    if ((dlUser.plan || 'free') === 'free') return json(res, { error: 'Export requires a paid plan. Upgrade to download your clones.' }, 403);
     const outDir = url.searchParams.get('outDir') || '';
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await userOwnsOutDir(dlUser, outDir)) return json(res, { error: 'Not found' }, 404);
     if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
-    const zipName = `${outDir.split(/[\\/]/).pop()}.zip`;
-    const zipPath = join(OUTPUT_DIR, zipName);
     try {
-      const isWindows = process.platform === 'win32';
-      const cmd = isWindows
-        ? `powershell -NoProfile -Command "Compress-Archive -Path '${outDir}' -DestinationPath '${zipPath}' -Force"`
-        : `zip -r '${zipPath}' '${outDir}'`;
-      await new Promise((resolve, reject) => {
-        const p = spawn(cmd, [], { shell: true, stdio: 'ignore' });
-        p.on('close', code => code === 0 ? resolve() : reject(new Error(`zip exited ${code}`)));
-      });
+      const { zipName, zipPath } = await buildOutputZip(outDir);
       res.writeHead(200, {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${zipName}"`,
@@ -913,6 +1020,141 @@ async function handleRequest(req, res) {
       stream.on('close', () => { try { rmSync(zipPath); } catch {} });
     } catch(err) { return json(res, { error: err.message }, 500); }
     return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/github/connect') {
+    const ghUser = await getSessionUser(req);
+    if (!ghUser) return json(res, { error: 'Not authenticated' }, 401);
+    if ((ghUser.plan || 'free') === 'free') return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
+    try {
+      const { token } = await readJsonBody(req, 50_000);
+      if (!token || String(token).length < 20) return json(res, { error: 'GitHub token is required' }, 400);
+      const me = await githubAPIRequest('GET', '/user', token);
+      const reposResp = await githubAPIRequest('GET', '/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member', token);
+      const repos = (reposResp.body || [])
+        .filter(r => r?.permissions?.push || r?.permissions?.admin || r?.permissions?.maintain)
+        .map(r => ({
+          fullName: r.full_name,
+          defaultBranch: r.default_branch || 'main',
+          private: !!r.private,
+          htmlUrl: r.html_url,
+          pushedAt: r.pushed_at,
+        }));
+      return json(res, {
+        ok: true,
+        user: { login: me.body.login, name: me.body.name || me.body.login, avatarUrl: me.body.avatar_url },
+        repos,
+      });
+    } catch(err) {
+      return json(res, { error: err.message }, githubErrorStatus(err));
+    }
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/github/branches') {
+    const ghUser = await getSessionUser(req);
+    if (!ghUser) return json(res, { error: 'Not authenticated' }, 401);
+    if ((ghUser.plan || 'free') === 'free') return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
+    try {
+      const { token, repo } = await readJsonBody(req, 50_000);
+      if (!token || String(token).length < 20) return json(res, { error: 'GitHub token is required' }, 400);
+      const parsedRepo = parseGitHubRepo(repo);
+      if (!parsedRepo) return json(res, { error: 'Enter a GitHub repo as owner/repo or a github.com URL' }, 400);
+      const { owner, repo: repoName } = parsedRepo;
+      const branches = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/branches?per_page=100`, token);
+      return json(res, {
+        ok: true,
+        branches: (branches.body || []).map(b => b.name).filter(Boolean),
+      });
+    } catch(err) {
+      return json(res, { error: err.message }, githubErrorStatus(err));
+    }
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/github/push') {
+    const ghUser = await getSessionUser(req);
+    if (!ghUser) return json(res, { error: 'Not authenticated' }, 401);
+    if ((ghUser.plan || 'free') === 'free') return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
+    try {
+      const { outDir, token, repo, branch = 'main', targetPath = '', commitMessage = '', cleanTarget = false } = await readJsonBody(req, 200_000);
+      if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
+      if (!await userOwnsOutDir(ghUser, outDir)) return json(res, { error: 'Not found' }, 404);
+      if (!existsSync(outDir)) return json(res, { error: 'Output folder not found' }, 404);
+      if (!token || String(token).length < 20) return json(res, { error: 'GitHub token is required' }, 400);
+      const parsedRepo = parseGitHubRepo(repo);
+      if (!parsedRepo) return json(res, { error: 'Enter a GitHub repo as owner/repo or a github.com URL' }, 400);
+      const cleanBranch = String(branch || 'main').trim();
+      if (!/^[A-Za-z0-9._/-]+$/.test(cleanBranch) || cleanBranch.includes('..')) return json(res, { error: 'Invalid branch name' }, 400);
+      const prefix = cleanGitPath(targetPath);
+      const files = listOutputFiles(outDir);
+      if (!files.length) return json(res, { error: 'No files found in output folder' }, 400);
+      if (files.length > 5000) return json(res, { error: `Too many files for one GitHub commit (${files.length}/5000). Try a smaller clone.` }, 400);
+      const tooLarge = files.find(f => f.size > 95 * 1024 * 1024);
+      if (tooLarge) return json(res, { error: `File is too large for GitHub API: ${tooLarge.rel}` }, 400);
+
+      const { owner, repo: repoName } = parsedRepo;
+      const refPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/ref/heads/${cleanBranch.split('/').map(encodeURIComponent).join('/')}`;
+      const repoInfo = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`, token);
+      let ref;
+      try {
+        ref = await githubAPIRequest('GET', refPath, token);
+      } catch {
+        const defaultBranch = repoInfo.body.default_branch || 'main';
+        const defaultRef = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/ref/heads/${encodeURIComponent(defaultBranch)}`, token);
+        await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/refs`, token, {
+          ref: `refs/heads/${cleanBranch}`,
+          sha: defaultRef.body.object.sha,
+        });
+        ref = await githubAPIRequest('GET', refPath, token);
+      }
+
+      const baseCommitSha = ref.body.object.sha;
+      const baseCommit = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/commits/${baseCommitSha}`, token);
+      const baseTreeSha = baseCommit.body.tree.sha;
+      const entries = [];
+      const nextPaths = new Set();
+      for (const file of files) {
+        const gitPath = prefix ? `${prefix}/${file.rel}` : file.rel;
+        nextPaths.add(gitPath);
+        const blob = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/blobs`, token, {
+          content: readFileSync(file.abs).toString('base64'),
+          encoding: 'base64',
+        });
+        entries.push({ path: gitPath, mode: '100644', type: 'blob', sha: blob.body.sha });
+      }
+
+      if (cleanTarget) {
+        const tree = await githubAPIRequest('GET', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/trees/${baseTreeSha}?recursive=1`, token);
+        for (const item of tree.body.tree || []) {
+          if (item.type !== 'blob') continue;
+          const inTarget = prefix ? item.path === prefix || item.path.startsWith(`${prefix}/`) : true;
+          if (inTarget && !nextPaths.has(item.path)) {
+            entries.push({ path: item.path, mode: '100644', type: 'blob', sha: null });
+          }
+        }
+      }
+
+      const newTree = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/trees`, token, {
+        base_tree: baseTreeSha,
+        tree: entries,
+      });
+      const message = String(commitMessage || '').trim() || `Import Web Cloner output (${outDir.split(/[\\/]/).pop()})`;
+      const commit = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/commits`, token, {
+        message,
+        tree: newTree.body.sha,
+        parents: [baseCommitSha],
+      });
+      await githubAPIRequest('PATCH', refPath, token, { sha: commit.body.sha, force: false });
+      return json(res, {
+        ok: true,
+        files: files.length,
+        branch: cleanBranch,
+        targetPath: prefix,
+        commitUrl: commit.body.html_url,
+        repoUrl: repoInfo.body.html_url,
+      });
+    } catch(err) {
+      return json(res, { error: err.message }, githubErrorStatus(err));
+    }
   }
 
   if (req.method === 'DELETE' && url.pathname === '/api/output') {

@@ -2,7 +2,7 @@
 import {
   logger,
   runClone
-} from "./chunk-5S3KUUKO.js";
+} from "./chunk-EZABET3L.js";
 
 // src/cli.ts
 import { program } from "commander";
@@ -1404,7 +1404,7 @@ async function startServer(baseOutDir, port) {
 
 // src/cli.ts
 program.name("cloner").description("Web cloner: captures JS-heavy sites and generates a Next.js full-stack clone").version("0.1.0");
-program.command("clone <url>").description("Clone a website").option("-o, --out <dir>", "Output directory", "./output/site").option("-m, --max-pages <n>", "Max pages to crawl", "50").option("-d, --depth <n>", "Max link depth", "3").option("-c, --concurrency <n>", "Concurrent browser contexts", "2").option("--ignore-robots", "Skip robots.txt check", false).option("-v, --verbose", "Print DEBUG lines to console (all detail goes to log file regardless)", false).action(async (url, options) => {
+program.command("clone <url>").description("Clone a website").option("-o, --out <dir>", "Output directory", "./output/site").option("-m, --max-pages <n>", "Max pages to crawl", "50").option("-d, --depth <n>", "Max link depth", "3").option("-c, --concurrency <n>", "Concurrent browser contexts", "1").option("--ignore-robots", "Skip robots.txt check", false).option("-v, --verbose", "Print DEBUG lines to console (all detail goes to log file regardless)", false).action(async (url, options) => {
   await runClone({
     url,
     out: resolve(options.out),

@@ -12,7 +12,7 @@ function buildAssetMap(assets: AssetEntry[]): Map<string, string> {
   return m;
 }
 
-function rewriteUrl(value: string, assetMap: Map<string, string>, origin: string): string {
+function rewriteUrl(value: string, assetMap: Map<string, string>, baseUrl: string): string {
   if (!value) return value;
   const clean = value.split('?')[0].split('#')[0];
 
@@ -22,13 +22,13 @@ function rewriteUrl(value: string, assetMap: Map<string, string>, origin: string
 
   // Resolve root-relative and document-relative paths against origin, then look up
   try {
-    const abs = new URL(value, origin).href;
+    const abs = new URL(value, baseUrl).href;
     const absClean = abs.split('?')[0].split('#')[0];
     if (assetMap.has(abs)) return assetMap.get(abs)!;
     if (assetMap.has(absClean)) return assetMap.get(absClean)!;
     // Same-origin but not captured as asset — convert to relative path so links still work
     const u = new URL(abs);
-    if (u.origin === origin) return u.pathname + u.search + u.hash;
+    if (u.origin === new URL(baseUrl).origin) return u.pathname + u.search + u.hash;
   } catch { /* not a URL */ }
 
   return value;
@@ -65,6 +65,18 @@ function isMapIframe(src: string): boolean {
   return MAP_EMBED_PATTERNS.some((p) => p.test(src));
 }
 
+const LIVE_WIDGET_PATTERNS = [
+  /js\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hsforms\.net\/forms\//,
+  /forms-[a-z0-9]+\.hsforms\.com\//,
+  /static\.hsappstatic\.net\/ui-forms-embed-components-app\//,
+  /hubspotv2\.[^/]+\.webflow\.services\/static\//,
+];
+function isLiveWidgetUrl(src: string): boolean {
+  return LIVE_WIDGET_PATTERNS.some((p) => p.test(src));
+}
+
 function isMetaImageContent(el: parse5.DefaultTreeAdapterMap['element']): boolean {
   const key = el.attrs?.find((a) => a.name.toLowerCase() === 'property' || a.name.toLowerCase() === 'name')
     ?.value.toLowerCase();
@@ -75,7 +87,7 @@ function rewriteAttrValue(
   name: string,
   value: string,
   assetMap: Map<string, string>,
-  origin: string,
+  baseUrl: string,
 ): string {
   if (!value) return value;
 
@@ -83,21 +95,21 @@ function rewriteAttrValue(
     return value.split(',').map((part) => {
       const trimmed = part.trim();
       const spaceIdx = trimmed.search(/\s/);
-      if (spaceIdx === -1) return rewriteUrl(trimmed, assetMap, origin);
+      if (spaceIdx === -1) return rewriteUrl(trimmed, assetMap, baseUrl);
       const url = trimmed.slice(0, spaceIdx);
       const descriptor = trimmed.slice(spaceIdx);
-      return rewriteUrl(url, assetMap, origin) + descriptor;
+      return rewriteUrl(url, assetMap, baseUrl) + descriptor;
     }).join(', ');
   }
 
   if (name === 'style') {
     return value.replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, url) => {
-      const rewritten = rewriteUrl(url, assetMap, origin);
+      const rewritten = rewriteUrl(url, assetMap, baseUrl);
       return `url(${quote}${rewritten}${quote})`;
     });
   }
 
-  return rewriteUrl(value, assetMap, origin);
+  return rewriteUrl(value, assetMap, baseUrl);
 }
 
 interface RewriteStats {
@@ -111,6 +123,7 @@ function walkNode(
   node: parse5.DefaultTreeAdapterMap['childNode'],
   assetMap: Map<string, string>,
   origin: string,
+  baseUrl: string,
   stats: RewriteStats,
   failedAssets: Set<string>,
 ): void {
@@ -119,14 +132,14 @@ function walkNode(
   const el = node as parse5.DefaultTreeAdapterMap['element'];
   const tagName = el.nodeName?.toLowerCase() ?? '';
 
-  // Blank out map service iframes so they don't make live network requests in the clone
+  // Blank out live embeds so they don't make network requests in the clone.
   if (tagName === 'iframe' && el.attrs) {
     const srcAttr = el.attrs.find((a) => a.name === 'src');
-    if (srcAttr?.value && isMapIframe(srcAttr.value)) {
+    if (srcAttr?.value && (isMapIframe(srcAttr.value) || isLiveWidgetUrl(srcAttr.value))) {
       const originalSrc = srcAttr.value;
       srcAttr.value = 'about:blank';
       el.attrs = el.attrs.filter((a) => a.name !== 'allowfullscreen' && a.name !== 'loading');
-      logger.debug(`  [MAP IFRAME] replaced ${originalSrc} with about:blank`);
+      logger.debug(`  [LIVE IFRAME] replaced ${originalSrc} with about:blank`);
       stats.attrsRewritten++;
     }
   }
@@ -136,7 +149,7 @@ function walkNode(
       if (child.nodeName === '#text') {
         const textNode = child as parse5.DefaultTreeAdapterMap['textNode'];
         const before = textNode.value;
-        textNode.value = rewriteCssUrls(before, assetMap);
+        textNode.value = rewriteCssUrls(before, assetMap, baseUrl);
         if (textNode.value !== before) stats.styleUrlsRewritten++;
       }
     }
@@ -151,15 +164,22 @@ function walkNode(
       urlAttrs.add('content');
     }
 
+    let rewroteSubresourceToLocal = false;
     for (const attr of el.attrs) {
       const attrName = attr.name.toLowerCase();
       if (urlAttrs.has(attrName) && attr.value) {
         const before = attr.value;
 
+        if ((tagName === 'script' || tagName === 'iframe') && isLiveWidgetUrl(before)) {
+          attr.value = tagName === 'iframe' ? 'about:blank' : '';
+          stats.attrsRewritten++;
+          continue;
+        }
+
         // Strip src/href pointing to assets we know returned 404 during capture.
         // This avoids broken-image network errors when the clone is viewed.
         try {
-          const absUrl = new URL(before, origin).href;
+          const absUrl = new URL(before, baseUrl).href;
           if (failedAssets.has(absUrl) || failedAssets.has(before)) {
             attr.value = '';
             stats.attrsRewritten++;
@@ -167,12 +187,15 @@ function walkNode(
           }
         } catch { /* not a URL, skip */ }
 
-        attr.value = rewriteAttrValue(attrName, attr.value, assetMap, origin);
+        attr.value = rewriteAttrValue(attrName, attr.value, assetMap, baseUrl);
         if (attr.value !== before) {
           stats.attrsRewritten++;
+          if ((tagName === 'link' || tagName === 'script') && attr.value.includes('/_assets/')) {
+            rewroteSubresourceToLocal = true;
+          }
         } else {
           try {
-            const u = new URL(before, origin);
+            const u = new URL(before, baseUrl);
             if (u.origin !== origin && u.protocol.startsWith('http')) {
               stats.externalUrls++;
             } else if (u.origin === origin) {
@@ -182,11 +205,14 @@ function walkNode(
         }
       }
     }
+    if (rewroteSubresourceToLocal) {
+      el.attrs = el.attrs.filter((a) => a.name.toLowerCase() !== 'integrity');
+    }
   }
 
   if ('childNodes' in el && el.childNodes) {
     for (const child of el.childNodes) {
-      walkNode(child, assetMap, origin, stats, failedAssets);
+      walkNode(child, assetMap, origin, baseUrl, stats, failedAssets);
     }
   }
 }
@@ -195,10 +221,11 @@ export function rewriteHtml(record: PageRecord, origin: string): string {
   const assetMap = buildAssetMap(record.assets);
   const failedAssets = new Set<string>(record.failedAssets ?? []);
   const stats: RewriteStats = { attrsRewritten: 0, attrsToRelative: 0, styleUrlsRewritten: 0, externalUrls: 0 };
+  const baseUrl = record.url || origin;
 
   const doc = parse5.parse(record.html);
   for (const child of doc.childNodes) {
-    walkNode(child, assetMap, origin, stats, failedAssets);
+    walkNode(child, assetMap, origin, baseUrl, stats, failedAssets);
   }
 
   logger.debug(

@@ -814,7 +814,7 @@ var ABORT_PATTERNS = [
   /api\.mapbox\.com\/styles.*\/tiles/,
   /maps\.gstatic\.com/,
   /cdn\.jsdelivr\.net\/npm\/leaflet.*marker/,
-  // Map embed iframes — aborting here prevents the embed JS from even loading,
+  // Map embed iframes - aborting here prevents the embed JS from even loading,
   // which eliminates the ERR_FAILED tile-fetch console error flood.
   /openstreetmap\.org\/export\/embed/,
   /maps\.google\.com\/maps\?/,
@@ -822,7 +822,7 @@ var ABORT_PATTERNS = [
   /bing\.com\/maps\/embed/,
   /yandex\.\w+\/map-widget/,
   /2gis\.com\/widget/,
-  // Analytics beacons — tracking pings that keep networkidle from settling (NOT the JS files)
+  // Analytics beacons - tracking pings that keep networkidle from settling (NOT the JS files)
   /google-analytics\.com\/[rj]?\/?(collect|r\/collect)/,
   /analytics\.google\.com\/g\/collect/,
   /\bgtm\.js\?id=/,
@@ -849,14 +849,21 @@ var ABORT_PATTERNS = [
   // YouTube Jnn telemetry
   /\/youtubei\/v1\/(log|stats)/,
   // YouTube internal logging
-  // Live chat widgets — these poll aggressively and prevent networkidle
+  // Live chat widgets - these poll aggressively and prevent networkidle
   /intercom\.io\/messenger\//,
   /widget\.intercom\.io/,
   /js\.driftt\.com/,
   /widget\.drift\.com/,
   /js\.hs-scripts\.com/,
   // HubSpot embed
+  /js-[a-z0-9]+\.hs-scripts\.com/,
   /api\.hubspot\.com\/conversations/,
+  /js-[a-z0-9]+\.hsforms\.net\/forms\//,
+  // HubSpot forms runtime
+  /forms-[a-z0-9]+\.hsforms\.com\//,
+  // HubSpot forms API/counters
+  /static\.hsappstatic\.net\/ui-forms-embed-components-app\//,
+  /hubspotv2\.[^/]+\.webflow\.services\/static\//,
   /cdn\.livechatinc\.com/,
   /lc\.chat\//,
   /static\.zdassets\.com/,
@@ -867,11 +874,11 @@ var ABORT_PATTERNS = [
   // Cookie consent banners that make long-polling requests
   /consent\.cookiebot\.com\/uc\.js/,
   /cdn\.cookielaw\.org\/scripttemplates/,
-  // Payment widgets — Stripe makes persistent keep-alive requests
+  // Payment widgets - Stripe makes persistent keep-alive requests
   /js\.stripe\.com\/v3/,
   /m\.stripe\.network/,
   /r\.stripe\.com/,
-  // Social embeds — Twitter, Facebook, Instagram, LinkedIn, TikTok
+  // Social embeds - Twitter, Facebook, Instagram, LinkedIn, TikTok
   /platform\.twitter\.com\/widgets/,
   /syndication\.twitter\.com/,
   /connect\.facebook\.net\/[^/]+\/sdk/,
@@ -879,10 +886,10 @@ var ABORT_PATTERNS = [
   /www\.instagram\.com\/embed/,
   /badges\.linkedin\.com/,
   /www\.tiktok\.com\/embed/,
-  // Comments — Disqus makes many polling requests
+  // Comments - Disqus makes many polling requests
   /disqus\.com\/embed\//,
   /disquscdn\.com\/next\/embed/,
-  // CAPTCHA — these phone home with challenge tokens
+  // CAPTCHA - these phone home with challenge tokens
   /www\.google\.com\/recaptcha\/api/,
   /www\.gstatic\.com\/recaptcha/,
   /challenges\.cloudflare\.com\/turnstile/,
@@ -900,14 +907,46 @@ var ABORT_PATTERNS = [
   /ingest\.sentry\.io/,
   /browser\.sentry-cdn\.com/
 ];
+var SCRIPT_STUB_PATTERNS = [
+  /js\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hsforms\.net\/forms\//,
+  /hubspotv2\.[^/]+\.webflow\.services\/static\//
+];
+var HUBSPOT_FORM_STUB = `
+window.hbspt = window.hbspt || {};
+window.hbspt.forms = window.hbspt.forms || {};
+window.hbspt.forms.create = window.hbspt.forms.create || function () {};
+`;
 var NAVIGATION_TIMEOUT = 3e4;
 var ROUTE_FETCH_TIMEOUT = 15e3;
 var USER_AGENT2 = "WebCloner/0.1 (+local archival)";
+var MAX_ASSET_BYTES = 50 * 1024 * 1024;
+var MAX_CSS_BYTES = 25 * 1024 * 1024;
+var TRANSPARENT_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax3p9QAAAAASUVORK5CYII=",
+  "base64"
+);
 function hashUrl(url) {
   return createHash("sha1").update(url).digest("hex").slice(0, 16);
 }
 function shouldSkipAsset(url) {
   return SKIP_ASSET_PATTERNS.some((p) => p.test(url));
+}
+function shouldReportConsoleError(text) {
+  return !/^Failed to load resource:/i.test(text);
+}
+function shouldReportPageError(message) {
+  return !/^Invalid or unexpected token$/i.test(message.trim());
+}
+function isImageLikeRequest(url, resourceType) {
+  if (resourceType === "image") return true;
+  try {
+    const ext = extname(new URL(url.split("?")[0]).pathname).toLowerCase();
+    return [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".avif"].includes(ext);
+  } catch {
+    return false;
+  }
 }
 function extractCssUrls(css) {
   const urls = [];
@@ -923,12 +962,26 @@ function extractCssUrls(css) {
   }
   return urls;
 }
-function rewriteCssUrls(css, assetMap) {
+function mapAssetUrl(url, assetMap, baseUrl) {
+  const clean = url.split("?")[0].split("#")[0];
+  const direct = assetMap.get(url) ?? assetMap.get(clean);
+  if (direct) return direct;
+  if (baseUrl) {
+    try {
+      const abs = new URL(url, baseUrl).href;
+      return assetMap.get(abs) ?? assetMap.get(abs.split("?")[0].split("#")[0]) ?? null;
+    } catch {
+    }
+  }
+  return null;
+}
+function rewriteCssUrls(css, assetMap, baseUrl) {
   return css.replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, url) => {
-    const mapped = assetMap.get(url) ?? assetMap.get(url.split("?")[0]);
+    const mapped = mapAssetUrl(url, assetMap, baseUrl);
     return mapped ? `url(${quote}${mapped}${quote})` : match;
-  }).replace(/@import\s+(?:url\(\s*)?['"]([^'"]+)['"]\s*\)?/g, (match, url) => {
-    const mapped = assetMap.get(url) ?? assetMap.get(url.split("?")[0]);
+  }).replace(/@import\s+(?:url\(\s*)?(?:(['"])([^'")]+)\1|([^'")\s;]+))\s*\)?/g, (match, _quote, quotedUrl, bareUrl) => {
+    const url = quotedUrl || bareUrl;
+    const mapped = mapAssetUrl(url, assetMap, baseUrl);
     return mapped ? match.replace(url, mapped) : match;
   });
 }
@@ -938,6 +991,7 @@ async function capturePage(context, pageUrl, assetsDir) {
   const networkLog = [];
   const assetMap = /* @__PURE__ */ new Map();
   const pendingAssets = [];
+  const processedCssRefs = /* @__PURE__ */ new Set();
   const consoleErrors = [];
   const cssFilesForRewrite = /* @__PURE__ */ new Map();
   const failedAssets = /* @__PURE__ */ new Set();
@@ -948,15 +1002,21 @@ async function capturePage(context, pageUrl, assetsDir) {
   page.on("console", (msg) => {
     if (msg.type() === "error") {
       const text = msg.text();
-      consoleErrors.push(text);
       logger.debug(`  [CONSOLE ERROR] ${text}`);
+      if (shouldReportConsoleError(text)) {
+        consoleErrors.push(text);
+      }
     }
   });
   const cmsJsonStubs = /* @__PURE__ */ new Set();
   page.on("pageerror", (err) => {
     const text = `PageError: ${err.message}`;
-    consoleErrors.push(text);
-    logger.debug(`  [PAGE ERROR] ${err.message}`);
+    if (shouldReportPageError(err.message)) {
+      consoleErrors.push(text);
+      logger.debug(`  [PAGE ERROR] ${err.message}`);
+    } else {
+      logger.debug(`  [PAGE ERROR IGNORED] ${err.message}`);
+    }
     if (/invalid or unexpected token/i.test(err.message)) {
       for (const entry of networkLog) {
         if (entry.contentType.includes("application/json") && entry.method !== "CONSOLE_ERROR") {
@@ -965,31 +1025,36 @@ async function capturePage(context, pageUrl, assetsDir) {
       }
     }
   });
-  async function saveAsset(url, body, contentType) {
+  async function saveAsset(url, body, contentType, forceCss = false) {
     if (shouldSkipAsset(url)) return null;
+    const maxBytes = forceCss || contentType.includes("text/css") ? MAX_CSS_BYTES : MAX_ASSET_BYTES;
+    if (body.length > maxBytes) {
+      logger.debug(`  [ASSET SKIP] ${url} - too large (${(body.length / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
+      return null;
+    }
     try {
       const cleanUrl = url.split("?")[0].split("#")[0];
       const hash = hashUrl(url);
       const extFromPath = extname(new URL(cleanUrl).pathname).toLowerCase();
       const extFromMime = mime.extension(contentType);
-      const ext = extFromPath || (extFromMime ? `.${extFromMime}` : ".bin");
+      const ext = forceCss ? ".css" : extFromPath || (extFromMime ? `.${extFromMime}` : ".bin");
       const filename = `${hash}${ext}`;
       const localPath = join2(assetsDir, filename);
       const webPath = `/_assets/${filename}`;
-      const isCss = ext === ".css" || contentType.includes("text/css");
+      const isCss = forceCss || ext === ".css" || contentType.includes("text/css");
       if (isCss) {
         const cssText = body.toString("utf8");
         if (!existsSync(localPath)) {
           writeFileSync(localPath, body);
           assetsSaved++;
-          logger.debug(`  [CSS]   ${webPath}  \u2190  ${url}  (${(body.length / 1024).toFixed(1)}KB, will rewrite urls)`);
+          logger.debug(`  [CSS]   ${webPath}  <-  ${url}  (${(body.length / 1024).toFixed(1)}KB, will rewrite urls)`);
         }
         cssFilesForRewrite.set(webPath, { localPath, cssText, sourceUrl: url });
       } else {
         if (!existsSync(localPath)) {
           writeFileSync(localPath, body);
           assetsSaved++;
-          logger.debug(`  [ASSET] ${webPath}  \u2190  ${url}  (${(body.length / 1024).toFixed(1)}KB, ${contentType.split(";")[0]})`);
+          logger.debug(`  [ASSET] ${webPath}  <-  ${url}  (${(body.length / 1024).toFixed(1)}KB, ${contentType.split(";")[0]})`);
         }
       }
       assetMap.set(url, webPath);
@@ -998,6 +1063,47 @@ async function capturePage(context, pageUrl, assetsDir) {
     } catch (err) {
       logger.warn(`  [ASSET FAIL] ${url}: ${err.message}`);
       return null;
+    }
+  }
+  function enqueueCssReferences(cssText, sourceUrl) {
+    if (processedCssRefs.has(sourceUrl)) return;
+    processedCssRefs.add(sourceUrl);
+    const cssUrls = extractCssUrls(cssText);
+    if (cssUrls.length > 0) {
+      logger.debug(`  [CSS REFS] ${cssUrls.length} url() references in ${sourceUrl}`);
+    }
+    for (const cssUrl of cssUrls) {
+      pendingAssets.push(async () => {
+        try {
+          const absUrl = new URL(cssUrl, sourceUrl).href;
+          if (assetMap.has(absUrl)) return;
+          const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(1e4) });
+          if (!r.ok) {
+            logger.debug(`  [CSS REF FAIL] ${absUrl} -> HTTP ${r.status}`);
+            return;
+          }
+          const contentType = r.headers.get("content-type") ?? "";
+          const pathExt = extname(new URL(absUrl.split("?")[0]).pathname).toLowerCase();
+          const isCssRef = contentType.includes("text/css") || pathExt === ".css";
+          const maxBytes = isCssRef ? MAX_CSS_BYTES : MAX_ASSET_BYTES;
+          const len = Number(r.headers.get("content-length") || 0);
+          if (len > maxBytes) {
+            logger.debug(`  [CSS REF SKIP] ${absUrl} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
+            return;
+          }
+          const subBuf = Buffer.from(await r.arrayBuffer());
+          const saved = await saveAsset(absUrl, subBuf, contentType, isCssRef);
+          if (!saved) {
+            logger.debug(`  [CSS REF SKIP] ${absUrl}`);
+            return;
+          }
+          if (isCssRef && subBuf.length < 5e5) {
+            enqueueCssReferences(subBuf.toString("utf8"), absUrl);
+          }
+        } catch (err) {
+          logger.debug(`  [CSS REF ERR] ${cssUrl}: ${err.message}`);
+        }
+      });
     }
   }
   await page.route("**/*", async (route) => {
@@ -1010,13 +1116,22 @@ async function capturePage(context, pageUrl, assetsDir) {
       await route.continue();
       return;
     }
+    if (resourceType === "script" && SCRIPT_STUB_PATTERNS.some((p) => p.test(url))) {
+      logger.debug(`  [SCRIPT STUB] ${url}`);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/javascript; charset=utf-8",
+        body: HUBSPOT_FORM_STUB
+      });
+      return;
+    }
     if (ABORT_PATTERNS.some((p) => p.test(url))) {
       logger.debug(`  [ABORT] ${url}`);
       await route.abort();
       return;
     }
     if (cmsJsonStubs.has(url)) {
-      logger.debug(`  [CMS STUB] ${url} \u2192 {} (caused pageerror on prior load)`);
+      logger.debug(`  [CMS STUB] ${url} -> {} (caused pageerror on prior load)`);
       await route.fulfill({ status: 200, contentType: "application/json; charset=utf-8", body: "{}" });
       return;
     }
@@ -1035,10 +1150,18 @@ async function capturePage(context, pageUrl, assetsDir) {
       _pathExt = extname(new URL(url.split("?")[0]).pathname).toLowerCase();
     } catch {
     }
-    const isAsset = ASSET_EXTS.has(_pathExt) || contentType.startsWith("image/") || contentType.startsWith("font/") || contentType.startsWith("text/css") || contentType.includes("javascript");
+    const isStylesheetRequest = resourceType === "stylesheet";
+    const isAsset = isStylesheetRequest || ASSET_EXTS.has(_pathExt) || contentType.startsWith("image/") || contentType.startsWith("font/") || contentType.startsWith("text/css") || contentType.includes("javascript");
     const isJson = contentType.includes("application/json");
     const isText = contentType.startsWith("text/");
-    const isCss = contentType.includes("text/css") || _pathExt === ".css";
+    const isCss = isStylesheetRequest || contentType.includes("text/css") || _pathExt === ".css";
+    const loggedContentType = isCss && !contentType.includes("text/css") ? "text/css; charset=utf-8" : contentType;
+    if (status >= 400 && isImageLikeRequest(url, resourceType)) {
+      failedAssets.add(url);
+      logger.debug(`  [IMAGE FALLBACK] ${url} -> HTTP ${status}, substituting transparent pixel`);
+      await route.fulfill({ status: 200, contentType: "image/png", body: TRANSPARENT_PNG });
+      return;
+    }
     let body = null;
     if ((isJson || isText) && resourceType !== "document") {
       try {
@@ -1061,56 +1184,40 @@ async function capturePage(context, pageUrl, assetsDir) {
         url,
         postData: req.postData(),
         status,
-        contentType,
+        contentType: loggedContentType,
         body
       });
-      logger.debug(`  [NET] ${req.method()} ${status} ${contentType.split(";")[0].padEnd(30)} ${url}`);
+      logger.debug(`  [NET] ${req.method()} ${status} ${loggedContentType.split(";")[0].padEnd(30)} ${url}`);
     }
     if ((contentType.includes("javascript") || resourceType === "script") && status >= 400) {
-      logger.debug(`  [JS STUB] ${url} \u2192 HTTP ${status}, substituting empty script`);
+      logger.debug(`  [JS STUB] ${url} -> HTTP ${status}, substituting empty script`);
       await route.fulfill({ status: 200, contentType: "application/javascript; charset=utf-8", body: "/* stub */" });
       return;
     }
     if ((resourceType === "xhr" || resourceType === "fetch") && contentType.includes("text/html") && status >= 400) {
-      logger.debug(`  [XHR STUB] ${url} \u2192 HTTP ${status} text/html, substituting {}`);
+      logger.debug(`  [XHR STUB] ${url} -> HTTP ${status} text/html, substituting {}`);
       await route.fulfill({ status: 200, contentType: "application/json; charset=utf-8", body: "{}" });
       return;
     }
-    const MAX_ASSET_BYTES = 5 * 1024 * 1024;
     if (isAsset && status === 200) {
       assetsIntercepted++;
       try {
-        const buf = await response.body();
-        if (buf.length > MAX_ASSET_BYTES) {
-          logger.debug(`  [ASSET SKIP] ${url} \u2014 too large (${(buf.length / 1024 / 1024).toFixed(1)}MB > 5MB)`);
+        const maxBytes = isCss ? MAX_CSS_BYTES : MAX_ASSET_BYTES;
+        const len = Number(response.headers()["content-length"] || 0);
+        if (len > maxBytes) {
+          logger.debug(`  [ASSET SKIP] ${url} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
           await route.fulfill({ response });
           return;
         }
-        const webPath = await saveAsset(url, buf, contentType);
+        const buf = await response.body();
+        if (buf.length > maxBytes) {
+          logger.debug(`  [ASSET SKIP] ${url} - too large (${(buf.length / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
+          await route.fulfill({ response });
+          return;
+        }
+        const webPath = await saveAsset(url, buf, contentType, isCss);
         if (webPath && isCss && buf.length < 5e5) {
-          const cssText = buf.toString("utf8");
-          const cssUrls = extractCssUrls(cssText);
-          if (cssUrls.length > 0) {
-            logger.debug(`  [CSS REFS] ${cssUrls.length} url() references in ${url}`);
-          }
-          for (const cssUrl of cssUrls) {
-            pendingAssets.push(async () => {
-              try {
-                const absUrl = new URL(cssUrl, url).href;
-                if (assetMap.has(absUrl)) return;
-                const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(1e4) });
-                if (r.ok) {
-                  const subBuf = Buffer.from(await r.arrayBuffer());
-                  const saved = await saveAsset(absUrl, subBuf, r.headers.get("content-type") ?? "");
-                  if (!saved) logger.debug(`  [CSS REF SKIP] ${absUrl}`);
-                } else {
-                  logger.debug(`  [CSS REF FAIL] ${absUrl} \u2192 HTTP ${r.status}`);
-                }
-              } catch (err) {
-                logger.debug(`  [CSS REF ERR] ${cssUrl}: ${err.message}`);
-              }
-            });
-          }
+          enqueueCssReferences(buf.toString("utf8"), url);
         }
       } catch (err) {
         logger.debug(`  [BODY ERR] ${url}: ${err.message}`);
@@ -1119,7 +1226,7 @@ async function capturePage(context, pageUrl, assetsDir) {
     await route.fulfill({ response });
   });
   try {
-    logger.debug(`  [NAV] \u2192 ${pageUrl}`);
+    logger.debug(`  [NAV] -> ${pageUrl}`);
     try {
       await page.goto(pageUrl, { waitUntil: "load", timeout: NAVIGATION_TIMEOUT });
       logger.debug(`  [NAV] load fired for ${pageUrl}`);
@@ -1137,19 +1244,25 @@ async function capturePage(context, pageUrl, assetsDir) {
     await page.evaluate(async () => {
       const delay = (ms) => new Promise((r) => setTimeout(r, ms));
       const step = Math.max(window.innerHeight, 400);
+      const started = Date.now();
+      const maxSteps = 28;
       let y = 0;
-      while (y < document.body.scrollHeight) {
+      let steps = 0;
+      while (y < document.body.scrollHeight && steps < maxSteps && Date.now() - started < 6e3) {
         window.scrollTo(0, y);
-        await delay(120);
+        await delay(80);
         y += step;
+        steps++;
       }
+      window.scrollTo(0, document.body.scrollHeight);
+      await delay(120);
       window.scrollTo(0, 0);
     });
     try {
       await page.waitForFunction(() => {
         const imgs = Array.from(document.querySelectorAll('img[loading="lazy"], img[data-src]'));
         return imgs.every((img) => img.complete);
-      }, { timeout: 5e3 });
+      }, void 0, { timeout: 2e3 });
     } catch {
     }
     const domAssetUrls = await page.evaluate(() => {
@@ -1200,10 +1313,20 @@ async function capturePage(context, pageUrl, assetsDir) {
             if (assetMap.has(absUrl)) return;
             const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(1e4) });
             if (r.ok) {
+              const contentType = r.headers.get("content-type") ?? "";
+              if (contentType.includes("text/html")) {
+                logger.debug(`  [DOM ASSET SKIP] ${absUrl} - document response`);
+                return;
+              }
+              const len = Number(r.headers.get("content-length") || 0);
+              if (len > MAX_ASSET_BYTES) {
+                logger.debug(`  [DOM ASSET SKIP] ${absUrl} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(MAX_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB)`);
+                return;
+              }
               const buf = Buffer.from(await r.arrayBuffer());
-              await saveAsset(absUrl, buf, r.headers.get("content-type") ?? "");
+              await saveAsset(absUrl, buf, contentType);
             } else {
-              logger.debug(`  [DOM ASSET FAIL] ${absUrl} -> HTTP ${r.status}`);
+              logger.debug(`  [DOM ASSET MISSING] ${absUrl} -> skipped`);
               failedAssets.add(absUrl);
             }
           } catch (err) {
@@ -1240,10 +1363,20 @@ async function capturePage(context, pageUrl, assetsDir) {
             if (assetMap.has(absUrl)) return;
             const r = await fetch(absUrl, { headers: { "User-Agent": USER_AGENT2 }, signal: AbortSignal.timeout(1e4) });
             if (r.ok) {
+              const contentType = r.headers.get("content-type") ?? "";
+              if (contentType.includes("text/html")) {
+                logger.debug(`  [INLINE CSS SKIP] ${absUrl} - document response`);
+                return;
+              }
+              const len = Number(r.headers.get("content-length") || 0);
+              if (len > MAX_ASSET_BYTES) {
+                logger.debug(`  [INLINE CSS SKIP] ${absUrl} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(MAX_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB)`);
+                return;
+              }
               const buf = Buffer.from(await r.arrayBuffer());
-              await saveAsset(absUrl, buf, r.headers.get("content-type") ?? "");
+              await saveAsset(absUrl, buf, contentType);
             } else {
-              logger.debug(`  [INLINE CSS FAIL] ${absUrl} \u2192 HTTP ${r.status}`);
+              logger.debug(`  [INLINE CSS MISSING] ${absUrl} -> skipped`);
             }
           } catch (err) {
             logger.debug(`  [INLINE CSS ERR] ${u}: ${err.message}`);
@@ -1253,8 +1386,10 @@ async function capturePage(context, pageUrl, assetsDir) {
     }
     const PENDING_BATCH = 10;
     let failedPending = 0;
-    for (let i = 0; i < pendingAssets.length; i += PENDING_BATCH) {
-      const batch = pendingAssets.slice(i, i + PENDING_BATCH);
+    let pendingIndex = 0;
+    while (pendingIndex < pendingAssets.length) {
+      const batch = pendingAssets.slice(pendingIndex, pendingIndex + PENDING_BATCH);
+      pendingIndex += batch.length;
       const settled = await Promise.allSettled(batch.map((fn) => fn()));
       failedPending += settled.filter((r) => r.status === "rejected").length;
     }
@@ -1265,7 +1400,7 @@ async function capturePage(context, pageUrl, assetsDir) {
     let cssUrlsReplaced = 0;
     for (const [, { localPath, cssText, sourceUrl }] of cssFilesForRewrite) {
       try {
-        const rewritten = rewriteCssUrls(cssText, assetMap);
+        const rewritten = rewriteCssUrls(cssText, assetMap, sourceUrl);
         if (rewritten !== cssText) {
           writeFileSync(localPath, rewritten, "utf8");
           cssRewritten++;
@@ -1285,8 +1420,6 @@ async function capturePage(context, pageUrl, assetsDir) {
         "[data-tab]",
         "[data-panel]",
         "details > summary",
-        'nav a[href^="#"]',
-        'nav a[href^="/"]',
         ".tab, .tabs__item, .tab-link, .nav-tab",
         "[aria-controls]"
       ];
@@ -1396,7 +1529,7 @@ async function capturePage(context, pageUrl, assetsDir) {
 
 // src/crawler.ts
 var NAV_DELAY_MS = 250;
-var PAGE_CAPTURE_TIMEOUT = 12e4;
+var PAGE_CAPTURE_TIMEOUT = 18e4;
 var USER_AGENT3 = "WebCloner/0.1 (+local archival)";
 var TRACKING_PARAM = /^(utm_|fbclid|gclid|msclkid|_ga|_gl|mc_eid|yclid|dclid|zanpid|igshid|twclid|li_fat_id|ttclid)/i;
 var AUTH_PATH = /^\/(login|logout|signin|sign-in|sign-out|signout|register|signup|sign-up|forgot-password|reset-password|change-password|verify-email|confirm-email|auth|oauth|sso|account\/activate|account\/confirm)(\/|$|\?)/i;
@@ -1488,7 +1621,7 @@ async function crawl(opts, assetsDir, onPage) {
       return;
     }
     if (visited.has(clean)) return;
-    if (records.length + queue.size + queue.pending >= opts.maxPages) return;
+    if (visited.size >= opts.maxPages) return;
     visited.add(clean);
     queue.add(async () => {
       if (records.length >= opts.maxPages) return;
@@ -1517,21 +1650,29 @@ async function crawl(opts, assetsDir, onPage) {
         });
         logger.info(`  [${records.length + 1}/${opts.maxPages}] ${clean}`);
         let timeoutHandle;
-        const { record, links } = await Promise.race([
-          capturePage(context, clean, assetsDir).then((result) => {
-            clearTimeout(timeoutHandle);
-            return result;
-          }, (err) => {
-            clearTimeout(timeoutHandle);
-            throw err;
-          }),
-          new Promise((_, reject) => {
-            timeoutHandle = setTimeout(
-              () => reject(new Error(`Page capture timed out after ${PAGE_CAPTURE_TIMEOUT / 1e3}s`)),
-              PAGE_CAPTURE_TIMEOUT
-            );
-          })
-        ]);
+        let timedOut = false;
+        const capturePromise = capturePage(context, clean, assetsDir);
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            timedOut = true;
+            context?.close().catch(() => {
+            });
+            reject(new Error(`Page capture timed out after ${PAGE_CAPTURE_TIMEOUT / 1e3}s`));
+          }, PAGE_CAPTURE_TIMEOUT);
+        });
+        let result;
+        try {
+          result = await Promise.race([capturePromise, timeoutPromise]);
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (timedOut) {
+            await Promise.race([
+              capturePromise.catch(() => void 0),
+              new Promise((resolve2) => setTimeout(resolve2, 2e3))
+            ]);
+          }
+        }
+        const { record, links } = result;
         records.push(record);
         onPage(record);
         if (currentDepth < opts.depth) {
@@ -9549,18 +9690,18 @@ function buildAssetMap(assets) {
   }
   return m;
 }
-function rewriteUrl(value, assetMap, origin) {
+function rewriteUrl(value, assetMap, baseUrl) {
   if (!value) return value;
   const clean = value.split("?")[0].split("#")[0];
   if (assetMap.has(value)) return assetMap.get(value);
   if (assetMap.has(clean)) return assetMap.get(clean);
   try {
-    const abs = new URL(value, origin).href;
+    const abs = new URL(value, baseUrl).href;
     const absClean = abs.split("?")[0].split("#")[0];
     if (assetMap.has(abs)) return assetMap.get(abs);
     if (assetMap.has(absClean)) return assetMap.get(absClean);
     const u = new URL(abs);
-    if (u.origin === origin) return u.pathname + u.search + u.hash;
+    if (u.origin === new URL(baseUrl).origin) return u.pathname + u.search + u.hash;
   } catch {
   }
   return value;
@@ -9604,41 +9745,52 @@ var MAP_EMBED_PATTERNS = [
 function isMapIframe(src) {
   return MAP_EMBED_PATTERNS.some((p) => p.test(src));
 }
+var LIVE_WIDGET_PATTERNS = [
+  /js\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hsforms\.net\/forms\//,
+  /forms-[a-z0-9]+\.hsforms\.com\//,
+  /static\.hsappstatic\.net\/ui-forms-embed-components-app\//,
+  /hubspotv2\.[^/]+\.webflow\.services\/static\//
+];
+function isLiveWidgetUrl(src) {
+  return LIVE_WIDGET_PATTERNS.some((p) => p.test(src));
+}
 function isMetaImageContent(el) {
   const key = el.attrs?.find((a) => a.name.toLowerCase() === "property" || a.name.toLowerCase() === "name")?.value.toLowerCase();
   return !!key && META_IMAGE_PROPERTIES.has(key);
 }
-function rewriteAttrValue(name, value, assetMap, origin) {
+function rewriteAttrValue(name, value, assetMap, baseUrl) {
   if (!value) return value;
   if (name === "srcset") {
     return value.split(",").map((part) => {
       const trimmed = part.trim();
       const spaceIdx = trimmed.search(/\s/);
-      if (spaceIdx === -1) return rewriteUrl(trimmed, assetMap, origin);
+      if (spaceIdx === -1) return rewriteUrl(trimmed, assetMap, baseUrl);
       const url = trimmed.slice(0, spaceIdx);
       const descriptor = trimmed.slice(spaceIdx);
-      return rewriteUrl(url, assetMap, origin) + descriptor;
+      return rewriteUrl(url, assetMap, baseUrl) + descriptor;
     }).join(", ");
   }
   if (name === "style") {
     return value.replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, url) => {
-      const rewritten = rewriteUrl(url, assetMap, origin);
+      const rewritten = rewriteUrl(url, assetMap, baseUrl);
       return `url(${quote}${rewritten}${quote})`;
     });
   }
-  return rewriteUrl(value, assetMap, origin);
+  return rewriteUrl(value, assetMap, baseUrl);
 }
-function walkNode(node, assetMap, origin, stats, failedAssets) {
+function walkNode(node, assetMap, origin, baseUrl, stats, failedAssets) {
   if (node.nodeName === "#text" || node.nodeName === "#comment" || node.nodeName === "#document") return;
   const el = node;
   const tagName = el.nodeName?.toLowerCase() ?? "";
   if (tagName === "iframe" && el.attrs) {
     const srcAttr = el.attrs.find((a) => a.name === "src");
-    if (srcAttr?.value && isMapIframe(srcAttr.value)) {
+    if (srcAttr?.value && (isMapIframe(srcAttr.value) || isLiveWidgetUrl(srcAttr.value))) {
       const originalSrc = srcAttr.value;
       srcAttr.value = "about:blank";
       el.attrs = el.attrs.filter((a) => a.name !== "allowfullscreen" && a.name !== "loading");
-      logger.debug(`  [MAP IFRAME] replaced ${originalSrc} with about:blank`);
+      logger.debug(`  [LIVE IFRAME] replaced ${originalSrc} with about:blank`);
       stats.attrsRewritten++;
     }
   }
@@ -9647,7 +9799,7 @@ function walkNode(node, assetMap, origin, stats, failedAssets) {
       if (child.nodeName === "#text") {
         const textNode = child;
         const before = textNode.value;
-        textNode.value = rewriteCssUrls(before, assetMap);
+        textNode.value = rewriteCssUrls(before, assetMap, baseUrl);
         if (textNode.value !== before) stats.styleUrlsRewritten++;
       }
     }
@@ -9660,12 +9812,18 @@ function walkNode(node, assetMap, origin, stats, failedAssets) {
     if (tagName === "meta" && isMetaImageContent(el)) {
       urlAttrs.add("content");
     }
+    let rewroteSubresourceToLocal = false;
     for (const attr of el.attrs) {
       const attrName = attr.name.toLowerCase();
       if (urlAttrs.has(attrName) && attr.value) {
         const before = attr.value;
+        if ((tagName === "script" || tagName === "iframe") && isLiveWidgetUrl(before)) {
+          attr.value = tagName === "iframe" ? "about:blank" : "";
+          stats.attrsRewritten++;
+          continue;
+        }
         try {
-          const absUrl = new URL(before, origin).href;
+          const absUrl = new URL(before, baseUrl).href;
           if (failedAssets.has(absUrl) || failedAssets.has(before)) {
             attr.value = "";
             stats.attrsRewritten++;
@@ -9673,12 +9831,15 @@ function walkNode(node, assetMap, origin, stats, failedAssets) {
           }
         } catch {
         }
-        attr.value = rewriteAttrValue(attrName, attr.value, assetMap, origin);
+        attr.value = rewriteAttrValue(attrName, attr.value, assetMap, baseUrl);
         if (attr.value !== before) {
           stats.attrsRewritten++;
+          if ((tagName === "link" || tagName === "script") && attr.value.includes("/_assets/")) {
+            rewroteSubresourceToLocal = true;
+          }
         } else {
           try {
-            const u = new URL(before, origin);
+            const u = new URL(before, baseUrl);
             if (u.origin !== origin && u.protocol.startsWith("http")) {
               stats.externalUrls++;
             } else if (u.origin === origin) {
@@ -9689,10 +9850,13 @@ function walkNode(node, assetMap, origin, stats, failedAssets) {
         }
       }
     }
+    if (rewroteSubresourceToLocal) {
+      el.attrs = el.attrs.filter((a) => a.name.toLowerCase() !== "integrity");
+    }
   }
   if ("childNodes" in el && el.childNodes) {
     for (const child of el.childNodes) {
-      walkNode(child, assetMap, origin, stats, failedAssets);
+      walkNode(child, assetMap, origin, baseUrl, stats, failedAssets);
     }
   }
 }
@@ -9700,9 +9864,10 @@ function rewriteHtml(record, origin) {
   const assetMap = buildAssetMap(record.assets);
   const failedAssets = new Set(record.failedAssets ?? []);
   const stats = { attrsRewritten: 0, attrsToRelative: 0, styleUrlsRewritten: 0, externalUrls: 0 };
+  const baseUrl = record.url || origin;
   const doc = parse(record.html);
   for (const child of doc.childNodes) {
-    walkNode(child, assetMap, origin, stats, failedAssets);
+    walkNode(child, assetMap, origin, baseUrl, stats, failedAssets);
   }
   logger.debug(
     `  [REWRITE] ${record.url}
@@ -9778,6 +9943,7 @@ function analyzeTraffic(entries, targetOrigin) {
   const filtered = entries.filter((e) => {
     if (!HTTP_METHODS.has(e.method.toUpperCase())) return false;
     if (e.method.toUpperCase() === "GET" && e.contentType?.includes("text/html")) return false;
+    if (e.method.toUpperCase() === "GET" && (e.contentType?.includes("text/css") || e.contentType?.includes("javascript") || e.contentType?.startsWith("image/") || e.contentType?.startsWith("font/"))) return false;
     if (SKIP_PATTERNS.some((p) => p.test(e.url))) return false;
     try {
       const u = new URL(e.url);
@@ -10164,4 +10330,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-5S3KUUKO.js.map
+//# sourceMappingURL=chunk-EZABET3L.js.map

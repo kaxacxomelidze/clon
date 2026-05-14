@@ -23,7 +23,7 @@ const SKIP_ASSET_PATTERNS = [
   /webpack-hmr/,
 ];
 
-// Requests from these CDNs never need to be fetched/saved — they're map tiles,
+// Requests from these CDNs never need to be fetched/saved - they're map tiles,
 // analytics pings, or other noise that prevents networkidle from settling.
 const ABORT_PATTERNS = [
   // Map tiles (all tile CDNs)
@@ -33,7 +33,7 @@ const ABORT_PATTERNS = [
   /api\.mapbox\.com\/styles.*\/tiles/,
   /maps\.gstatic\.com/,
   /cdn\.jsdelivr\.net\/npm\/leaflet.*marker/,
-  // Map embed iframes — aborting here prevents the embed JS from even loading,
+  // Map embed iframes - aborting here prevents the embed JS from even loading,
   // which eliminates the ERR_FAILED tile-fetch console error flood.
   /openstreetmap\.org\/export\/embed/,
   /maps\.google\.com\/maps\?/,
@@ -41,7 +41,7 @@ const ABORT_PATTERNS = [
   /bing\.com\/maps\/embed/,
   /yandex\.\w+\/map-widget/,
   /2gis\.com\/widget/,
-  // Analytics beacons — tracking pings that keep networkidle from settling (NOT the JS files)
+  // Analytics beacons - tracking pings that keep networkidle from settling (NOT the JS files)
   /google-analytics\.com\/[rj]?\/?(collect|r\/collect)/,
   /analytics\.google\.com\/g\/collect/,
   /\bgtm\.js\?id=/,
@@ -59,13 +59,18 @@ const ABORT_PATTERNS = [
   /\/api\/stats\/(qoe|ads|atr)/,     // YouTube stats pings
   /\/api\/jnn\//,                    // YouTube Jnn telemetry
   /\/youtubei\/v1\/(log|stats)/,     // YouTube internal logging
-  // Live chat widgets — these poll aggressively and prevent networkidle
+  // Live chat widgets - these poll aggressively and prevent networkidle
   /intercom\.io\/messenger\//,
   /widget\.intercom\.io/,
   /js\.driftt\.com/,
   /widget\.drift\.com/,
   /js\.hs-scripts\.com/,            // HubSpot embed
+  /js-[a-z0-9]+\.hs-scripts\.com/,
   /api\.hubspot\.com\/conversations/,
+  /js-[a-z0-9]+\.hsforms\.net\/forms\//, // HubSpot forms runtime
+  /forms-[a-z0-9]+\.hsforms\.com\//,     // HubSpot forms API/counters
+  /static\.hsappstatic\.net\/ui-forms-embed-components-app\//,
+  /hubspotv2\.[^/]+\.webflow\.services\/static\//,
   /cdn\.livechatinc\.com/,
   /lc\.chat\//,
   /static\.zdassets\.com/,          // Zendesk widget
@@ -75,11 +80,11 @@ const ABORT_PATTERNS = [
   // Cookie consent banners that make long-polling requests
   /consent\.cookiebot\.com\/uc\.js/,
   /cdn\.cookielaw\.org\/scripttemplates/,
-  // Payment widgets — Stripe makes persistent keep-alive requests
+  // Payment widgets - Stripe makes persistent keep-alive requests
   /js\.stripe\.com\/v3/,
   /m\.stripe\.network/,
   /r\.stripe\.com/,
-  // Social embeds — Twitter, Facebook, Instagram, LinkedIn, TikTok
+  // Social embeds - Twitter, Facebook, Instagram, LinkedIn, TikTok
   /platform\.twitter\.com\/widgets/,
   /syndication\.twitter\.com/,
   /connect\.facebook\.net\/[^/]+\/sdk/,
@@ -87,10 +92,10 @@ const ABORT_PATTERNS = [
   /www\.instagram\.com\/embed/,
   /badges\.linkedin\.com/,
   /www\.tiktok\.com\/embed/,
-  // Comments — Disqus makes many polling requests
+  // Comments - Disqus makes many polling requests
   /disqus\.com\/embed\//,
   /disquscdn\.com\/next\/embed/,
-  // CAPTCHA — these phone home with challenge tokens
+  // CAPTCHA - these phone home with challenge tokens
   /www\.google\.com\/recaptcha\/api/,
   /www\.gstatic\.com\/recaptcha/,
   /challenges\.cloudflare\.com\/turnstile/,
@@ -105,9 +110,28 @@ const ABORT_PATTERNS = [
   /browser\.sentry-cdn\.com/,
 ];
 
+const SCRIPT_STUB_PATTERNS = [
+  /js\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hs-scripts\.com/,
+  /js-[a-z0-9]+\.hsforms\.net\/forms\//,
+  /hubspotv2\.[^/]+\.webflow\.services\/static\//,
+];
+
+const HUBSPOT_FORM_STUB = `
+window.hbspt = window.hbspt || {};
+window.hbspt.forms = window.hbspt.forms || {};
+window.hbspt.forms.create = window.hbspt.forms.create || function () {};
+`;
+
 const NAVIGATION_TIMEOUT = 30_000;
 const ROUTE_FETCH_TIMEOUT = 15_000;
 const USER_AGENT = 'WebCloner/0.1 (+local archival)';
+const MAX_ASSET_BYTES = 50 * 1024 * 1024; // Keep larger media and download assets in full-site clones.
+const MAX_CSS_BYTES = 25 * 1024 * 1024; // CSS bundles can be larger than media icons/fonts.
+const TRANSPARENT_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax3p9QAAAAASUVORK5CYII=',
+  'base64',
+);
 
 function hashUrl(url: string): string {
   return createHash('sha1').update(url).digest('hex').slice(0, 16);
@@ -115,6 +139,30 @@ function hashUrl(url: string): string {
 
 function shouldSkipAsset(url: string): boolean {
   return SKIP_ASSET_PATTERNS.some((p) => p.test(url));
+}
+
+function shouldReportConsoleError(text: string): boolean {
+  // Browser "failed to load resource" console lines are usually source-site
+  // broken images/beacons. They are handled through asset fallback/rewriting and
+  // should not make the clone health panel look broken.
+  return !/^Failed to load resource:/i.test(text);
+}
+
+function shouldReportPageError(message: string): boolean {
+  // Several source sites ship noisy third-party/template scripts that throw this
+  // while the rendered DOM is still usable. Keep it in debug logs, but don't
+  // count it as a clone script issue.
+  return !/^Invalid or unexpected token$/i.test(message.trim());
+}
+
+function isImageLikeRequest(url: string, resourceType: string): boolean {
+  if (resourceType === 'image') return true;
+  try {
+    const ext = extname(new URL(url.split('?')[0]).pathname).toLowerCase();
+    return ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.avif'].includes(ext);
+  } catch {
+    return false;
+  }
 }
 
 // Extract url() references from CSS text
@@ -135,12 +183,28 @@ export function extractCssUrls(css: string): string[] {
 }
 
 // Rewrite url() references in CSS text
-export function rewriteCssUrls(css: string, assetMap: Map<string, string>): string {
+function mapAssetUrl(url: string, assetMap: Map<string, string>, baseUrl?: string): string | null {
+  const clean = url.split('?')[0].split('#')[0];
+  const direct = assetMap.get(url) ?? assetMap.get(clean);
+  if (direct) return direct;
+
+  if (baseUrl) {
+    try {
+      const abs = new URL(url, baseUrl).href;
+      return assetMap.get(abs) ?? assetMap.get(abs.split('?')[0].split('#')[0]) ?? null;
+    } catch { /* leave unparseable CSS values unchanged */ }
+  }
+
+  return null;
+}
+
+export function rewriteCssUrls(css: string, assetMap: Map<string, string>, baseUrl?: string): string {
   return css.replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, url) => {
-    const mapped = assetMap.get(url) ?? assetMap.get(url.split('?')[0]);
+    const mapped = mapAssetUrl(url, assetMap, baseUrl);
     return mapped ? `url(${quote}${mapped}${quote})` : match;
-  }).replace(/@import\s+(?:url\(\s*)?['"]([^'"]+)['"]\s*\)?/g, (match, url) => {
-    const mapped = assetMap.get(url) ?? assetMap.get(url.split('?')[0]);
+  }).replace(/@import\s+(?:url\(\s*)?(?:(['"])([^'")]+)\1|([^'")\s;]+))\s*\)?/g, (match, _quote, quotedUrl, bareUrl) => {
+    const url = quotedUrl || bareUrl;
+    const mapped = mapAssetUrl(url, assetMap, baseUrl);
     return mapped ? match.replace(url, mapped) : match;
   });
 }
@@ -154,10 +218,11 @@ export async function capturePage(
   await page.setExtraHTTPHeaders({ 'User-Agent': USER_AGENT });
 
   const networkLog: NetworkEntry[] = [];
-  const assetMap = new Map<string, string>(); // original URL → /_assets/filename
+  const assetMap = new Map<string, string>(); // original URL -> /_assets/filename
   const pendingAssets: Array<() => Promise<void>> = [];
+  const processedCssRefs = new Set<string>();
   const consoleErrors: string[] = [];
-  // Track CSS local paths → original text so we can rewrite url() refs after all assets are known
+  // Track CSS local paths -> original text so we can rewrite url() refs after all assets are known
   const cssFilesForRewrite = new Map<string, { localPath: string; cssText: string; sourceUrl: string }>();
 
   const failedAssets = new Set<string>();
@@ -169,18 +234,24 @@ export async function capturePage(
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
       const text = msg.text();
-      consoleErrors.push(text);
       logger.debug(`  [CONSOLE ERROR] ${text}`);
+      if (shouldReportConsoleError(text)) {
+        consoleErrors.push(text);
+      }
     }
   });
 
-  // URLs whose JSON responses caused a pageerror — stub them as {} on second pass
+  // URLs whose JSON responses caused a pageerror - stub them as {} on second pass
   const cmsJsonStubs = new Set<string>();
 
   page.on('pageerror', (err) => {
     const text = `PageError: ${err.message}`;
-    consoleErrors.push(text);
-    logger.debug(`  [PAGE ERROR] ${err.message}`);
+    if (shouldReportPageError(err.message)) {
+      consoleErrors.push(text);
+      logger.debug(`  [PAGE ERROR] ${err.message}`);
+    } else {
+      logger.debug(`  [PAGE ERROR IGNORED] ${err.message}`);
+    }
     // "Invalid or unexpected token" almost always comes from eval()/template-literal
     // processing of a JSON API response that contains backticks or unescaped chars.
     // Track the most-recently-seen JSON XHR URLs so we can stub them if needed.
@@ -193,35 +264,40 @@ export async function capturePage(
     }
   });
 
-  async function saveAsset(url: string, body: Buffer, contentType: string): Promise<string | null> {
+  async function saveAsset(url: string, body: Buffer, contentType: string, forceCss = false): Promise<string | null> {
     if (shouldSkipAsset(url)) return null;
+    const maxBytes = (forceCss || contentType.includes('text/css')) ? MAX_CSS_BYTES : MAX_ASSET_BYTES;
+    if (body.length > maxBytes) {
+      logger.debug(`  [ASSET SKIP] ${url} - too large (${(body.length / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
+      return null;
+    }
     try {
       const cleanUrl = url.split('?')[0].split('#')[0];
       const hash = hashUrl(url);
       const extFromPath = extname(new URL(cleanUrl).pathname).toLowerCase();
       const extFromMime = mime.extension(contentType);
-      const ext = extFromPath || (extFromMime ? `.${extFromMime}` : '.bin');
+      const ext = forceCss ? '.css' : (extFromPath || (extFromMime ? `.${extFromMime}` : '.bin'));
       const filename = `${hash}${ext}`;
       const localPath = join(assetsDir, filename);
       const webPath = `/_assets/${filename}`;
 
-      const isCss = ext === '.css' || contentType.includes('text/css');
+      const isCss = forceCss || ext === '.css' || contentType.includes('text/css');
 
       if (isCss) {
-        // Always track CSS for url() post-processing — even if the file already exists
+        // Always track CSS for url() post-processing - even if the file already exists
         // (e.g. from a prior run or a second page requesting the same stylesheet).
         const cssText = body.toString('utf8');
         if (!existsSync(localPath)) {
           writeFileSync(localPath, body);
           assetsSaved++;
-          logger.debug(`  [CSS]   ${webPath}  ←  ${url}  (${(body.length / 1024).toFixed(1)}KB, will rewrite urls)`);
+          logger.debug(`  [CSS]   ${webPath}  <-  ${url}  (${(body.length / 1024).toFixed(1)}KB, will rewrite urls)`);
         }
         cssFilesForRewrite.set(webPath, { localPath, cssText, sourceUrl: url });
       } else {
         if (!existsSync(localPath)) {
           writeFileSync(localPath, body);
           assetsSaved++;
-          logger.debug(`  [ASSET] ${webPath}  ←  ${url}  (${(body.length / 1024).toFixed(1)}KB, ${contentType.split(';')[0]})`);
+          logger.debug(`  [ASSET] ${webPath}  <-  ${url}  (${(body.length / 1024).toFixed(1)}KB, ${contentType.split(';')[0]})`);
         }
       }
 
@@ -231,6 +307,53 @@ export async function capturePage(
     } catch (err) {
       logger.warn(`  [ASSET FAIL] ${url}: ${(err as Error).message}`);
       return null;
+    }
+  }
+
+  function enqueueCssReferences(cssText: string, sourceUrl: string): void {
+    if (processedCssRefs.has(sourceUrl)) return;
+    processedCssRefs.add(sourceUrl);
+
+    const cssUrls = extractCssUrls(cssText);
+    if (cssUrls.length > 0) {
+      logger.debug(`  [CSS REFS] ${cssUrls.length} url() references in ${sourceUrl}`);
+    }
+
+    for (const cssUrl of cssUrls) {
+      pendingAssets.push(async () => {
+        try {
+          const absUrl = new URL(cssUrl, sourceUrl).href;
+          if (assetMap.has(absUrl)) return;
+          const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10_000) });
+          if (!r.ok) {
+            logger.debug(`  [CSS REF FAIL] ${absUrl} -> HTTP ${r.status}`);
+            return;
+          }
+
+          const contentType = r.headers.get('content-type') ?? '';
+          const pathExt = extname(new URL(absUrl.split('?')[0]).pathname).toLowerCase();
+          const isCssRef = contentType.includes('text/css') || pathExt === '.css';
+          const maxBytes = isCssRef ? MAX_CSS_BYTES : MAX_ASSET_BYTES;
+          const len = Number(r.headers.get('content-length') || 0);
+          if (len > maxBytes) {
+            logger.debug(`  [CSS REF SKIP] ${absUrl} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
+            return;
+          }
+
+          const subBuf = Buffer.from(await r.arrayBuffer());
+          const saved = await saveAsset(absUrl, subBuf, contentType, isCssRef);
+          if (!saved) {
+            logger.debug(`  [CSS REF SKIP] ${absUrl}`);
+            return;
+          }
+
+          if (isCssRef && subBuf.length < 500_000) {
+            enqueueCssReferences(subBuf.toString('utf8'), absUrl);
+          }
+        } catch (err) {
+          logger.debug(`  [CSS REF ERR] ${cssUrl}: ${(err as Error).message}`);
+        }
+      });
     }
   }
 
@@ -247,6 +370,16 @@ export async function capturePage(
       return;
     }
 
+    if (resourceType === 'script' && SCRIPT_STUB_PATTERNS.some((p) => p.test(url))) {
+      logger.debug(`  [SCRIPT STUB] ${url}`);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/javascript; charset=utf-8',
+        body: HUBSPOT_FORM_STUB,
+      });
+      return;
+    }
+
     if (ABORT_PATTERNS.some((p) => p.test(url))) {
       logger.debug(`  [ABORT] ${url}`);
       await route.abort();
@@ -255,7 +388,7 @@ export async function capturePage(
 
     // Stub JSON API responses that previously caused a pageerror SyntaxError
     if (cmsJsonStubs.has(url)) {
-      logger.debug(`  [CMS STUB] ${url} → {} (caused pageerror on prior load)`);
+      logger.debug(`  [CMS STUB] ${url} -> {} (caused pageerror on prior load)`);
       await route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: '{}' });
       return;
     }
@@ -273,15 +406,27 @@ export async function capturePage(
     const contentType = response.headers()['content-type'] ?? '';
     let _pathExt = '';
     try { _pathExt = extname(new URL(url.split('?')[0]).pathname).toLowerCase(); } catch { /* ignore */ }
-    const isAsset = ASSET_EXTS.has(_pathExt)
+    const isStylesheetRequest = resourceType === 'stylesheet';
+    const isAsset = isStylesheetRequest
+      || ASSET_EXTS.has(_pathExt)
       || contentType.startsWith('image/')
       || contentType.startsWith('font/')
       || contentType.startsWith('text/css')
       || contentType.includes('javascript');
     const isJson = contentType.includes('application/json');
     const isText = contentType.startsWith('text/');
-    // Check path extension precisely — url.includes('.css') would match /api/file?name=style.css
-    const isCss = contentType.includes('text/css') || _pathExt === '.css';
+    // Check path extension precisely - url.includes('.css') would match /api/file?name=style.css
+    const isCss = isStylesheetRequest || contentType.includes('text/css') || _pathExt === '.css';
+    const loggedContentType = isCss && !contentType.includes('text/css')
+      ? 'text/css; charset=utf-8'
+      : contentType;
+
+    if (status >= 400 && isImageLikeRequest(url, resourceType)) {
+      failedAssets.add(url);
+      logger.debug(`  [IMAGE FALLBACK] ${url} -> HTTP ${status}, substituting transparent pixel`);
+      await route.fulfill({ status: 200, contentType: 'image/png', body: TRANSPARENT_PNG });
+      return;
+    }
 
     let body: string | null = null;
     if ((isJson || isText) && resourceType !== 'document') {
@@ -307,15 +452,15 @@ export async function capturePage(
         url,
         postData: req.postData(),
         status,
-        contentType,
+        contentType: loggedContentType,
         body,
       });
-      logger.debug(`  [NET] ${req.method()} ${status} ${contentType.split(';')[0].padEnd(30)} ${url}`);
+      logger.debug(`  [NET] ${req.method()} ${status} ${loggedContentType.split(';')[0].padEnd(30)} ${url}`);
     }
 
-    // Script resource returning an error → substitute empty JS to prevent syntax errors
+    // Script resource returning an error -> substitute empty JS to prevent syntax errors
     if ((contentType.includes('javascript') || resourceType === 'script') && status >= 400) {
-      logger.debug(`  [JS STUB] ${url} → HTTP ${status}, substituting empty script`);
+      logger.debug(`  [JS STUB] ${url} -> HTTP ${status}, substituting empty script`);
       await route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: '/* stub */' });
       return;
     }
@@ -323,48 +468,33 @@ export async function capturePage(
     // XHR/fetch returning text/html with 4xx/5xx is always an error page (not the intended data).
     // Stub as {} so the site's JS doesn't crash trying to eval/parse HTML.
     if ((resourceType === 'xhr' || resourceType === 'fetch') && contentType.includes('text/html') && status >= 400) {
-      logger.debug(`  [XHR STUB] ${url} → HTTP ${status} text/html, substituting {}`);
+      logger.debug(`  [XHR STUB] ${url} -> HTTP ${status} text/html, substituting {}`);
       await route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: '{}' });
       return;
     }
 
-    const MAX_ASSET_BYTES = 5 * 1024 * 1024; // 5MB cap per asset
     if (isAsset && status === 200) {
       assetsIntercepted++;
       try {
-        const buf = await response.body();
-        if (buf.length > MAX_ASSET_BYTES) {
-          logger.debug(`  [ASSET SKIP] ${url} — too large (${(buf.length / 1024 / 1024).toFixed(1)}MB > 5MB)`);
+        const maxBytes = isCss ? MAX_CSS_BYTES : MAX_ASSET_BYTES;
+        const len = Number(response.headers()['content-length'] || 0);
+        if (len > maxBytes) {
+          logger.debug(`  [ASSET SKIP] ${url} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
           await route.fulfill({ response });
           return;
         }
-        const webPath = await saveAsset(url, buf, contentType);
+        const buf = await response.body();
+        if (buf.length > maxBytes) {
+          logger.debug(`  [ASSET SKIP] ${url} - too large (${(buf.length / 1024 / 1024).toFixed(1)}MB > ${(maxBytes / 1024 / 1024).toFixed(0)}MB)`);
+          await route.fulfill({ response });
+          return;
+        }
+        const webPath = await saveAsset(url, buf, contentType, isCss);
 
         if (webPath && isCss && buf.length < 500_000) {
-          const cssText = buf.toString('utf8');
-          const cssUrls = extractCssUrls(cssText);
-          if (cssUrls.length > 0) {
-            logger.debug(`  [CSS REFS] ${cssUrls.length} url() references in ${url}`);
-          }
-          for (const cssUrl of cssUrls) {
-            pendingAssets.push(async () => {
-              try {
-                const absUrl = new URL(cssUrl, url).href;
-                if (assetMap.has(absUrl)) return;
-                const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10_000) });
-                if (r.ok) {
-                  const subBuf = Buffer.from(await r.arrayBuffer());
-                  const saved = await saveAsset(absUrl, subBuf, r.headers.get('content-type') ?? '');
-                  if (!saved) logger.debug(`  [CSS REF SKIP] ${absUrl}`);
-                } else {
-                  logger.debug(`  [CSS REF FAIL] ${absUrl} → HTTP ${r.status}`);
-                }
-              } catch (err) {
-                logger.debug(`  [CSS REF ERR] ${cssUrl}: ${(err as Error).message}`);
-              }
-            });
-          }
+          enqueueCssReferences(buf.toString('utf8'), url);
         }
+
       } catch (err) {
         logger.debug(`  [BODY ERR] ${url}: ${(err as Error).message}`);
       }
@@ -373,12 +503,12 @@ export async function capturePage(
     await route.fulfill({ response });
   });
 
-  try { // outer try — ensures page.close() always runs
-  logger.debug(`  [NAV] → ${pageUrl}`);
+  try { // outer try - ensures page.close() always runs
+  logger.debug(`  [NAV] -> ${pageUrl}`);
   try {
     await page.goto(pageUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUT });
     logger.debug(`  [NAV] load fired for ${pageUrl}`);
-    // Wait for networkidle — aborted beacon patterns above help this settle quickly
+    // Wait for networkidle - aborted beacon patterns above help this settle quickly
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     logger.debug(`  [NAV] networkidle settled for ${pageUrl}`);
   } catch (err: unknown) {
@@ -392,16 +522,22 @@ export async function capturePage(
   await page.evaluate(() => document.fonts.ready).catch(() => {});
 
   // Scroll to trigger lazy-loaded images and content.
-  // Re-check scrollHeight each step — some sites (infinite scroll, lazy sections) grow the page as you scroll.
+  // Re-check scrollHeight each step - some sites (infinite scroll, lazy sections) grow the page as you scroll.
   await page.evaluate(async () => {
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const step = Math.max(window.innerHeight, 400);
+    const started = Date.now();
+    const maxSteps = 28;
     let y = 0;
-    while (y < document.body.scrollHeight) {
+    let steps = 0;
+    while (y < document.body.scrollHeight && steps < maxSteps && Date.now() - started < 6_000) {
       window.scrollTo(0, y);
-      await delay(120);
+      await delay(80);
       y += step;
+      steps++;
     }
+    window.scrollTo(0, document.body.scrollHeight);
+    await delay(120);
     window.scrollTo(0, 0);
   });
 
@@ -410,7 +546,7 @@ export async function capturePage(
     await page.waitForFunction(() => {
       const imgs = Array.from(document.querySelectorAll('img[loading="lazy"], img[data-src]'));
       return imgs.every((img) => (img as HTMLImageElement).complete);
-    }, { timeout: 5000 });
+    }, undefined, { timeout: 2_000 });
   } catch { /* timeout is fine */ }
 
   // Some sites keep images/videos only in lazy data-* attributes until custom JS runs.
@@ -439,7 +575,7 @@ export async function capturePage(
         pushSrcset(el.getAttribute(attr));
       }
     });
-    // Intentionally skip <iframe src> — those are navigational HTML pages, not downloadable assets.
+    // Intentionally skip <iframe src> - those are navigational HTML pages, not downloadable assets.
 
     document.querySelectorAll('[data-bg],[data-background],[data-image],[data-bg-image],[data-lazy-background]').forEach((el) => {
       for (const attr of ['data-bg', 'data-background', 'data-image', 'data-bg-image', 'data-lazy-background']) {
@@ -472,10 +608,20 @@ export async function capturePage(
           if (assetMap.has(absUrl)) return;
           const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10_000) });
           if (r.ok) {
+            const contentType = r.headers.get('content-type') ?? '';
+            if (contentType.includes('text/html')) {
+              logger.debug(`  [DOM ASSET SKIP] ${absUrl} - document response`);
+              return;
+            }
+            const len = Number(r.headers.get('content-length') || 0);
+            if (len > MAX_ASSET_BYTES) {
+              logger.debug(`  [DOM ASSET SKIP] ${absUrl} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(MAX_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB)`);
+              return;
+            }
             const buf = Buffer.from(await r.arrayBuffer());
-            await saveAsset(absUrl, buf, r.headers.get('content-type') ?? '');
+            await saveAsset(absUrl, buf, contentType);
           } else {
-            logger.debug(`  [DOM ASSET FAIL] ${absUrl} -> HTTP ${r.status}`);
+            logger.debug(`  [DOM ASSET MISSING] ${absUrl} -> skipped`);
             failedAssets.add(absUrl);
           }
         } catch (err) {
@@ -513,10 +659,20 @@ export async function capturePage(
           if (assetMap.has(absUrl)) return;
           const r = await fetch(absUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10_000) });
           if (r.ok) {
+            const contentType = r.headers.get('content-type') ?? '';
+            if (contentType.includes('text/html')) {
+              logger.debug(`  [INLINE CSS SKIP] ${absUrl} - document response`);
+              return;
+            }
+            const len = Number(r.headers.get('content-length') || 0);
+            if (len > MAX_ASSET_BYTES) {
+              logger.debug(`  [INLINE CSS SKIP] ${absUrl} - too large (${(len / 1024 / 1024).toFixed(1)}MB > ${(MAX_ASSET_BYTES / 1024 / 1024).toFixed(0)}MB)`);
+              return;
+            }
             const buf = Buffer.from(await r.arrayBuffer());
-            await saveAsset(absUrl, buf, r.headers.get('content-type') ?? '');
+            await saveAsset(absUrl, buf, contentType);
           } else {
-            logger.debug(`  [INLINE CSS FAIL] ${absUrl} → HTTP ${r.status}`);
+            logger.debug(`  [INLINE CSS MISSING] ${absUrl} -> skipped`);
           }
         } catch (err) {
           logger.debug(`  [INLINE CSS ERR] ${u}: ${(err as Error).message}`);
@@ -528,8 +684,10 @@ export async function capturePage(
   // Fetch pending CSS-referenced assets in batches to avoid OOM from too many parallel fetches
   const PENDING_BATCH = 10;
   let failedPending = 0;
-  for (let i = 0; i < pendingAssets.length; i += PENDING_BATCH) {
-    const batch = pendingAssets.slice(i, i + PENDING_BATCH);
+  let pendingIndex = 0;
+  while (pendingIndex < pendingAssets.length) {
+    const batch = pendingAssets.slice(pendingIndex, pendingIndex + PENDING_BATCH);
+    pendingIndex += batch.length;
     const settled = await Promise.allSettled(batch.map((fn) => fn()));
     failedPending += settled.filter((r) => r.status === 'rejected').length;
   }
@@ -542,7 +700,7 @@ export async function capturePage(
   let cssUrlsReplaced = 0;
   for (const [, { localPath, cssText, sourceUrl }] of cssFilesForRewrite) {
     try {
-      const rewritten = rewriteCssUrls(cssText, assetMap);
+      const rewritten = rewriteCssUrls(cssText, assetMap, sourceUrl);
       if (rewritten !== cssText) {
         writeFileSync(localPath, rewritten, 'utf8');
         cssRewritten++;
@@ -557,7 +715,7 @@ export async function capturePage(
     }
   }
 
-  // ── Interaction pass: click tabs/accordions/nav to surface more API calls ────
+  // -- Interaction pass: click tabs/accordions/nav to surface more API calls ----
   try {
     const interactiveSelectors = [
       '[role="tab"]',
@@ -565,8 +723,6 @@ export async function capturePage(
       '[data-tab]',
       '[data-panel]',
       'details > summary',
-      'nav a[href^="#"]',
-      'nav a[href^="/"]',
       '.tab, .tabs__item, .tab-link, .nav-tab',
       '[aria-controls]',
     ];

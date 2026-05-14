@@ -501,6 +501,156 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 @keyframes authProg{0%{width:0;opacity:1}70%{width:82%;opacity:1}90%{width:86%;opacity:.8}100%{width:86%;opacity:.8}}
 @keyframes authErrShake{0%,100%{transform:none}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
 
+/* Builder editor refresh */
+.editor-root{
+  --builder-panel:#101214;
+  --builder-panel-2:#15181c;
+  --builder-line:#252a31;
+  --builder-soft:#a7b0bc;
+  --builder-muted:#697281;
+  --builder-accent:#14b8a6;
+  display:grid;
+  grid-template-columns:260px minmax(420px,1fr)330px;
+  grid-template-rows:48px minmax(0,1fr);
+  overflow:hidden;
+  min-width:0;
+  background:#0b0d10;
+}
+.editor-root.pages-collapsed{grid-template-columns:0 minmax(420px,1fr)330px}
+.editor-root.props-collapsed{grid-template-columns:260px minmax(420px,1fr)0}
+.editor-root.pages-collapsed.props-collapsed{grid-template-columns:0 minmax(420px,1fr)0}
+.editor-root.pages-collapsed .ed-pages,.editor-root.props-collapsed .ed-props{display:none}
+.ed-studio-bar{
+  grid-column:1/-1;
+  grid-row:1;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:0 14px 0 18px;
+  background:#0f1115;
+  border-bottom:1px solid var(--builder-line);
+  min-width:0;
+}
+.ed-studio-title{display:flex;align-items:center;gap:10px;min-width:0;color:#eef2f6}
+.ed-studio-title strong{font-size:13px;letter-spacing:.01em}
+.ed-studio-kicker{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--builder-accent);background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.22);border-radius:999px;padding:4px 8px}
+.ed-studio-route{font-size:11px;color:var(--builder-muted);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:1px solid var(--builder-line);padding-left:10px}
+.ed-studio-flow{display:flex;align-items:center;gap:8px;color:var(--builder-muted);font-size:11px;font-weight:700}
+.ed-studio-flow span{display:flex;align-items:center;gap:8px}
+.ed-studio-flow span:not(:last-child)::after{content:'';width:20px;height:1px;background:var(--builder-line);display:block}
+.ed-studio-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.ed-studio-btn{height:30px;padding:0 12px;border-radius:7px;border:1px solid var(--builder-line);background:#15181d;color:var(--builder-soft);font-size:12px;font-weight:700}
+.ed-studio-btn:hover{border-color:#3a424d;background:#1a1f25;color:#fff}
+.ed-studio-btn.primary{background:var(--builder-accent);border-color:var(--builder-accent);color:#03120f}
+.ed-pages{
+  grid-column:1;
+  grid-row:2;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  resize:none;
+  background:var(--builder-panel);
+  border-right:1px solid var(--builder-line);
+}
+.ed-pages-hd,.ed-props-top{
+  min-height:46px;
+  padding:0 14px;
+  background:var(--builder-panel-2);
+  color:#d7dde5;
+  border-bottom:1px solid var(--builder-line);
+  text-transform:none;
+  letter-spacing:0;
+}
+.ed-pages-hd span,.ed-props-top>span{font-size:13px;font-weight:800}
+.ed-page-actions{padding:10px;border-bottom:1px solid var(--builder-line);gap:8px}
+.ed-page-add{height:34px;border-radius:8px;background:#171b20;border-color:#2a3038;color:#cbd5e1}
+.ed-page-add:hover{background:#1e252c;border-color:rgba(20,184,166,.42);color:#fff}
+.ed-left-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;border-bottom:1px solid var(--builder-line)}
+.ed-left-tool{height:54px;border-radius:9px;border:1px solid #2a3038;background:#15191e;color:#edf2f7;text-align:left;padding:9px 10px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.ed-left-tool:hover{border-color:rgba(20,184,166,.45);background:#192127}
+.ed-left-tool span{font-size:12px;font-weight:800}
+.ed-left-tool small{font-size:10px;color:var(--builder-muted);font-weight:700}
+.ed-pages-list{padding:8px}
+.ed-page-btn{border:1px solid transparent;border-left:3px solid transparent;border-radius:8px;margin-bottom:4px;padding:9px 10px;color:var(--builder-soft);font-weight:650}
+.ed-page-btn:hover{background:#171b20;color:#f8fafc;border-color:#252c34}
+.ed-page-btn.on{background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.28);border-left-color:var(--builder-accent);color:#7dd3c7}
+.ed-center{
+  grid-column:2;
+  grid-row:2;
+  background:#171a1f;
+  min-width:0;
+}
+.ed-toolbar{
+  min-height:46px;
+  padding:7px 12px;
+  background:#101318;
+  border-bottom:1px solid var(--builder-line);
+  gap:7px;
+}
+.tool-group{gap:4px}
+.tool-btn,.ed-menu-btn{
+  height:32px;
+  border-radius:8px;
+  border-color:#262c34;
+  background:#15191e;
+  color:#aeb7c3;
+}
+.tool-btn:hover,.ed-menu-btn:hover,.ed-menu.open .ed-menu-btn{background:#1c2229;border-color:#3a444f;color:#fff}
+.tool-btn.on{background:rgba(20,184,166,.14);border-color:rgba(20,184,166,.42);color:#5eead4}
+.ed-menu-btn{padding:0 12px;color:#d7dde5}
+.tool-sep{background:#2a3038;height:24px;margin:0 2px}
+.ed-save-btn{
+  height:32px;
+  border-radius:8px;
+  padding:0 14px;
+  background:#0f2f2a;
+  border-color:rgba(20,184,166,.38);
+  color:#5eead4;
+}
+.frame-area{
+  background:#20242a;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:24px 24px;
+}
+#frame-wrap{padding:34px 48px}
+#frame-scaler{border-radius:10px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 28px 90px rgba(0,0,0,.55);overflow:hidden}
+.canvas-zoom-hud{background:rgba(15,17,21,.9);border-color:#333b45;border-radius:10px}
+.ed-props{
+  grid-column:3;
+  grid-row:2;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  resize:none;
+  background:var(--builder-panel);
+  border-left:1px solid var(--builder-line);
+}
+.ed-props-top{position:sticky;top:0;z-index:5;gap:8px}
+.ed-props-top small{font-size:10px;color:var(--builder-muted);font-weight:700;margin-right:auto}
+.ep-tabs{top:46px;background:#101318;border-bottom:1px solid var(--builder-line);padding:6px;gap:5px}
+.ep-tab{border:1px solid transparent;border-radius:7px;padding:7px 4px;color:var(--builder-muted)}
+.ep-tab:hover{background:#171b20;color:#d7dde5}
+.ep-tab.on{background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.28);color:#5eead4}
+.sec,.sec-group{margin:10px;border:1px solid var(--builder-line);border-radius:10px;background:#12161b;overflow:hidden}
+.sec-hd,.sec-group-hd{padding:10px 12px;background:#171b20;color:#cbd5e1;text-transform:none;letter-spacing:0;font-size:12px}
+.sec-bd{padding:12px;gap:10px}
+.qp-bar{margin:10px;border:1px solid var(--builder-line);border-radius:10px;background:#12161b;padding:10px}
+.pi,.sp-cross input{background:#0f1318;border-color:#2b333d;border-radius:7px}
+.pi:focus,.sp-cross input:focus{border-color:var(--builder-accent);box-shadow:0 0 0 3px rgba(20,184,166,.12)}
+.act-btn{background:#151a20;border-color:#2a3038;border-radius:8px;color:#cbd5e1}
+.act-btn:hover{background:#1b2229;border-color:#475260;color:#fff}
+.p-empty{min-height:220px;color:var(--builder-muted)}
+@media(max-width:900px){
+  .editor-root,.editor-root.pages-collapsed,.editor-root.props-collapsed,.editor-root.pages-collapsed.props-collapsed{display:flex;flex-direction:column}
+  .ed-studio-bar{min-height:48px;flex-wrap:wrap;padding:8px 10px;height:auto}
+  .ed-studio-flow{display:none}
+  .ed-pages{width:100%;max-height:150px;border-right:none;border-bottom:1px solid var(--builder-line)}
+  .ed-props{width:100%;max-height:320px;border-left:none;border-top:1px solid var(--builder-line)}
+  .ed-center{min-height:520px}
+  #frame-wrap{padding:24px 18px}
+}
+
 #auth-screen{position:fixed;inset:0;z-index:10000;background:#06061a;display:flex;align-items:stretch;overflow:hidden;animation:authIn .3s ease}
 #auth-screen.hidden{display:none!important;animation:none}
 
@@ -1086,6 +1236,59 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   </div>
 </div>
 
+<!-- GitHub modal -->
+<div id="github-modal-bg" class="deploy-modal-bg" style="display:none" onclick="if(event.target===this)closeGithubModal()">
+  <div class="deploy-modal">
+    <button class="deploy-close" onclick="closeGithubModal()">x</button>
+    <div class="deploy-modal-title">Push to GitHub</div>
+    <div class="deploy-modal-sub">Connect once, pick the repo, and upload the generated project files exactly where you want them.</div>
+    <div class="deploy-field">
+      <label>GitHub token</label>
+      <input type="password" id="github-token" placeholder="github_pat_..." autocomplete="off">
+      <div class="deploy-field-hint">Needs Contents read/write access. Stored only in this browser if you choose remember.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin:-4px 0 14px;flex-wrap:wrap">
+      <button class="done-action-btn secondary" type="button" id="github-connect-btn" onclick="connectGithub()">Connect & load repos</button>
+      <label style="display:flex;align-items:center;gap:7px;color:var(--text2);font-size:12px;cursor:pointer">
+        <input id="github-remember" type="checkbox" style="accent-color:var(--blue)"> Remember token locally
+      </label>
+      <span id="github-connect-status" style="font-size:12px;color:var(--text3)"></span>
+    </div>
+    <div class="deploy-field">
+      <label>Repository</label>
+      <select id="github-repo-select" class="share-input" style="display:none;margin-bottom:8px;cursor:pointer" onchange="onGithubRepoPicked()"></select>
+      <input id="github-repo" placeholder="owner/repo or https://github.com/owner/repo" autocomplete="off">
+      <div class="deploy-field-hint">Choose from connected repos or type any exact repo manually.</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="deploy-field">
+        <label>Branch</label>
+        <select id="github-branch-select" class="share-input" style="display:none;margin-bottom:8px;cursor:pointer" onchange="document.getElementById('github-branch').value=this.value"></select>
+        <input id="github-branch" placeholder="main" value="main" autocomplete="off">
+      </div>
+      <div class="deploy-field">
+        <label>Folder path</label>
+        <input id="github-path" placeholder="optional, e.g. cloned/limova" autocomplete="off">
+      </div>
+    </div>
+    <div class="deploy-field">
+      <label>Commit message</label>
+      <input id="github-message" placeholder="Import Web Cloner output" autocomplete="off">
+    </div>
+    <label style="display:flex;align-items:flex-start;gap:9px;margin:2px 0 14px;color:var(--text2);font-size:12px;line-height:1.5;cursor:pointer">
+      <input id="github-clean" type="checkbox" style="margin-top:2px;accent-color:var(--blue)">
+      Replace files in the target folder so the repo matches this export.
+    </label>
+    <button class="deploy-btn" id="github-submit-btn" onclick="pushToGithub()">Push files</button>
+    <div class="deploy-result" id="github-result">
+      <div style="font-size:11px;font-weight:700;color:rgba(31,209,122,.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Pushed successfully</div>
+      <div class="deploy-result-url" id="github-result-url"></div>
+      <button style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:7px;background:rgba(31,209,122,.12);border:1px solid rgba(31,209,122,.25);color:#1fd17a;cursor:pointer;font-family:inherit" onclick="window.open(document.getElementById('github-result-url').dataset.url,'_blank')">Open commit</button>
+    </div>
+    <div class="deploy-err" id="github-err"></div>
+  </div>
+</div>
+
 <!-- Profile modal -->
 <div id="profile-modal" class="hidden" onclick="if(event.target===this)closeProfile()">
   <div class="profile-panel">
@@ -1265,13 +1468,33 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 
   <!-- Editor tab -->
   <div class="tab-panel editor-root" id="tab-editor" style="display:none">
+    <div class="ed-studio-bar">
+      <div class="ed-studio-title">
+        <span class="ed-studio-kicker">Builder</span>
+        <strong>Studio</strong>
+        <span class="ed-studio-route" id="edBuilderRoute">No page open</span>
+      </div>
+      <div class="ed-studio-flow" aria-label="Builder areas">
+        <span>Pages</span>
+        <span>Canvas</span>
+        <span>Inspector</span>
+      </div>
+      <div class="ed-studio-actions">
+        <button class="ed-studio-btn" type="button" onclick="openSectionModal()">Blocks</button>
+        <button class="ed-studio-btn primary" type="button" onclick="savePage()">Save page</button>
+      </div>
+    </div>
 
     <!-- Page list -->
     <div class="ed-pages">
-      <div class="ed-pages-hd"><span>Pages</span><button class="ed-rail-toggle" type="button" id="collapsePagesBtn" title="Hide pages panel">&lt;</button></div>
+      <div class="ed-pages-hd"><span>Site pages</span><button class="ed-rail-toggle" type="button" id="collapsePagesBtn" title="Hide pages panel">&lt;</button></div>
       <div class="ed-page-actions">
         <button class="ed-page-add" type="button" id="addLoginPageBtn" title="Create /login page">+ Login</button>
         <button class="ed-page-add" type="button" id="addRegisterPageBtn" title="Create /register page">+ Register</button>
+      </div>
+      <div class="ed-left-tools">
+        <button class="ed-left-tool" type="button" onclick="openSectionModal()"><span>Blocks</span><small>Sections</small></button>
+        <button class="ed-left-tool" type="button" onclick="setMode('select')"><span>Select</span><small>Canvas</small></button>
       </div>
       <div class="ed-pages-list" id="edPageList">
         <div class="ed-no-site">
@@ -1433,7 +1656,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 
     <!-- Properties panel -->
     <div class="ed-props" data-insp-tab="style">
-      <div class="ed-props-top"><span>Inspector</span><div class="ed-props-actions"><button class="mini-fold-btn" type="button" id="foldInspectorBtn" title="Collapse all sections">Fold</button><button class="mini-fold-btn" type="button" id="expandInspectorBtn" title="Expand all sections">Expand</button><button class="ed-rail-toggle" type="button" id="collapsePropsBtn" title="Hide inspector">&gt;</button></div></div>
+      <div class="ed-props-top"><span>Inspector</span><small>Selected element</small><div class="ed-props-actions"><button class="mini-fold-btn" type="button" id="foldInspectorBtn" title="Collapse all sections">Fold</button><button class="mini-fold-btn" type="button" id="expandInspectorBtn" title="Expand all sections">Expand</button><button class="ed-rail-toggle" type="button" id="collapsePropsBtn" title="Hide inspector">&gt;</button></div></div>
       <!-- Tab navigation -->
       <div class="ep-tabs">
         <button class="ep-tab on" onclick="switchEdInspTab('style',this)">Style</button>
@@ -2406,7 +2629,9 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-clone').style.display = tab === 'clone' ? 'flex' : 'none';
   document.getElementById('tab-preview').style.display = tab === 'preview' ? 'flex' : 'none';
-  document.getElementById('tab-editor').style.display = tab === 'editor' ? 'flex' : 'none';
+  document.getElementById('tab-editor').style.display = tab === 'editor'
+    ? (window.matchMedia('(max-width: 900px)').matches ? 'flex' : 'grid')
+    : 'none';
   document.getElementById('tab-build').style.display = tab === 'build' ? 'flex' : 'none';
   document.getElementById('t-clone').classList.toggle('active', tab === 'clone');
   document.getElementById('t-preview').classList.toggle('active', tab === 'preview');
@@ -2943,6 +3168,147 @@ async function exportZip() {
     toast('ZIP downloaded', 'ok');
   } catch (e) { toast('ZIP failed: ' + e.message, 'err'); }
 }
+function activeOutDir() {
+  const job = allJobs.find(j => j.id === activeJobId);
+  return job?.outDir || editorOutDir || '';
+}
+const GITHUB_TOKEN_KEY = 'wc_github_token';
+function githubToken() {
+  return document.getElementById('github-token').value.trim();
+}
+function setGithubStatus(message, type = 'info') {
+  const el = document.getElementById('github-connect-status');
+  el.textContent = message;
+  el.style.color = type === 'ok' ? 'var(--green)' : type === 'err' ? 'var(--red)' : 'var(--text3)';
+}
+function optionEsc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function openGithubModal() {
+  if (!requirePaid('GitHub push')) return;
+  const outDir = activeOutDir();
+  if (!outDir) { toast('Clone a site or choose a template first', 'err'); return; }
+  document.getElementById('github-result').classList.remove('show');
+  document.getElementById('github-err').classList.remove('show');
+  document.getElementById('github-submit-btn').disabled = false;
+  document.getElementById('github-submit-btn').textContent = 'Push files';
+  const savedToken = localStorage.getItem(GITHUB_TOKEN_KEY) || '';
+  if (savedToken && !document.getElementById('github-token').value) {
+    document.getElementById('github-token').value = savedToken;
+    document.getElementById('github-remember').checked = true;
+    setGithubStatus('Token loaded locally. Connect to refresh repos.', 'ok');
+  } else {
+    setGithubStatus('Paste a token, then connect.', 'info');
+  }
+  const host = (allJobs.find(j => j.id === activeJobId)?.hostname || '').replace(/^www\./, '').replace(/[^a-z0-9.-]/gi, '-');
+  if (!document.getElementById('github-path').value && host) document.getElementById('github-path').value = `clones/${host}`;
+  document.getElementById('github-modal-bg').style.display = 'flex';
+}
+function closeGithubModal() {
+  document.getElementById('github-modal-bg').style.display = 'none';
+}
+function showGithubErr(msg) {
+  const el = document.getElementById('github-err');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+async function connectGithub() {
+  const token = githubToken();
+  if (!token) { showGithubErr('Enter a GitHub token first'); return; }
+  const btn = document.getElementById('github-connect-btn');
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+  document.getElementById('github-err').classList.remove('show');
+  setGithubStatus('Checking token...', 'info');
+  try {
+    const res = await apiFetch('/api/github/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (document.getElementById('github-remember').checked) localStorage.setItem(GITHUB_TOKEN_KEY, token);
+    else localStorage.removeItem(GITHUB_TOKEN_KEY);
+    const select = document.getElementById('github-repo-select');
+    select.innerHTML = '<option value="">Choose repository...</option>' + data.repos.map(r =>
+      `<option value="${optionEsc(r.fullName)}" data-branch="${optionEsc(r.defaultBranch)}">${optionEsc(r.fullName)}${r.private ? ' (private)' : ''}</option>`
+    ).join('');
+    select.style.display = data.repos.length ? 'block' : 'none';
+    setGithubStatus(`Connected as ${data.user.login}. ${data.repos.length} writable repos found.`, 'ok');
+  } catch (e) {
+    showGithubErr(e.message || 'Could not connect to GitHub');
+    setGithubStatus('Connection failed', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Connect & load repos';
+  }
+}
+async function onGithubRepoPicked() {
+  const select = document.getElementById('github-repo-select');
+  const repo = select.value;
+  if (!repo) return;
+  document.getElementById('github-repo').value = repo;
+  const defaultBranch = select.options[select.selectedIndex]?.dataset?.branch || 'main';
+  document.getElementById('github-branch').value = defaultBranch;
+  const branchSelect = document.getElementById('github-branch-select');
+  branchSelect.style.display = 'none';
+  branchSelect.innerHTML = '';
+  try {
+    const res = await apiFetch('/api/github/branches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: githubToken(), repo }),
+    });
+    const data = await res.json();
+    if (data.error || !Array.isArray(data.branches) || !data.branches.length) return;
+    branchSelect.innerHTML = data.branches.map(b => `<option value="${optionEsc(b)}">${optionEsc(b)}</option>`).join('');
+    branchSelect.value = data.branches.includes(defaultBranch) ? defaultBranch : data.branches[0];
+    document.getElementById('github-branch').value = branchSelect.value;
+    branchSelect.style.display = 'block';
+  } catch {
+    // Manual branch typing still works, so this is non-fatal.
+  }
+}
+async function pushToGithub() {
+  const outDir = activeOutDir();
+  if (!outDir) { showGithubErr('No clone output is selected'); return; }
+  const repo = document.getElementById('github-repo').value.trim();
+  const branch = document.getElementById('github-branch').value.trim() || 'main';
+  const targetPath = document.getElementById('github-path').value.trim();
+  const commitMessage = document.getElementById('github-message').value.trim();
+  const token = githubToken();
+  const cleanTarget = document.getElementById('github-clean').checked;
+  if (!repo) { showGithubErr('Enter the GitHub repository'); return; }
+  if (!token) { showGithubErr('Enter a GitHub token'); return; }
+  if (document.getElementById('github-remember').checked) localStorage.setItem(GITHUB_TOKEN_KEY, token);
+  else localStorage.removeItem(GITHUB_TOKEN_KEY);
+  if (cleanTarget && !targetPath && !confirm('This will replace files at the repository root. Continue?')) return;
+  const btn = document.getElementById('github-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Pushing...';
+  document.getElementById('github-result').classList.remove('show');
+  document.getElementById('github-err').classList.remove('show');
+  try {
+    const res = await apiFetch('/api/github/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outDir, repo, branch, targetPath, commitMessage, token, cleanTarget }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const urlEl = document.getElementById('github-result-url');
+    urlEl.textContent = `${data.files} files pushed to ${repo}#${data.branch}${data.targetPath ? `/${data.targetPath}` : ''}`;
+    urlEl.dataset.url = data.commitUrl || data.repoUrl || '';
+    document.getElementById('github-result').classList.add('show');
+    toast('Pushed to GitHub', 'ok');
+  } catch (e) {
+    showGithubErr(e.message || 'GitHub push failed');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Push files';
+  }
+}
 function clearLog() { document.getElementById('logBody').innerHTML = ''; lastLogLen = 0; }
 function scrollLogBottom() { const el = document.getElementById('logBody'); el.scrollTop = el.scrollHeight; }
 function shake(id) {
@@ -3120,6 +3486,7 @@ async function loadEditorPage(encodedRoute) {
   edSelEl = null; edHovEl = null;
   document.querySelectorAll('.ed-page-btn').forEach(b => b.classList.toggle('on', b.title === route));
   document.getElementById('edCurrentPage').textContent = route;
+  document.getElementById('edBuilderRoute').textContent = route === '/' ? 'Home page' : route;
   document.getElementById('edEmptyPreview').style.display = 'none';
   const fw = document.getElementById('frame-wrap');
   fw.style.display = 'flex';

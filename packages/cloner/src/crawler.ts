@@ -5,7 +5,7 @@ import { logger } from './logger.js';
 import type { ClonerOptions, PageRecord } from './types.js';
 
 const NAV_DELAY_MS = 250;
-const PAGE_CAPTURE_TIMEOUT = 120_000; // 2 min hard cap per page
+const PAGE_CAPTURE_TIMEOUT = 180_000; // 3 min hard cap per page
 const USER_AGENT = 'WebCloner/0.1 (+local archival)';
 
 // Strip common tracking/UTM query params so the same page isn't crawled multiple times
@@ -109,7 +109,10 @@ export async function crawl(
     try { if (AUTH_PATH.test(new URL(clean).pathname)) return; } catch { return; }
 
     if (visited.has(clean)) return;
-    if (records.length + queue.size + queue.pending >= opts.maxPages) return;
+    // visited contains every URL already reserved for capture. Using queue.pending
+    // here under-counts discovered pages because the currently running page is
+    // still pending when it enqueues child links.
+    if (visited.size >= opts.maxPages) return;
     visited.add(clean);
 
     queue.add(async () => {
@@ -148,21 +151,28 @@ export async function crawl(
         // Timeout that is always cleared — leaving a dangling setTimeout causes an
         // unhandled rejection 120 s later on every *successful* capture in Node ≥ 15.
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-        const { record, links } = await Promise.race([
-          capturePage(context, clean, assetsDir).then((result) => {
-            clearTimeout(timeoutHandle);
-            return result;
-          }, (err) => {
-            clearTimeout(timeoutHandle);
-            throw err;
-          }),
-          new Promise<never>((_, reject) => {
-            timeoutHandle = setTimeout(
-              () => reject(new Error(`Page capture timed out after ${PAGE_CAPTURE_TIMEOUT / 1000}s`)),
-              PAGE_CAPTURE_TIMEOUT,
-            );
-          }),
-        ]);
+        let timedOut = false;
+        const capturePromise = capturePage(context, clean, assetsDir);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            timedOut = true;
+            context?.close().catch(() => {});
+            reject(new Error(`Page capture timed out after ${PAGE_CAPTURE_TIMEOUT / 1000}s`));
+          }, PAGE_CAPTURE_TIMEOUT);
+        });
+        let result: Awaited<typeof capturePromise>;
+        try {
+          result = await Promise.race([capturePromise, timeoutPromise]);
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (timedOut) {
+            await Promise.race([
+              capturePromise.catch(() => undefined),
+              new Promise((resolve) => setTimeout(resolve, 2_000)),
+            ]);
+          }
+        }
+        const { record, links } = result;
         records.push(record);
         onPage(record);
 
