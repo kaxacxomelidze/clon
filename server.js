@@ -70,7 +70,7 @@ const PLAN_LIMITS = {
   enterprise: { clonesPerMonth: Infinity, maxPages: 500 },
 };
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
-const SERVERLESS_MAX_PAGES = 5;
+const SERVERLESS_MAX_PAGES = 20;
 const PLAN_PRICES = {
   starter:    { monthly: 13,  annual: 112  },
   pro:        { monthly: 49,  annual: 422  },
