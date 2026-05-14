@@ -206,7 +206,7 @@ export const setSetting = async (key, value) => {
 const SETTINGS_DEFAULTS = {
   btc:'', eth:'', usdt_trc20:'', paypal_email:'', paypal_me:'', app_note:'',
   smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
-  smtp_secure:'false', app_url:'http://localhost:5000',
+  smtp_secure:'false', app_url:(process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || 'http://localhost:5000').replace(/\/$/, ''),
 };
 
 export async function getSettings() {

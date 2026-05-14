@@ -32,6 +32,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, 'packages', 'cloner', 'dist', 'cli.js');
 const EMAILS_DIR = join(__dirname, 'templates', 'emails');
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+const DEFAULT_APP_URL = (process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || `http://localhost:${PORT}`).replace(/\/$/, '');
 
 const jobs = new Map();
 
@@ -114,12 +115,26 @@ async function getSessionUser(req) {
 const SETTINGS_DEFAULTS = {
   btc:'', eth:'', usdt_trc20:'', paypal_email:'', paypal_me:'', app_note:'',
   smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
-  smtp_secure: false, app_url:`http://localhost:${PORT}`, support_email:'',
+  smtp_secure: false, app_url: DEFAULT_APP_URL, support_email:'',
 };
 let _settingsCache = { ...SETTINGS_DEFAULTS };
 async function initSettings() { _settingsCache = await getSettings(); }
 const getCachedSettings = () => _settingsCache;
 const invalidateSettingsCache = async () => { _settingsCache = await getSettings(); };
+
+function publicAppUrl(req = null) {
+  const configured = String(getCachedSettings().app_url || '').replace(/\/$/, '');
+  if (configured && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configured)) return configured;
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`.replace(/\/$/, '');
+  const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
+  if (host) {
+    const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
+    const firstHost = String(host).split(',')[0].trim();
+    if (firstHost) return `${proto}://${firstHost}`.replace(/\/$/, '');
+  }
+  return configured || DEFAULT_APP_URL;
+}
 
 // ── Email templates ───────────────────────────────────────────────────────────
 const _emailTemplateCache = new Map();
@@ -1373,7 +1388,7 @@ async function handleRequest(req, res) {
     }
     const expiresAt = expiresInDays ? Date.now() + Number(expiresInDays) * 86400000 : null;
     await insertShare({ id: shareId, outDir, route: route || '/', createdAt: new Date().toISOString(), passwordHash, salt, expiresAt });
-    const _appUrl = (getCachedSettings().app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
+    const _appUrl = publicAppUrl(req);
     return json(res, { shareId, url: `${_appUrl}/share/${shareId}` });
   }
 
@@ -2222,8 +2237,7 @@ async function handleRequest(req, res) {
 
   // robots.txt
   if (req.method === 'GET' && url.pathname === '/robots.txt') {
-    const s = getCachedSettings();
-    const host = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
+    const host = publicAppUrl(req);
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end(`User-agent: *\nDisallow: /api/\nDisallow: /admin\nDisallow: /dashboard\nDisallow: /share/\nSitemap: ${host}/sitemap.xml\n`);
     return;
@@ -2231,8 +2245,7 @@ async function handleRequest(req, res) {
 
   // sitemap.xml
   if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
-    const s = getCachedSettings();
-    const host = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
+    const host = publicAppUrl(req);
     const now = new Date().toISOString().split('T')[0];
     res.writeHead(200, { 'Content-Type': 'application/xml' });
     const urls = [
