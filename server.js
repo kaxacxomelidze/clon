@@ -1034,7 +1034,7 @@ async function handleRequest(req, res) {
         if (code !== 0) {
           job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
         }
-        job.status = code === 0 ? 'saving' : 'error';
+        job.status = code === 0 ? 'done' : 'error';
         if (code === 0) { invalidateOutputsCache(); }
         const findNum = (pat) => {
           const line = job.logs.find((l) => l.includes(pat));
@@ -1060,7 +1060,6 @@ async function handleRequest(req, res) {
           } catch (storageErr) {
             job.logs.push(`[WARN] Could not persist all clone files: ${storageErr?.message || storageErr}`);
           }
-          job.status = 'done';
         }
         try {
           await insertClone({

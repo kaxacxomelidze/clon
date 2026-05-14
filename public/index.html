@@ -2880,9 +2880,9 @@ function updateJobView(job) {
   if (job.assets != null)    document.getElementById('statAssets').textContent = job.assets;
   const badge = document.getElementById('jobBadge');
   badge.className = 'badge ' + job.status;
-  badge.textContent = job.status === 'running' ? 'Running' : job.status === 'done' ? 'Done' : 'Error';
+  badge.textContent = job.status === 'running' ? 'Running' : job.status === 'saving' ? 'Saving' : job.status === 'done' ? 'Done' : 'Error';
   const pb = document.getElementById('progressBar');
-  if (job.status === 'running') {
+  if (job.status === 'running' || job.status === 'saving') {
     const progressLine = (job.logs || []).slice().reverse().find(l => /\[\d+\/\d+\]/.test(l));
     if (progressLine) {
       const m = progressLine.match(/\[(\d+)\/(\d+)\]/);
@@ -2922,10 +2922,10 @@ function updateJobView(job) {
     editorOutDir = job.outDir;
     loadEditorPages(job.outDir);
     loadPreviewPages(job.outDir);
-  } else if (job.status === 'running') {
+  } else if (job.status === 'running' || job.status === 'saving') {
     if (!startTime) { startTime = Date.now(); startTimer(); }
   }
-  if (job.status !== 'running') {
+  if (job.status !== 'running' && job.status !== 'saving') {
     clearPolling();
     clearTimer();
   }
@@ -2971,7 +2971,7 @@ function renderSidebar() {
       <div class="sb-dot ${j.status}"></div>
       <div class="sb-info">
         <div class="sb-name">${j.label || j.hostname}</div>
-        <div class="sb-sub">${j.status === 'running' ? 'cloning...' : j.status === 'done' ? `${j.pages ?? 0} pages` : 'error'}</div>
+        <div class="sb-sub">${j.status === 'running' ? 'cloning...' : j.status === 'saving' ? 'saving...' : j.status === 'done' ? `${j.pages ?? 0} pages` : 'error'}</div>
       </div>
       <button class="sb-rename" onclick="renameClone('${j.id}',event)" title="Rename">✎</button>
       <button class="sb-del" onclick="deleteClone('${j.id}',event)" title="Delete">×</button>
