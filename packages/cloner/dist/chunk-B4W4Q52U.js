@@ -1594,6 +1594,51 @@ async function fetchSitemap(origin) {
   }
   return found;
 }
+function routeForUrl(url) {
+  try {
+    const pathname = new URL(url).pathname || "/";
+    return pathname === "/index.html" ? "/" : pathname;
+  } catch {
+    return "/";
+  }
+}
+function extractLinksFromHtml(html, pageUrl, origin) {
+  const found = /* @__PURE__ */ new Set();
+  const attrRe = /\b(?:href|data-href|data-url|data-link)=["']([^"']+)["']/gi;
+  let match;
+  while ((match = attrRe.exec(html)) !== null) {
+    try {
+      const href = new URL(match[1], pageUrl);
+      if (href.origin === origin) found.add(href.href);
+    } catch {
+    }
+  }
+  return [...found];
+}
+async function fetchStaticPage(url, origin) {
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT3, "Accept": "text/html,application/xhtml+xml" },
+    signal: AbortSignal.timeout(IS_SERVERLESS2 ? 5e3 : 15e3)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType && !/(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
+    throw new Error(`Not an HTML page (${contentType})`);
+  }
+  const html = await res.text();
+  const links = extractLinksFromHtml(html, url, origin);
+  return {
+    record: {
+      url,
+      route: routeForUrl(url),
+      html,
+      assets: [],
+      network: [],
+      failedAssets: []
+    },
+    links
+  };
+}
 async function crawl(opts, assetsDir, onPage) {
   const origin = new URL(opts.url).origin;
   const visited = /* @__PURE__ */ new Set();
@@ -1694,6 +1739,21 @@ async function crawl(opts, assetsDir, onPage) {
           }
         }
       } catch (err) {
+        if (IS_SERVERLESS2) {
+          try {
+            logger.info(`  [FALLBACK] Static HTML fetch for ${clean}`);
+            const { record, links } = await fetchStaticPage(clean, origin);
+            records.push(record);
+            onPage(record);
+            if (currentDepth < opts.depth) {
+              for (const link of links) enqueue(link, currentDepth + 1);
+            }
+            return;
+          } catch (fallbackErr) {
+            logger.warn(`  [SKIP] ${clean}: ${fallbackErr.message}`);
+            return;
+          }
+        }
         logger.warn(`  [SKIP] ${clean}: ${err.message}`);
       } finally {
         await context?.close().catch(() => {
@@ -10337,4 +10397,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-CF5CN3V4.js.map
+//# sourceMappingURL=chunk-B4W4Q52U.js.map

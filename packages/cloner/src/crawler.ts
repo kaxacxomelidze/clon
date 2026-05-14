@@ -75,6 +75,53 @@ async function fetchSitemap(origin: string): Promise<string[]> {
   return found;
 }
 
+function routeForUrl(url: string): string {
+  try {
+    const pathname = new URL(url).pathname || '/';
+    return pathname === '/index.html' ? '/' : pathname;
+  } catch {
+    return '/';
+  }
+}
+
+function extractLinksFromHtml(html: string, pageUrl: string, origin: string): string[] {
+  const found = new Set<string>();
+  const attrRe = /\b(?:href|data-href|data-url|data-link)=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = attrRe.exec(html)) !== null) {
+    try {
+      const href = new URL(match[1], pageUrl);
+      if (href.origin === origin) found.add(href.href);
+    } catch { /* skip invalid links */ }
+  }
+  return [...found];
+}
+
+async function fetchStaticPage(url: string, origin: string): Promise<{ record: PageRecord; links: string[] }> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html,application/xhtml+xml' },
+    signal: AbortSignal.timeout(IS_SERVERLESS ? 5_000 : 15_000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType && !/(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
+    throw new Error(`Not an HTML page (${contentType})`);
+  }
+  const html = await res.text();
+  const links = extractLinksFromHtml(html, url, origin);
+  return {
+    record: {
+      url,
+      route: routeForUrl(url),
+      html,
+      assets: [],
+      network: [],
+      failedAssets: [],
+    },
+    links,
+  };
+}
+
 export async function crawl(
   opts: ClonerOptions,
   assetsDir: string,
@@ -191,6 +238,21 @@ export async function crawl(
           }
         }
       } catch (err) {
+        if (IS_SERVERLESS) {
+          try {
+            logger.info(`  [FALLBACK] Static HTML fetch for ${clean}`);
+            const { record, links } = await fetchStaticPage(clean, origin);
+            records.push(record);
+            onPage(record);
+            if (currentDepth < opts.depth) {
+              for (const link of links) enqueue(link, currentDepth + 1);
+            }
+            return;
+          } catch (fallbackErr) {
+            logger.warn(`  [SKIP] ${clean}: ${(fallbackErr as Error).message}`);
+            return;
+          }
+        }
         logger.warn(`  [SKIP] ${clean}: ${(err as Error).message}`);
       } finally {
         await context?.close().catch(() => {});
