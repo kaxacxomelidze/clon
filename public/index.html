@@ -3053,7 +3053,11 @@ async function loadPreviewPages(outDir) {
     return;
   }
   try {
-    const routes = sortRoutes(await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir)).then(r => r.json()));
+    const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
+    if (!Array.isArray(payload)) throw new Error('Invalid pages response');
+    const routes = sortRoutes(payload);
     if (!routes.length) {
       select.innerHTML = '';
       empty.textContent = 'No captured pages found';
@@ -3067,7 +3071,7 @@ async function loadPreviewPages(outDir) {
     loadPreviewRoute(encodeURIComponent(routes[0]));
   } catch (e) {
     select.innerHTML = '';
-    empty.textContent = 'Preview could not load pages';
+    empty.textContent = 'Preview could not load pages: ' + (e.message || 'unknown error');
     empty.style.display = 'flex';
     frame.style.display = 'none';
   }
@@ -3453,7 +3457,11 @@ if (!localStorage.getItem(FOLD_KEY)) {
 
 async function loadEditorPages(outDir, preferredRoute = '') {
   try {
-    const routes = sortRoutes(await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir)).then(r => r.json()));
+    const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
+    if (!Array.isArray(payload)) throw new Error('Invalid pages response');
+    const routes = sortRoutes(payload);
     const list = document.getElementById('edPageList');
     if (!routes.length) { list.innerHTML = '<div class="ed-no-site">No pages found</div>'; return; }
     list.innerHTML = routes.map(r =>

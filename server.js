@@ -685,6 +685,14 @@ async function canReadOutDir(user, outDir) {
   return false;
 }
 
+async function canReadCloneRecord(user, outDir) {
+  if (!outDir) return false;
+  const clone = await getCloneByOutDir(outDir).catch(() => null);
+  if (!clone) return false;
+  if (!clone.user_id) return true;
+  return !!user && (clone.user_id === user.id || user.role === 'admin');
+}
+
 function netlifyAPIRequest(method, path, token, body, contentType) {
   return new Promise((resolve, reject) => {
     const isBuffer = Buffer.isBuffer(body);
@@ -1009,7 +1017,9 @@ async function handleRequest(req, res) {
     const pagesUser = await getSessionUser(req);
     const outDir = url.searchParams.get('outDir');
     if (!outDir) return json(res, []);
-    if (!await canReadOutDir(pagesUser, outDir)) return json(res, { error: pagesUser ? 'Not found' : 'Not authenticated' }, pagesUser ? 404 : 401);
+    if (!await canReadOutDir(pagesUser, outDir) && !await canReadCloneRecord(pagesUser, outDir)) {
+      return json(res, { error: pagesUser ? 'Not found' : 'Not authenticated' }, pagesUser ? 404 : 401);
+    }
     const map = await loadRouteMapAsync(outDir);
     if (!map) return json(res, []);
     return json(res, Object.keys(map));
@@ -1019,7 +1029,7 @@ async function handleRequest(req, res) {
     const pageUser = await getSessionUser(req);
     const outDir = url.searchParams.get('outDir');
     if (!outDir) { res.writeHead(404); res.end('No clone specified'); return; }
-    if (!await canReadOutDir(pageUser, outDir)) {
+    if (!await canReadOutDir(pageUser, outDir) && !await canReadCloneRecord(pageUser, outDir)) {
       if (!pageUser) return json(res, { error: 'Not authenticated' }, 401);
       res.writeHead(404); res.end('Not found'); return;
     }
