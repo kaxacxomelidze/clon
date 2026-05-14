@@ -693,6 +693,12 @@ async function canReadCloneRecord(user, outDir) {
   return !!user && (clone.user_id === user.id || user.role === 'admin');
 }
 
+async function canUseCloneOutput(user, outDir) {
+  if (!user || !outDir) return false;
+  if (await userOwnsOutDir(user, outDir)) return true;
+  return canReadCloneRecord(user, outDir);
+}
+
 function netlifyAPIRequest(method, path, token, body, contentType) {
   return new Promise((resolve, reject) => {
     const isBuffer = Buffer.isBuffer(body);
@@ -1050,7 +1056,7 @@ async function handleRequest(req, res) {
     if (!saveUser) return json(res, { error: 'Not authenticated' }, 401);
     if ((saveUser.plan || 'free') === 'free') return json(res, { error: 'Visual editor requires a paid plan. Upgrade to edit pages.' }, 403);
     readJsonBody(req).then(async ({ outDir, route, html }) => {
-      if (!await userOwnsOutDir(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
+      if (!await canUseCloneOutput(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const map = await loadRouteMapAsync(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const filename = map[route || '/'];
@@ -1066,7 +1072,7 @@ async function handleRequest(req, res) {
     if (!authPageUser) return json(res, { error: 'Not authenticated' }, 401);
     readJsonBody(req).then(async ({ outDir, kind }) => {
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-      if (!await userOwnsOutDir(authPageUser, outDir)) return json(res, { error: 'Not found' }, 404);
+      if (!await canUseCloneOutput(authPageUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const pageKind = kind === 'register' ? 'register' : 'login';
       const map = await loadRouteMapAsync(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
@@ -1087,7 +1093,7 @@ async function handleRequest(req, res) {
     if (!assetUser) return json(res, { error: 'Not authenticated' }, 401);
     readJsonBody(req).then(async ({ outDir, dataUrl, filename }) => {
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-      if (!await userOwnsOutDir(assetUser, outDir)) return json(res, { error: 'Not found' }, 404);
+      if (!await canUseCloneOutput(assetUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
       if (!match) return json(res, { error: 'Invalid file data' }, 400);
       const bytes = Buffer.from(match[2], 'base64');
@@ -1283,7 +1289,7 @@ async function handleRequest(req, res) {
     if (!previewUser) return json(res, { error: 'Not authenticated' }, 401);
     const { outDir } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-    if (!await userOwnsOutDir(previewUser, outDir)) return json(res, { error: 'Not found' }, 404);
+    if (!await canUseCloneOutput(previewUser, outDir)) return json(res, { error: 'Not found' }, 404);
     if (IS_VERCEL) {
       const map = await loadRouteMapAsync(outDir);
       if (!map) return json(res, { error: 'Preview pages not found' }, 404);
@@ -1309,7 +1315,7 @@ async function handleRequest(req, res) {
     if ((zipUser.plan || 'free') === 'free') return json(res, { error: 'Export requires a paid plan. Upgrade to download your clones.' }, 403);
     const { outDir } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-    if (!await userOwnsOutDir(zipUser, outDir)) return json(res, { error: 'Not found' }, 404);
+    if (!await canUseCloneOutput(zipUser, outDir)) return json(res, { error: 'Not found' }, 404);
     try {
       const { zipName, zipPath } = await buildOutputZip(outDir);
       return json(res, { ok: true, zipPath, folder: OUTPUT_DIR });
@@ -1322,7 +1328,7 @@ async function handleRequest(req, res) {
     if ((dlUser.plan || 'free') === 'free') return json(res, { error: 'Export requires a paid plan. Upgrade to download your clones.' }, 403);
     const outDir = url.searchParams.get('outDir') || '';
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-    if (!await userOwnsOutDir(dlUser, outDir)) return json(res, { error: 'Not found' }, 404);
+    if (!await canUseCloneOutput(dlUser, outDir)) return json(res, { error: 'Not found' }, 404);
     try {
       const { zipName, zipPath } = await buildOutputZip(outDir);
       res.writeHead(200, {
@@ -1392,7 +1398,7 @@ async function handleRequest(req, res) {
     try {
       const { outDir, token, repo, branch = 'main', targetPath = '', commitMessage = '', cleanTarget = false } = await readJsonBody(req, 200_000);
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-      if (!await userOwnsOutDir(ghUser, outDir)) return json(res, { error: 'Not found' }, 404);
+      if (!await canUseCloneOutput(ghUser, outDir)) return json(res, { error: 'Not found' }, 404);
       if (!token || String(token).length < 20) return json(res, { error: 'GitHub token is required' }, 400);
       const parsedRepo = parseGitHubRepo(repo);
       if (!parsedRepo) return json(res, { error: 'Enter a GitHub repo as owner/repo or a github.com URL' }, 400);
@@ -1481,7 +1487,7 @@ async function handleRequest(req, res) {
     if (!deleteUser) return json(res, { error: 'Not authenticated' }, 401);
     const { outDir } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-    if (!await userOwnsOutDir(deleteUser, outDir)) return json(res, { error: 'Not found' }, 404);
+    if (!await canUseCloneOutput(deleteUser, outDir)) return json(res, { error: 'Not found' }, 404);
     try {
       if (existsSync(outDir)) rmSync(outDir, { recursive: true, force: true });
       for (const [id, job] of jobs.entries()) {
@@ -1501,7 +1507,7 @@ async function handleRequest(req, res) {
     if ((shareUser.plan || 'free') === 'free') return json(res, { error: 'Share links require a paid plan. Upgrade to share your clones.' }, 403);
     const { outDir, route, password, expiresInDays } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-    if (!await userOwnsOutDir(shareUser, outDir)) return json(res, { error: 'Not found' }, 404);
+    if (!await canUseCloneOutput(shareUser, outDir)) return json(res, { error: 'Not found' }, 404);
     const map = await loadRouteMapAsync(outDir);
     if (!map) return json(res, { error: 'No clone found' }, 404);
     const shareId = randomUUID().replace(/-/g, '').slice(0, 14);
@@ -2394,7 +2400,7 @@ async function handleRequest(req, res) {
     const { outDir, netlifyToken } = body;
     if (!netlifyToken) return json(res, { error: 'Netlify personal access token is required' }, 400);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
-    if (!await userOwnsOutDir(deployUser, outDir)) return json(res, { error: 'Not found' }, 404);
+    if (!await canUseCloneOutput(deployUser, outDir)) return json(res, { error: 'Not found' }, 404);
 
     const deployTmp = join(OUTPUT_DIR, `__deploy_${randomUUID().slice(0,8)}`);
     const zipPath = deployTmp + '.zip';
