@@ -1381,9 +1381,9 @@ async function loadAdminSettings() {
     document.getElementById('s-support-email').value = s.support_email || '';
     document.getElementById('s-google-client-id').value = s.google_client_id || '';
     document.getElementById('s-google-client-secret').value = s.google_client_secret ? '••••••••' : '';
-    document.getElementById('s-stripe-secret').value = s.stripe_secret_key ? '••••••••' : '';
+    document.getElementById('s-stripe-secret').value = (s.stripe_secret_key || s.stripe_secret_key_configured) ? '••••••••' : '';
     document.getElementById('s-stripe-pub').value = s.stripe_publishable_key || '';
-    document.getElementById('s-stripe-webhook').value = s.stripe_webhook_secret ? '••••••••' : '';
+    document.getElementById('s-stripe-webhook').value = (s.stripe_webhook_secret || s.stripe_webhook_secret_configured) ? '••••••••' : '';
     ['starter','popular','growth','unlimited'].forEach(plan => {
       document.getElementById(`s-stripe-p-${plan}-monthly`).value = s[`stripe_price_${plan}_monthly`] || '';
       document.getElementById(`s-stripe-p-${plan}-annual`).value = s[`stripe_price_${plan}_annual`] || '';

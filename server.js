@@ -86,6 +86,14 @@ const PLAN_PRICES = {
   pro:        { monthly: 34.99, annual: 335.88 },
   enterprise: { monthly: 59.99, annual: 575.88 },
 };
+const PLAN_LABELS = {
+  starter: 'Starter',
+  popular: 'Most Popular',
+  growth: 'Growth',
+  unlimited: 'Unlimited',
+  pro: 'Pro',
+  enterprise: 'Enterprise',
+};
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function hashPassword(password, salt) {
@@ -184,7 +192,7 @@ function renderEmail(templateName, vars) {
 // ── Stripe ────────────────────────────────────────────────────────────────────
 let _stripeInstance = null, _stripeKey = '';
 function getStripe() {
-  const s = getCachedSettings();
+  const s = getStripeSettings();
   const key = s.stripe_secret_key || '';
   if (!key || !StripeLib) return null;
   if (_stripeInstance && _stripeKey === key) return _stripeInstance;
@@ -196,6 +204,63 @@ function getStripe() {
 
 // Map of plan+interval → settings key for Stripe price IDs
 const STRIPE_PRICE_KEY = (plan, interval) => `stripe_price_${plan}_${interval}`;
+const STRIPE_PRICE_ENV_KEY = (plan, interval) => `STRIPE_PRICE_${plan}_${interval}`.toUpperCase();
+const SECRET_MASK = '••••••••';
+function isMaskedSecret(value) {
+  const v = String(value || '').trim();
+  return v === SECRET_MASK || /^â€¢+$/.test(v);
+}
+function envFirst(...keys) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value) return String(value).trim();
+  }
+  return '';
+}
+function getStripeSettings(raw = getCachedSettings()) {
+  const out = { ...raw };
+  out.stripe_secret_key = String(raw.stripe_secret_key || '').trim() || envFirst('STRIPE_SECRET_KEY', 'STRIPE_SECRET');
+  out.stripe_webhook_secret = String(raw.stripe_webhook_secret || '').trim() || envFirst('STRIPE_WEBHOOK_SECRET');
+  out.stripe_publishable_key = String(raw.stripe_publishable_key || '').trim() || envFirst('STRIPE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY');
+  for (const plan of ALL_PAID_PLAN_KEYS) {
+    for (const interval of ['monthly', 'annual']) {
+      const key = STRIPE_PRICE_KEY(plan, interval);
+      out[key] = String(raw[key] || '').trim() || envFirst(STRIPE_PRICE_ENV_KEY(plan, interval));
+    }
+  }
+  return out;
+}
+function stripePeriodEnd(sub) {
+  return sub?.current_period_end || sub?.items?.data?.[0]?.current_period_end || null;
+}
+async function ensureStripePrice(stripe, plan, interval) {
+  const s = getStripeSettings();
+  const key = STRIPE_PRICE_KEY(plan, interval);
+  if (s[key]) return s[key];
+  const amount = PLAN_PRICES[plan]?.[interval];
+  if (!amount) throw new Error(`No local price exists for ${plan} ${interval}.`);
+
+  const product = await stripe.products.create({
+    name: `CLONYFY ${PLAN_LABELS[plan] || plan}`,
+    metadata: { app: 'clonyfy', plan },
+  });
+  const price = await stripe.prices.create({
+    currency: 'usd',
+    unit_amount: Math.round(amount * 100),
+    recurring: { interval: interval === 'annual' ? 'year' : 'month' },
+    product: product.id,
+    metadata: { app: 'clonyfy', plan, billing_interval: interval },
+  });
+
+  try {
+    const current = { ...getCachedSettings(), [key]: price.id };
+    await saveSettings(current);
+    await invalidateSettingsCache();
+  } catch (err) {
+    console.warn('[Stripe] created price but could not save setting:', err.message);
+  }
+  return price.id;
+}
 
 // ── Google OAuth state ────────────────────────────────────────────────────────
 const _oauthStates = new Map(); // state → expiresAt
@@ -1847,7 +1912,7 @@ async function handleRequest(req, res) {
   // ── Payments ───────────────────────────────────────────────────────────────
 
   if (req.method === 'GET' && url.pathname === '/api/payments/settings') {
-    const s = getCachedSettings();
+    const s = getStripeSettings();
     return json(res, {
       btc: s.btc, eth: s.eth, usdt_trc20: s.usdt_trc20,
       paypal_email: s.paypal_email, paypal_me: s.paypal_me,
@@ -1994,7 +2059,21 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
-    return json(res, getCachedSettings());
+    const raw = getCachedSettings();
+    const stripe = getStripeSettings(raw);
+    const body = {
+      ...raw,
+      stripe_publishable_key: raw.stripe_publishable_key || stripe.stripe_publishable_key,
+      stripe_secret_key_configured: !!stripe.stripe_secret_key,
+      stripe_webhook_secret_configured: !!stripe.stripe_webhook_secret,
+    };
+    for (const plan of ALL_PAID_PLAN_KEYS) {
+      for (const interval of ['monthly', 'annual']) {
+        const key = STRIPE_PRICE_KEY(plan, interval);
+        body[key] = raw[key] || stripe[key] || '';
+      }
+    }
+    return json(res, body);
   }
 
   if (req.method === 'PUT' && url.pathname === '/api/admin/settings') {
@@ -2017,7 +2096,7 @@ async function handleRequest(req, res) {
       'google_client_id', 'google_client_secret',
     ];
     for (const k of plainKeys) {
-      if (body[k] !== undefined && body[k] !== '••••••••') current[k] = String(body[k] || '').trim();
+      if (body[k] !== undefined && !isMaskedSecret(body[k])) current[k] = String(body[k] || '').trim();
     }
     if (body.smtp_secure !== undefined) current.smtp_secure = body.smtp_secure === true || body.smtp_secure === 'true';
     await saveSettings(current);
@@ -2111,6 +2190,15 @@ async function handleRequest(req, res) {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
     if (user.plan === 'free') return json(res, { error: 'No active subscription to cancel' }, 400);
+    if (user.stripe_subscription_id) {
+      const stripe = getStripe();
+      if (!stripe) return json(res, { error: 'Stripe is not configured. Contact support.' }, 503);
+      try {
+        await stripe.subscriptions.update(user.stripe_subscription_id, { cancel_at_period_end: true });
+      } catch (err) {
+        return json(res, { error: `Stripe cancellation failed: ${err.message}` }, 502);
+      }
+    }
     await updateUser(user.id, { cancel_at_period_end: 1 });
     audit(user.id, user.name, 'cancel_subscription', user.plan, ip);
     return json(res, { ok: true });
@@ -2323,10 +2411,13 @@ async function handleRequest(req, res) {
     const { plan, interval, promoCode } = await readJsonBody(req);
     if (!plan || !ALL_PAID_PLAN_KEYS.includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
     const bi = interval === 'annual' ? 'annual' : 'monthly';
-    const s = getCachedSettings();
-    const priceId = s[STRIPE_PRICE_KEY(plan, bi)];
-    if (!priceId) return json(res, { error: `Stripe price not configured for ${plan} ${bi}. Contact admin.` }, 503);
-    const appUrl = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
+    let priceId = '';
+    try {
+      priceId = await ensureStripePrice(stripe, plan, bi);
+    } catch (err) {
+      return json(res, { error: `Stripe price setup failed: ${err.message}` }, 502);
+    }
+    const appUrl = publicAppUrl(req);
 
     // Ensure Stripe customer exists
     let customerId = user.stripe_customer_id;
@@ -2347,10 +2438,12 @@ async function handleRequest(req, res) {
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
+      client_reference_id: user.id,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       allow_promotion_codes: !discounts,
       ...(discounts ? { discounts } : {}),
+      metadata: { userId: user.id, plan, interval: bi },
       subscription_data: { metadata: { userId: user.id, plan, interval: bi } },
       success_url: `${appUrl}/dashboard?stripe=success`,
       cancel_url: `${appUrl}/dashboard?stripe=cancelled`,
@@ -2366,8 +2459,7 @@ async function handleRequest(req, res) {
     const stripe = getStripe();
     if (!stripe) return json(res, { error: 'Stripe not configured' }, 503);
     if (!user.stripe_customer_id) return json(res, { error: 'No Stripe subscription found' }, 400);
-    const s = getCachedSettings();
-    const appUrl = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
+    const appUrl = publicAppUrl(req);
     const portal = await stripe.billingPortal.sessions.create({
       customer: user.stripe_customer_id,
       return_url: `${appUrl}/dashboard`,
@@ -2381,7 +2473,8 @@ async function handleRequest(req, res) {
     if (!stripe) { res.writeHead(503); res.end('Stripe not configured'); return; }
     const rawBody = await readRawBody(req);
     const sig = req.headers['stripe-signature'] || '';
-    const s = getCachedSettings();
+    const s = getStripeSettings();
+    if (!s.stripe_webhook_secret) { res.writeHead(503); res.end('Stripe webhook secret not configured'); return; }
     let event;
     try {
       event = stripe.webhooks.constructEvent(rawBody, sig, s.stripe_webhook_secret || '');
@@ -2392,7 +2485,7 @@ async function handleRequest(req, res) {
       return;
     }
 
-    const appUrl = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
+    const appUrl = publicAppUrl(req);
 
     try {
       if (event.type === 'checkout.session.completed') {
@@ -2400,10 +2493,11 @@ async function handleRequest(req, res) {
         if (session.payment_status === 'paid' && session.subscription) {
           const sub = await stripe.subscriptions.retrieve(session.subscription);
           const userId = sub.metadata?.userId || session.metadata?.userId;
-          const plan = sub.metadata?.plan;
-          const bi = sub.metadata?.interval || 'monthly';
+          const plan = sub.metadata?.plan || session.metadata?.plan;
+          const bi = sub.metadata?.interval || session.metadata?.interval || 'monthly';
           if (userId && plan) {
-            const renewsAt = new Date(sub.current_period_end * 1000);
+            const periodEnd = stripePeriodEnd(sub);
+            const renewsAt = periodEnd ? new Date(periodEnd * 1000) : new Date(Date.now() + (bi === 'annual' ? 365 : 31) * 24 * 60 * 60 * 1000);
             await updateUser(userId, { plan, billing_interval: bi, plan_renews_at: renewsAt.toISOString(), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0 });
             const u = await getUserById(userId);
             if (u) {
@@ -2419,18 +2513,36 @@ async function handleRequest(req, res) {
 
       if (event.type === 'customer.subscription.updated') {
         const sub = event.data.object;
-        const userId = sub.metadata?.userId;
+        const customerUser = sub.customer ? await getUserByStripeCustomerId(sub.customer) : null;
+        const userId = sub.metadata?.userId || customerUser?.id;
         if (userId && sub.status === 'active') {
-          const plan = sub.metadata?.plan;
-          const bi = sub.metadata?.interval || 'monthly';
-          const renewsAt = new Date(sub.current_period_end * 1000);
-          if (plan) await updateUser(userId, { plan, billing_interval: bi, plan_renews_at: renewsAt.toISOString(), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+          const plan = sub.metadata?.plan || customerUser?.plan;
+          const bi = sub.metadata?.interval || customerUser?.billing_interval || 'monthly';
+          const periodEnd = stripePeriodEnd(sub);
+          const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
+          if (plan) await updateUser(userId, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+        }
+      }
+
+      if (event.type === 'invoice.payment_succeeded') {
+        const inv = event.data.object;
+        const customerId = inv.customer;
+        const u = customerId ? await getUserByStripeCustomerId(customerId) : null;
+        const subscriptionId = inv.subscription || inv.parent?.subscription_details?.subscription || null;
+        if (u && subscriptionId) {
+          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          const plan = sub.metadata?.plan || u.plan;
+          const bi = sub.metadata?.interval || u.billing_interval || 'monthly';
+          const periodEnd = stripePeriodEnd(sub);
+          const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
+          await updateUser(u.id, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
         }
       }
 
       if (event.type === 'customer.subscription.deleted') {
         const sub = event.data.object;
-        const userId = sub.metadata?.userId;
+        const customerUser = sub.customer ? await getUserByStripeCustomerId(sub.customer) : null;
+        const userId = sub.metadata?.userId || customerUser?.id;
         if (userId) {
           await updateUser(userId, { plan: 'free', plan_renews_at: null, stripe_subscription_id: null, cancel_at_period_end: 0, renewal_reminder_sent: 0, usage_alert_sent: 0 });
           const u = await getUserById(userId);
