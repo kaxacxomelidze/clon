@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync, createReadStream, copyFileSync } from 'fs';
 import { request as httpsRequest } from 'https';
 import { createRequire } from 'module';
+import 'dotenv/config';
 import {
   getUserById, getUserByEmail, getAllUsers, insertUser, updateUser, deleteUser,
   getUserByVerifyToken, getUserByResetToken,
@@ -200,6 +201,12 @@ function getStripe() {
   _stripeInstance = new Ctor(key, { apiVersion: '2024-06-20' });
   _stripeKey = key;
   return _stripeInstance;
+}
+function stripeUnavailableReason() {
+  const s = getStripeSettings();
+  if (!StripeLib) return 'Stripe package is not installed on the server.';
+  if (!s.stripe_secret_key) return 'Missing STRIPE_SECRET_KEY environment variable or admin Stripe Secret Key.';
+  return '';
 }
 
 // Map of plan+interval → settings key for Stripe price IDs
@@ -2192,7 +2199,7 @@ async function handleRequest(req, res) {
     if (user.plan === 'free') return json(res, { error: 'No active subscription to cancel' }, 400);
     if (user.stripe_subscription_id) {
       const stripe = getStripe();
-      if (!stripe) return json(res, { error: 'Stripe is not configured. Contact support.' }, 503);
+      if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe is not configured. Contact support.' }, 503);
       try {
         await stripe.subscriptions.update(user.stripe_subscription_id, { cancel_at_period_end: true });
       } catch (err) {
@@ -2407,7 +2414,7 @@ async function handleRequest(req, res) {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Sign in first.' }, 401);
     const stripe = getStripe();
-    if (!stripe) return json(res, { error: 'Stripe is not configured. Contact support.' }, 503);
+    if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe is not configured. Contact support.' }, 503);
     const { plan, interval, promoCode } = await readJsonBody(req);
     if (!plan || !ALL_PAID_PLAN_KEYS.includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
     const bi = interval === 'annual' ? 'annual' : 'monthly';
@@ -2457,7 +2464,7 @@ async function handleRequest(req, res) {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
     const stripe = getStripe();
-    if (!stripe) return json(res, { error: 'Stripe not configured' }, 503);
+    if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe not configured' }, 503);
     if (!user.stripe_customer_id) return json(res, { error: 'No Stripe subscription found' }, 400);
     const appUrl = publicAppUrl(req);
     const portal = await stripe.billingPortal.sessions.create({
@@ -2470,7 +2477,7 @@ async function handleRequest(req, res) {
   // POST /api/stripe/webhook — Stripe event handler (requires raw body)
   if (req.method === 'POST' && url.pathname === '/api/stripe/webhook') {
     const stripe = getStripe();
-    if (!stripe) { res.writeHead(503); res.end('Stripe not configured'); return; }
+    if (!stripe) { res.writeHead(503); res.end(stripeUnavailableReason() || 'Stripe not configured'); return; }
     const rawBody = await readRawBody(req);
     const sig = req.headers['stripe-signature'] || '';
     const s = getStripeSettings();
@@ -2709,7 +2716,7 @@ async function handleRequest(req, res) {
     return json(res, {
       defaultAdminPassword: ADMIN_PASSWORD === 'admin123',
       smtpConfigured: !!(getCachedSettings().smtp_host),
-      stripeConfigured: !!(getCachedSettings().stripe_secret_key),
+      stripeConfigured: !!(getStripeSettings().stripe_secret_key),
       appUrlConfigured: !!(getCachedSettings().app_url),
     });
   }
