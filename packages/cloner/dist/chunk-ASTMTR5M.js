@@ -709,7 +709,7 @@ var PQueue = class extends import_index.default {
 // src/capture.ts
 import { createHash } from "crypto";
 import { writeFileSync, existsSync } from "fs";
-import { join as join2, extname } from "path";
+import { join as join2, extname as extname2 } from "path";
 import mime from "mime-types";
 
 // src/logger.ts
@@ -770,6 +770,103 @@ var logger = {
     }
   }
 };
+
+// src/pageUrls.ts
+import { extname } from "path";
+var TRACKING_PARAM = /^(utm_|fbclid|gclid|msclkid|_ga|_gl|mc_eid|yclid|dclid|zanpid|igshid|twclid|li_fat_id|ttclid)/i;
+var NON_PAGE_EXTS = /* @__PURE__ */ new Set([
+  ".7z",
+  ".aac",
+  ".avi",
+  ".avif",
+  ".bin",
+  ".bmp",
+  ".css",
+  ".csv",
+  ".doc",
+  ".docx",
+  ".eot",
+  ".exe",
+  ".gif",
+  ".gz",
+  ".ico",
+  ".jpeg",
+  ".jpg",
+  ".js",
+  ".json",
+  ".map",
+  ".mjs",
+  ".mov",
+  ".mp3",
+  ".mp4",
+  ".ogg",
+  ".ogv",
+  ".otf",
+  ".pdf",
+  ".png",
+  ".ppt",
+  ".pptx",
+  ".rar",
+  ".rss",
+  ".svg",
+  ".tar",
+  ".tgz",
+  ".ttf",
+  ".txt",
+  ".wav",
+  ".webm",
+  ".webp",
+  ".woff",
+  ".woff2",
+  ".xls",
+  ".xlsx",
+  ".xml",
+  ".zip"
+]);
+var PAGE_EXTS = /* @__PURE__ */ new Set([
+  ".asp",
+  ".aspx",
+  ".htm",
+  ".html",
+  ".jsp",
+  ".php",
+  ".shtml",
+  ".xhtml"
+]);
+var AUTH_PATH = /^\/(login|logout|signin|sign-in|sign-out|signout|register|signup|sign-up|forgot-password|reset-password|change-password|verify-email|confirm-email|auth|oauth|sso|account\/activate|account\/confirm)(\/|$|\?)/i;
+function stripTrackingParams(href) {
+  try {
+    const u = new URL(href);
+    for (const key of [...u.searchParams.keys()]) {
+      if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
+    }
+    return u.href;
+  } catch {
+    return href;
+  }
+}
+function normalizePageUrl(input, baseUrl) {
+  const raw = String(input || "").trim();
+  if (!raw || raw.startsWith("#")) return null;
+  if (/^(mailto|tel|sms|javascript|data|blob):/i.test(raw)) return null;
+  try {
+    const u = new URL(raw, baseUrl);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.hostname || ["http", "https"].includes(u.hostname.toLowerCase())) return null;
+    if (AUTH_PATH.test(u.pathname)) return null;
+    u.hash = "";
+    if (u.pathname === "/index.html") {
+      u.pathname = "/";
+    } else if (u.pathname !== "/" && u.pathname.endsWith("/")) {
+      u.pathname = u.pathname.slice(0, -1);
+    }
+    const ext = extname(u.pathname).toLowerCase();
+    if (NON_PAGE_EXTS.has(ext) && !PAGE_EXTS.has(ext)) return null;
+    return stripTrackingParams(u.href);
+  } catch {
+    return null;
+  }
+}
 
 // src/capture.ts
 var ASSET_EXTS = /* @__PURE__ */ new Set([
@@ -944,7 +1041,7 @@ function shouldReportPageError(message) {
 function isImageLikeRequest(url, resourceType) {
   if (resourceType === "image") return true;
   try {
-    const ext = extname(new URL(url.split("?")[0]).pathname).toLowerCase();
+    const ext = extname2(new URL(url.split("?")[0]).pathname).toLowerCase();
     return [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".avif"].includes(ext);
   } catch {
     return false;
@@ -1037,7 +1134,7 @@ async function capturePage(context, pageUrl, assetsDir) {
     try {
       const cleanUrl = url.split("?")[0].split("#")[0];
       const hash = hashUrl(url);
-      const extFromPath = extname(new URL(cleanUrl).pathname).toLowerCase();
+      const extFromPath = extname2(new URL(cleanUrl).pathname).toLowerCase();
       const extFromMime = mime.extension(contentType);
       const ext = forceCss ? ".css" : extFromPath || (extFromMime ? `.${extFromMime}` : ".bin");
       const filename = `${hash}${ext}`;
@@ -1085,7 +1182,7 @@ async function capturePage(context, pageUrl, assetsDir) {
             return;
           }
           const contentType = r.headers.get("content-type") ?? "";
-          const pathExt = extname(new URL(absUrl.split("?")[0]).pathname).toLowerCase();
+          const pathExt = extname2(new URL(absUrl.split("?")[0]).pathname).toLowerCase();
           const isCssRef = contentType.includes("text/css") || pathExt === ".css";
           const maxBytes = isCssRef ? MAX_CSS_BYTES : MAX_ASSET_BYTES;
           const len = Number(r.headers.get("content-length") || 0);
@@ -1149,7 +1246,7 @@ async function capturePage(context, pageUrl, assetsDir) {
     const contentType = response.headers()["content-type"] ?? "";
     let _pathExt = "";
     try {
-      _pathExt = extname(new URL(url.split("?")[0]).pathname).toLowerCase();
+      _pathExt = extname2(new URL(url.split("?")[0]).pathname).toLowerCase();
     } catch {
     }
     const isStylesheetRequest = resourceType === "stylesheet";
@@ -1230,7 +1327,11 @@ async function capturePage(context, pageUrl, assetsDir) {
   try {
     logger.debug(`  [NAV] -> ${pageUrl}`);
     try {
-      await page.goto(pageUrl, { waitUntil: "load", timeout: NAVIGATION_TIMEOUT });
+      const mainResponse = await page.goto(pageUrl, { waitUntil: "load", timeout: NAVIGATION_TIMEOUT });
+      const status = mainResponse?.status();
+      if (status && status >= 400) {
+        throw new Error(`HTTP ${status}`);
+      }
       logger.debug(`  [NAV] load fired for ${pageUrl}`);
       await page.waitForLoadState("networkidle", { timeout: IS_SERVERLESS ? 2e3 : 15e3 }).catch(() => {
       });
@@ -1473,25 +1574,35 @@ async function capturePage(context, pageUrl, assetsDir) {
     }
     const html = await page.content();
     const origin = new URL(pageUrl).origin;
-    const links = await page.evaluate((origin2) => {
+    const rawLinks = await page.evaluate((origin2) => {
       const found = /* @__PURE__ */ new Set();
-      document.querySelectorAll("a[href]").forEach((a) => {
-        const href = a.href;
-        if (href.startsWith(origin2)) found.add(href);
-      });
-      document.querySelectorAll("[data-href],[data-url],[data-link]").forEach((el) => {
-        for (const attr of ["data-href", "data-url", "data-link"]) {
+      const push = (value) => {
+        if (!value) return;
+        try {
+          const href = new URL(value, window.location.href).href;
+          if (href.startsWith(origin2)) found.add(href);
+        } catch {
+        }
+      };
+      document.querySelectorAll("a[href]").forEach((a) => push(a.href));
+      document.querySelectorAll("[href],[to],[routerlink],[data-href],[data-url],[data-link],[data-route],[data-page]").forEach((el) => {
+        for (const attr of ["href", "to", "routerlink", "data-href", "data-url", "data-link", "data-route", "data-page"]) {
           const val = el.getAttribute(attr);
-          if (val?.startsWith("/") || val?.startsWith(origin2)) {
-            try {
-              found.add(new URL(val, origin2).href);
-            } catch {
-            }
-          }
+          if (val?.startsWith("/") || val?.startsWith(origin2)) push(val);
         }
       });
+      document.querySelectorAll("link[rel][href]").forEach((el) => {
+        const rel = (el.getAttribute("rel") ?? "").toLowerCase();
+        if (/(canonical|alternate|next|prev)/.test(rel)) push(el.getAttribute("href"));
+      });
+      document.querySelectorAll('meta[property="og:url"],meta[name="twitter:url"]').forEach((el) => {
+        push(el.getAttribute("content"));
+      });
+      const spaNavs = window.__clonyfyNavs ?? [];
+      spaNavs.forEach(push);
       return [...found];
     }, origin);
+    const links = rawLinks.map((link) => normalizePageUrl(link, pageUrl)).filter((link) => !!link && new URL(link).origin === origin);
     const seenPaths = /* @__PURE__ */ new Set();
     const assets = Array.from(assetMap.entries()).filter(([, localPath]) => {
       if (seenPaths.has(localPath)) return false;
@@ -1536,53 +1647,59 @@ var IS_SERVERLESS2 = process.env.VERCEL === "1" || process.env.VERCEL === "true"
 var NAV_DELAY_MS = IS_SERVERLESS2 ? 50 : 250;
 var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 18e3 : 18e4;
 var USER_AGENT3 = "CLONYFY/0.1 (+local archival)";
-var TRACKING_PARAM = /^(utm_|fbclid|gclid|msclkid|_ga|_gl|mc_eid|yclid|dclid|zanpid|igshid|twclid|li_fat_id|ttclid)/i;
-var AUTH_PATH = /^\/(login|logout|signin|sign-in|sign-out|signout|register|signup|sign-up|forgot-password|reset-password|change-password|verify-email|confirm-email|auth|oauth|sso|account\/activate|account\/confirm)(\/|$|\?)/i;
-function stripTrackingParams(href) {
-  try {
-    const u = new URL(href);
-    for (const key of [...u.searchParams.keys()]) {
-      if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
-    }
-    return u.href;
-  } catch {
-    return href;
-  }
-}
 async function fetchSitemap(origin) {
-  const candidates = [
+  const candidates = /* @__PURE__ */ new Set([
     `${origin}/sitemap.xml`,
     `${origin}/sitemap_index.xml`,
     `${origin}/sitemap.txt`
-  ];
+  ]);
   const found = [];
   const fetchedSitemaps = /* @__PURE__ */ new Set();
+  try {
+    const robots = await fetch(`${origin}/robots.txt`, {
+      headers: { "User-Agent": USER_AGENT3 },
+      signal: AbortSignal.timeout(IS_SERVERLESS2 ? 2e3 : 5e3)
+    });
+    if (robots.ok) {
+      const text = await robots.text();
+      for (const match of text.matchAll(/^sitemap:\s*(\S+)/gim)) {
+        candidates.add(match[1].trim());
+      }
+    }
+  } catch {
+  }
   async function parseSitemapText(url, text) {
     if (url.endsWith(".txt")) {
-      text.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("http")).forEach((l) => found.push(l));
+      text.split("\n").map((line) => line.trim()).filter((line) => normalizePageUrl(line)).forEach((line) => found.push(line));
       return;
     }
     if (/<sitemapindex/i.test(text)) {
       const nestedUrls = [...text.matchAll(/<sitemap>\s*<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
-      for (const nestedUrl of nestedUrls.slice(0, 10)) {
+      for (const nestedUrl of nestedUrls.slice(0, IS_SERVERLESS2 ? 20 : 80)) {
         if (fetchedSitemaps.has(nestedUrl)) continue;
         fetchedSitemaps.add(nestedUrl);
         try {
-          const r = await fetch(nestedUrl, { headers: { "User-Agent": USER_AGENT3 }, signal: AbortSignal.timeout(IS_SERVERLESS2 ? 3e3 : 8e3) });
-          if (r.ok) await parseSitemapText(nestedUrl, await r.text());
+          const res = await fetch(nestedUrl, {
+            headers: { "User-Agent": USER_AGENT3 },
+            signal: AbortSignal.timeout(IS_SERVERLESS2 ? 3e3 : 8e3)
+          });
+          if (res.ok) await parseSitemapText(nestedUrl, await res.text());
         } catch {
         }
       }
-    } else {
-      const locs = [...text.matchAll(/<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
-      found.push(...locs);
+      return;
     }
+    const locs = [...text.matchAll(/<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)].map((m) => m[1].trim()).filter((loc) => normalizePageUrl(loc));
+    found.push(...locs);
   }
   for (const url of candidates) {
     if (fetchedSitemaps.has(url)) continue;
     fetchedSitemaps.add(url);
     try {
-      const res = await fetch(url, { headers: { "User-Agent": USER_AGENT3 }, signal: AbortSignal.timeout(IS_SERVERLESS2 ? 3e3 : 8e3) });
+      const res = await fetch(url, {
+        headers: { "User-Agent": USER_AGENT3 },
+        signal: AbortSignal.timeout(IS_SERVERLESS2 ? 3e3 : 8e3)
+      });
       if (!res.ok) continue;
       await parseSitemapText(url, await res.text());
       if (found.length > 0) {
@@ -1592,7 +1709,7 @@ async function fetchSitemap(origin) {
     } catch {
     }
   }
-  return found;
+  return [...new Set(found)];
 }
 function routeForUrl(url) {
   try {
@@ -1604,14 +1721,16 @@ function routeForUrl(url) {
 }
 function extractLinksFromHtml(html, pageUrl, origin) {
   const found = /* @__PURE__ */ new Set();
-  const attrRe = /\b(?:href|data-href|data-url|data-link)=["']([^"']+)["']/gi;
+  const attrRe = /\b(?:href|to|routerlink|data-href|data-url|data-link|data-route|data-page)=["']([^"']+)["']/gi;
   let match;
   while ((match = attrRe.exec(html)) !== null) {
-    try {
-      const href = new URL(match[1], pageUrl);
-      if (href.origin === origin) found.add(href.href);
-    } catch {
-    }
+    const href = normalizePageUrl(match[1], pageUrl);
+    if (href && new URL(href).origin === origin) found.add(href);
+  }
+  const metaRe = /<(?:link|meta)\b[^>]*(?:href|content)=["']([^"']+)["'][^>]*>/gi;
+  while ((match = metaRe.exec(html)) !== null) {
+    const href = normalizePageUrl(match[1], pageUrl);
+    if (href && new URL(href).origin === origin) found.add(href);
   }
   return [...found];
 }
@@ -1655,20 +1774,10 @@ async function crawl(opts, assetsDir, onPage) {
     ]
   });
   const enqueue = (url, currentDepth) => {
-    let clean = url.split("#")[0];
+    const clean = normalizePageUrl(url);
+    if (!clean) return;
     try {
-      const u = new URL(clean);
-      if (u.pathname === "/index.html") {
-        u.pathname = "/";
-      } else if (u.pathname !== "/" && u.pathname.endsWith("/")) {
-        u.pathname = u.pathname.slice(0, -1);
-      }
-      clean = stripTrackingParams(u.href);
-    } catch {
-      return;
-    }
-    try {
-      if (AUTH_PATH.test(new URL(clean).pathname)) return;
+      if (new URL(clean).origin !== origin) return;
     } catch {
       return;
     }
@@ -1689,16 +1798,28 @@ async function crawl(opts, assetsDir, onPage) {
           }
         });
         await context.addInitScript(() => {
+          const collectNav = (value) => {
+            try {
+              if (typeof value !== "string" && !(value instanceof URL)) return;
+              const href = new URL(String(value), window.location.href).href;
+              const key = "__clonyfyNavs";
+              const current = window[key] ||= [];
+              current.push(href);
+              window.dispatchEvent(new CustomEvent("__cloner_nav__", { detail: href }));
+            } catch {
+            }
+          };
           const push = window.history.pushState.bind(history);
           const replace = window.history.replaceState.bind(history);
           window.history.pushState = function(...args) {
             push(...args);
-            window.dispatchEvent(new CustomEvent("__cloner_nav__", { detail: args[2] }));
+            collectNav(args[2]);
           };
           window.history.replaceState = function(...args) {
             replace(...args);
-            window.dispatchEvent(new CustomEvent("__cloner_nav__", { detail: args[2] }));
+            collectNav(args[2]);
           };
+          window.addEventListener("popstate", () => collectNav(window.location.href));
         });
         logger.info(`  [${records.length + 1}/${opts.maxPages}] ${clean}`);
         let timeoutHandle;
@@ -1728,15 +1849,7 @@ async function crawl(opts, assetsDir, onPage) {
         records.push(record);
         onPage(record);
         if (currentDepth < opts.depth) {
-          const allLinks = new Set(links);
-          for (const link of allLinks) {
-            const linkClean = link.split("#")[0];
-            try {
-              const u = new URL(linkClean);
-              if (u.origin === origin) enqueue(linkClean, currentDepth + 1);
-            } catch {
-            }
-          }
+          for (const link of new Set(links)) enqueue(link, currentDepth + 1);
         }
       } catch (err) {
         if (IS_SERVERLESS2) {
@@ -1764,13 +1877,7 @@ async function crawl(opts, assetsDir, onPage) {
   enqueue(opts.url, 0);
   logger.info("  Checking sitemap...");
   const sitemapUrls = await fetchSitemap(origin);
-  for (const u of sitemapUrls) {
-    try {
-      const parsed = new URL(u);
-      if (parsed.origin === origin) enqueue(u, 1);
-    } catch {
-    }
-  }
+  for (const url of sitemapUrls) enqueue(url, 1);
   try {
     await queue.onIdle();
   } finally {
@@ -10158,9 +10265,12 @@ function generateNextApp(outDir, manifest, apiRoutes) {
   for (const page of pages) {
     const name = safeName(page.route);
     writeFileSync2(join3(pagesDataDir, `${name}.html`), page.html, "utf8");
-    routeMap[page.route] = `${name}.html`;
-    if (page.route !== "/" && !page.route.endsWith(".html")) {
-      routeMap[`${page.route}.html`] = `${name}.html`;
+    routeMap[page.route] ??= `${name}.html`;
+    if (page.route !== "/" && page.route.endsWith(".html")) {
+      const cleanRoute = page.route.replace(/\.html$/i, "");
+      routeMap[cleanRoute] ??= `${name}.html`;
+    } else if (page.route !== "/") {
+      routeMap[`${page.route}.html`] ??= `${name}.html`;
     }
   }
   const authRoutes = [
@@ -10406,4 +10516,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-4JMZ2LDL.js.map
+//# sourceMappingURL=chunk-ASTMTR5M.js.map

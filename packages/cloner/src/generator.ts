@@ -121,10 +121,12 @@ export function generateNextApp(outDir: string, manifest: Manifest, apiRoutes: A
   for (const page of pages) {
     const name = safeName(page.route);
     writeFileSync(join(pagesDataDir, `${name}.html`), page.html, 'utf8');
-    routeMap[page.route] = `${name}.html`;
-    // Also register .html extension variant if route ends with .html
-    if (page.route !== '/' && !page.route.endsWith('.html')) {
-      routeMap[`${page.route}.html`] = `${name}.html`;
+    routeMap[page.route] ??= `${name}.html`;
+    if (page.route !== '/' && page.route.endsWith('.html')) {
+      const cleanRoute = page.route.replace(/\.html$/i, '');
+      routeMap[cleanRoute] ??= `${name}.html`;
+    } else if (page.route !== '/') {
+      routeMap[`${page.route}.html`] ??= `${name}.html`;
     }
   }
 

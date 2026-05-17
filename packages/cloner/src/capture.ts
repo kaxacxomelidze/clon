@@ -5,6 +5,7 @@ import mime from 'mime-types';
 import type { BrowserContext } from 'playwright';
 import type { AssetEntry, NetworkEntry, PageRecord } from './types.js';
 import { logger } from './logger.js';
+import { normalizePageUrl } from './pageUrls.js';
 
 const ASSET_EXTS = new Set([
   '.css', '.js', '.mjs', '.png', '.jpg', '.jpeg', '.gif', '.svg',
@@ -507,7 +508,11 @@ export async function capturePage(
   try { // outer try - ensures page.close() always runs
   logger.debug(`  [NAV] -> ${pageUrl}`);
   try {
-    await page.goto(pageUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUT });
+    const mainResponse = await page.goto(pageUrl, { waitUntil: 'load', timeout: NAVIGATION_TIMEOUT });
+    const status = mainResponse?.status();
+    if (status && status >= 400) {
+      throw new Error(`HTTP ${status}`);
+    }
     logger.debug(`  [NAV] load fired for ${pageUrl}`);
     // Wait for networkidle - aborted beacon patterns above help this settle quickly
     await page.waitForLoadState('networkidle', { timeout: IS_SERVERLESS ? 2_000 : 15_000 }).catch(() => {});
@@ -778,24 +783,45 @@ export async function capturePage(
 
   const html = await page.content();
 
-  // Extract links
+  // Extract real page links, including SPA routes recorded from pushState/replaceState.
   const origin = new URL(pageUrl).origin;
-  const links = await page.evaluate((origin: string) => {
+  const rawLinks = await page.evaluate((origin: string) => {
     const found = new Set<string>();
-    document.querySelectorAll('a[href]').forEach((a) => {
-      const href = (a as HTMLAnchorElement).href;
-      if (href.startsWith(origin)) found.add(href);
-    });
-    document.querySelectorAll('[data-href],[data-url],[data-link]').forEach((el) => {
-      for (const attr of ['data-href', 'data-url', 'data-link']) {
+    const push = (value: string | null | undefined) => {
+      if (!value) return;
+      try {
+        const href = new URL(value, window.location.href).href;
+        if (href.startsWith(origin)) found.add(href);
+      } catch {
+        // Ignore invalid route-like values.
+      }
+    };
+
+    document.querySelectorAll('a[href]').forEach((a) => push((a as HTMLAnchorElement).href));
+    document.querySelectorAll('[href],[to],[routerlink],[data-href],[data-url],[data-link],[data-route],[data-page]').forEach((el) => {
+      for (const attr of ['href', 'to', 'routerlink', 'data-href', 'data-url', 'data-link', 'data-route', 'data-page']) {
         const val = el.getAttribute(attr);
-        if (val?.startsWith('/') || val?.startsWith(origin)) {
-          try { found.add(new URL(val, origin).href); } catch { /* ignore */ }
-        }
+        if (val?.startsWith('/') || val?.startsWith(origin)) push(val);
       }
     });
+
+    document.querySelectorAll('link[rel][href]').forEach((el) => {
+      const rel = (el.getAttribute('rel') ?? '').toLowerCase();
+      if (/(canonical|alternate|next|prev)/.test(rel)) push(el.getAttribute('href'));
+    });
+
+    document.querySelectorAll('meta[property="og:url"],meta[name="twitter:url"]').forEach((el) => {
+      push(el.getAttribute('content'));
+    });
+
+    const spaNavs = (window as Window & { __clonyfyNavs?: string[] }).__clonyfyNavs ?? [];
+    spaNavs.forEach(push);
+
     return [...found];
   }, origin);
+  const links = rawLinks
+    .map((link) => normalizePageUrl(link, pageUrl))
+    .filter((link): link is string => !!link && new URL(link).origin === origin);
 
   const seenPaths = new Set<string>();
   const assets: AssetEntry[] = Array.from(assetMap.entries())

@@ -3,76 +3,91 @@ import sparticuzChromium from '@sparticuz/chromium';
 import PQueue from 'p-queue';
 import { capturePage } from './capture.js';
 import { logger } from './logger.js';
+import { normalizePageUrl } from './pageUrls.js';
 import type { ClonerOptions, PageRecord } from './types.js';
 
 const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 const NAV_DELAY_MS = IS_SERVERLESS ? 50 : 250;
-const PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS ? 18_000 : 180_000; // Vercel functions have a hard wall clock limit.
+const PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS ? 18_000 : 180_000;
 const USER_AGENT = 'CLONYFY/0.1 (+local archival)';
 
-// Strip common tracking/UTM query params so the same page isn't crawled multiple times
-// with different analytics decorations (e.g. ?utm_source=twitter vs ?utm_source=email).
-const TRACKING_PARAM = /^(utm_|fbclid|gclid|msclkid|_ga|_gl|mc_eid|yclid|dclid|zanpid|igshid|twclid|li_fat_id|ttclid)/i;
-
-// Auth/account pages that should not be cloned — they're user-specific flows, not content
-const AUTH_PATH = /^\/(login|logout|signin|sign-in|sign-out|signout|register|signup|sign-up|forgot-password|reset-password|change-password|verify-email|confirm-email|auth|oauth|sso|account\/activate|account\/confirm)(\/|$|\?)/i;
-
-function stripTrackingParams(href: string): string {
-  try {
-    const u = new URL(href);
-    for (const key of [...u.searchParams.keys()]) {
-      if (TRACKING_PARAM.test(key)) u.searchParams.delete(key);
-    }
-    // Remove trailing '?' if all params were stripped
-    return u.href;
-  } catch { return href; }
-}
-
 async function fetchSitemap(origin: string): Promise<string[]> {
-  const candidates = [
+  const candidates = new Set([
     `${origin}/sitemap.xml`,
     `${origin}/sitemap_index.xml`,
     `${origin}/sitemap.txt`,
-  ];
+  ]);
   const found: string[] = [];
   const fetchedSitemaps = new Set<string>();
 
+  try {
+    const robots = await fetch(`${origin}/robots.txt`, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(IS_SERVERLESS ? 2_000 : 5_000),
+    });
+    if (robots.ok) {
+      const text = await robots.text();
+      for (const match of text.matchAll(/^sitemap:\s*(\S+)/gim)) {
+        candidates.add(match[1].trim());
+      }
+    }
+  } catch {
+    // robots sitemap hints are optional.
+  }
+
   async function parseSitemapText(url: string, text: string) {
     if (url.endsWith('.txt')) {
-      text.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('http')).forEach((l) => found.push(l));
+      text.split('\n')
+        .map((line) => line.trim())
+        .filter((line) => normalizePageUrl(line))
+        .forEach((line) => found.push(line));
       return;
     }
-    // Sitemap index: contains nested <sitemap><loc>…</loc></sitemap> entries
+
     if (/<sitemapindex/i.test(text)) {
-      const nestedUrls = [...text.matchAll(/<sitemap>\s*<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
-      for (const nestedUrl of nestedUrls.slice(0, 10)) {
+      const nestedUrls = [...text.matchAll(/<sitemap>\s*<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)]
+        .map((m) => m[1].trim());
+      for (const nestedUrl of nestedUrls.slice(0, IS_SERVERLESS ? 20 : 80)) {
         if (fetchedSitemaps.has(nestedUrl)) continue;
         fetchedSitemaps.add(nestedUrl);
         try {
-          const r = await fetch(nestedUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 8_000) });
-          if (r.ok) await parseSitemapText(nestedUrl, await r.text());
-        } catch { /* skip unreachable child sitemap */ }
+          const res = await fetch(nestedUrl, {
+            headers: { 'User-Agent': USER_AGENT },
+            signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 8_000),
+          });
+          if (res.ok) await parseSitemapText(nestedUrl, await res.text());
+        } catch {
+          // Skip unreachable child sitemap.
+        }
       }
-    } else {
-      const locs = [...text.matchAll(/<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)].map((m) => m[1].trim());
-      found.push(...locs);
+      return;
     }
+
+    const locs = [...text.matchAll(/<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)]
+      .map((m) => m[1].trim())
+      .filter((loc) => normalizePageUrl(loc));
+    found.push(...locs);
   }
 
   for (const url of candidates) {
     if (fetchedSitemaps.has(url)) continue;
     fetchedSitemaps.add(url);
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 8_000) });
+      const res = await fetch(url, {
+        headers: { 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(IS_SERVERLESS ? 3_000 : 8_000),
+      });
       if (!res.ok) continue;
       await parseSitemapText(url, await res.text());
       if (found.length > 0) {
         logger.info(`  Found ${found.length} URLs in sitemap: ${url}`);
         break;
       }
-    } catch { /* no sitemap */ }
+    } catch {
+      // No sitemap at this location.
+    }
   }
-  return found;
+  return [...new Set(found)];
 }
 
 function routeForUrl(url: string): string {
@@ -86,14 +101,20 @@ function routeForUrl(url: string): string {
 
 function extractLinksFromHtml(html: string, pageUrl: string, origin: string): string[] {
   const found = new Set<string>();
-  const attrRe = /\b(?:href|data-href|data-url|data-link)=["']([^"']+)["']/gi;
+  const attrRe = /\b(?:href|to|routerlink|data-href|data-url|data-link|data-route|data-page)=["']([^"']+)["']/gi;
   let match: RegExpExecArray | null;
+
   while ((match = attrRe.exec(html)) !== null) {
-    try {
-      const href = new URL(match[1], pageUrl);
-      if (href.origin === origin) found.add(href.href);
-    } catch { /* skip invalid links */ }
+    const href = normalizePageUrl(match[1], pageUrl);
+    if (href && new URL(href).origin === origin) found.add(href);
   }
+
+  const metaRe = /<(?:link|meta)\b[^>]*(?:href|content)=["']([^"']+)["'][^>]*>/gi;
+  while ((match = metaRe.exec(html)) !== null) {
+    const href = normalizePageUrl(match[1], pageUrl);
+    if (href && new URL(href).origin === origin) found.add(href);
+  }
+
   return [...found];
 }
 
@@ -144,25 +165,10 @@ export async function crawl(
   });
 
   const enqueue = (url: string, currentDepth: number) => {
-    // Normalize: strip fragment + tracking params, trailing slash (except root), /index.html → /
-    let clean = url.split('#')[0];
-    try {
-      const u = new URL(clean);
-      if (u.pathname === '/index.html') {
-        u.pathname = '/'; // treat /index.html as root
-      } else if (u.pathname !== '/' && u.pathname.endsWith('/')) {
-        u.pathname = u.pathname.slice(0, -1);
-      }
-      clean = stripTrackingParams(u.href);
-    } catch { return; }
-
-    // Skip auth/registration pages — they're user-specific flows, not site content
-    try { if (AUTH_PATH.test(new URL(clean).pathname)) return; } catch { return; }
-
+    const clean = normalizePageUrl(url);
+    if (!clean) return;
+    try { if (new URL(clean).origin !== origin) return; } catch { return; }
     if (visited.has(clean)) return;
-    // visited contains every URL already reserved for capture. Using queue.pending
-    // here under-counts discovered pages because the currently running page is
-    // still pending when it enqueues child links.
     if (visited.size >= opts.maxPages) return;
     visited.add(clean);
 
@@ -170,8 +176,6 @@ export async function crawl(
       if (records.length >= opts.maxPages) return;
       await new Promise((r) => setTimeout(r, NAV_DELAY_MS));
 
-      // Declare before try so the finally block can always close it, even if
-      // newContext() succeeds but addInitScript() throws (resource leak otherwise).
       let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
       try {
         context = await browser.newContext({
@@ -183,24 +187,33 @@ export async function crawl(
           },
         });
 
-        // Patch pushState/replaceState so SPA navigations are visible as events.
-        // (The __cloner_nav__ event lets future tooling hook in without re-architecting capture.)
         await context.addInitScript(() => {
+          const collectNav = (value: unknown) => {
+            try {
+              if (typeof value !== 'string' && !(value instanceof URL)) return;
+              const href = new URL(String(value), window.location.href).href;
+              const key = '__clonyfyNavs';
+              const current = ((window as Window & Record<string, string[]>)[key] ||= []);
+              current.push(href);
+              window.dispatchEvent(new CustomEvent('__cloner_nav__', { detail: href }));
+            } catch {
+              // Ignore invalid SPA route targets.
+            }
+          };
           const push = (window as Window).history.pushState.bind(history);
           const replace = (window as Window).history.replaceState.bind(history);
           (window as Window).history.pushState = function (...args) {
             push(...args);
-            window.dispatchEvent(new CustomEvent('__cloner_nav__', { detail: args[2] }));
+            collectNav(args[2]);
           };
           (window as Window).history.replaceState = function (...args) {
             replace(...args);
-            window.dispatchEvent(new CustomEvent('__cloner_nav__', { detail: args[2] }));
+            collectNav(args[2]);
           };
+          window.addEventListener('popstate', () => collectNav(window.location.href));
         });
 
         logger.info(`  [${records.length + 1}/${opts.maxPages}] ${clean}`);
-        // Timeout that is always cleared — leaving a dangling setTimeout causes an
-        // unhandled rejection 120 s later on every *successful* capture in Node ≥ 15.
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
         let timedOut = false;
         const capturePromise = capturePage(context, clean, assetsDir);
@@ -223,19 +236,13 @@ export async function crawl(
             ]);
           }
         }
+
         const { record, links } = result;
         records.push(record);
         onPage(record);
 
         if (currentDepth < opts.depth) {
-          const allLinks = new Set(links);
-          for (const link of allLinks) {
-            const linkClean = link.split('#')[0];
-            try {
-              const u = new URL(linkClean);
-              if (u.origin === origin) enqueue(linkClean, currentDepth + 1);
-            } catch { /* skip */ }
-          }
+          for (const link of new Set(links)) enqueue(link, currentDepth + 1);
         }
       } catch (err) {
         if (IS_SERVERLESS) {
@@ -260,18 +267,11 @@ export async function crawl(
     });
   };
 
-  // 1. Start with the seed URL
   enqueue(opts.url, 0);
 
-  // 2. Discover pages from sitemap — no pre-slice; enqueue() enforces maxPages internally
   logger.info('  Checking sitemap...');
   const sitemapUrls = await fetchSitemap(origin);
-  for (const u of sitemapUrls) {
-    try {
-      const parsed = new URL(u);
-      if (parsed.origin === origin) enqueue(u, 1);
-    } catch { /* skip */ }
-  }
+  for (const url of sitemapUrls) enqueue(url, 1);
 
   try {
     await queue.onIdle();

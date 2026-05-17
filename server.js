@@ -853,13 +853,15 @@ function cleanGitPath(input) {
 function normalizeTargetUrl(input) {
   let raw = String(input || '').trim();
   if (!raw) throw new Error('Enter a website URL');
-  raw = raw.replace(/^https?:\/(?!\/)/i, m => m.toLowerCase() + '/');
+  if (/^https?:\/\/https?:[/:\\]?/i.test(raw)) throw new Error('Enter one valid website URL');
+  raw = raw.replace(/\\/g, '/').replace(/^https?:\/(?!\/)/i, m => m.toLowerCase() + '/');
   if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw.replace(/^\/+/, '');
   const parsed = new URL(raw);
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Use an http or https URL');
-  if (!parsed.hostname || !parsed.hostname.includes('.') || ['http', 'https'].includes(parsed.hostname.toLowerCase())) {
+  if (!parsed.hostname || !parsed.hostname.includes('.') || ['http', 'https'].includes(parsed.hostname.toLowerCase()) || /[/:]/.test(parsed.hostname)) {
     throw new Error('Enter a valid website domain');
   }
+  parsed.hash = '';
   return parsed;
 }
 
