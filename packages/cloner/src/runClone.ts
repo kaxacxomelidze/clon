@@ -114,6 +114,18 @@ export async function runClone(options: ClonerOptions, events: CloneRunEvents = 
       logger.info(`  Deduplicated ${records.length - uniqueRecords.length} duplicate route(s).`);
     }
 
+    const completeAssetMap = new Map<string, AssetEntry>();
+    for (const record of uniqueRecords) {
+      for (const asset of record.assets) {
+        completeAssetMap.set(asset.originalUrl, asset);
+        completeAssetMap.set(asset.originalUrl.split('?')[0].split('#')[0], asset);
+      }
+    }
+    const completeAssets = [...completeAssetMap.values()];
+    for (const record of uniqueRecords) {
+      record.html = rewriteHtml({ ...record, assets: completeAssets }, targetOrigin);
+    }
+
     const allNetwork = uniqueRecords.flatMap((r) => r.network);
     logger.info(`\nTotal network entries across all pages: ${allNetwork.length}`);
 

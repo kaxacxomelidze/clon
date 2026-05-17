@@ -187,8 +187,8 @@ var require_eventemitter3 = __commonJS({
 });
 
 // src/runClone.ts
-import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync3 } from "fs";
-import { resolve, join as join4 } from "path";
+import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "fs";
+import { resolve, join as join5 } from "path";
 
 // src/robots.ts
 import { createRequire } from "module";
@@ -705,6 +705,12 @@ var PQueue = class extends import_index.default {
     return this.#isPaused;
   }
 };
+
+// src/crawler.ts
+import { createHash as createHash2 } from "crypto";
+import { existsSync as existsSync2, writeFileSync as writeFileSync2 } from "fs";
+import { extname as extname3, join as join3 } from "path";
+import mime2 from "mime-types";
 
 // src/capture.ts
 import { createHash } from "crypto";
@@ -1647,6 +1653,12 @@ var IS_SERVERLESS2 = process.env.VERCEL === "1" || process.env.VERCEL === "true"
 var NAV_DELAY_MS = IS_SERVERLESS2 ? 50 : 250;
 var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 18e3 : 18e4;
 var USER_AGENT3 = "CLONYFY/0.1 (+local archival)";
+var STATIC_ASSET_LIMIT = IS_SERVERLESS2 ? 80 : 250;
+var STATIC_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 1e4;
+var STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS2 ? 8 : 50) * 1024 * 1024;
+function hashUrl2(url) {
+  return createHash2("sha1").update(url).digest("hex").slice(0, 16);
+}
 async function fetchSitemap(origin) {
   const candidates = /* @__PURE__ */ new Set([
     `${origin}/sitemap.xml`,
@@ -1734,7 +1746,60 @@ function extractLinksFromHtml(html, pageUrl, origin) {
   }
   return [...found];
 }
-async function fetchStaticPage(url, origin) {
+function pushSrcsetUrls(value, out) {
+  if (!value) return;
+  for (const part of value.split(",")) {
+    const candidate = part.trim().split(/\s+/)[0];
+    if (candidate) out.add(candidate);
+  }
+}
+function extractStaticAssetUrls(html) {
+  const found = /* @__PURE__ */ new Set();
+  const attrRe = /\b(?:src|href|poster|data-src|data-lazy-src|data-original|data-bg|data-background|data-image|data-bg-image|data-lazy-background)=["']([^"']+)["']/gi;
+  let match;
+  while ((match = attrRe.exec(html)) !== null) {
+    const value = match[1].trim();
+    if (value && !normalizePageUrl(value)) found.add(value);
+  }
+  const srcsetRe = /\b(?:srcset|data-srcset|data-lazy-srcset)=["']([^"']+)["']/gi;
+  while ((match = srcsetRe.exec(html)) !== null) pushSrcsetUrls(match[1], found);
+  for (const cssUrl of extractCssUrls(html)) found.add(cssUrl);
+  return [...found];
+}
+async function saveStaticAsset(rawUrl, pageUrl, assetsDir) {
+  if (/^(data|blob|javascript|mailto|tel):/i.test(rawUrl)) return null;
+  let absUrl;
+  try {
+    absUrl = new URL(rawUrl, pageUrl).href;
+  } catch {
+    return null;
+  }
+  try {
+    const res = await fetch(absUrl, {
+      headers: { "User-Agent": USER_AGENT3 },
+      signal: AbortSignal.timeout(STATIC_ASSET_TIMEOUT)
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "";
+    if (/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
+    const len = Number(res.headers.get("content-length") || 0);
+    if (len > STATIC_ASSET_MAX_BYTES) return null;
+    const body = Buffer.from(await res.arrayBuffer());
+    if (body.length > STATIC_ASSET_MAX_BYTES) return null;
+    const cleanUrl = absUrl.split("?")[0].split("#")[0];
+    const extFromPath = extname3(new URL(cleanUrl).pathname).toLowerCase();
+    const extFromMime = mime2.extension(contentType);
+    const ext = extFromPath || (extFromMime ? `.${extFromMime}` : ".bin");
+    const filename = `${hashUrl2(absUrl)}${ext}`;
+    const localPath = join3(assetsDir, filename);
+    const webPath = `/_assets/${filename}`;
+    if (!existsSync2(localPath)) writeFileSync2(localPath, body);
+    return { originalUrl: absUrl, localPath: webPath };
+  } catch {
+    return null;
+  }
+}
+async function fetchStaticPage(url, origin, assetsDir) {
   const res = await fetch(url, {
     headers: { "User-Agent": USER_AGENT3, "Accept": "text/html,application/xhtml+xml" },
     signal: AbortSignal.timeout(IS_SERVERLESS2 ? 5e3 : 15e3)
@@ -1746,12 +1811,37 @@ async function fetchStaticPage(url, origin) {
   }
   const html = await res.text();
   const links = extractLinksFromHtml(html, url, origin);
+  const assets = /* @__PURE__ */ new Map();
+  let assetUrls = extractStaticAssetUrls(html).slice(0, STATIC_ASSET_LIMIT);
+  for (const rawAssetUrl of assetUrls) {
+    const saved = await saveStaticAsset(rawAssetUrl, url, assetsDir);
+    if (!saved) continue;
+    assets.set(saved.originalUrl, saved);
+    if (/\.css(?:$|[?#])/i.test(saved.originalUrl)) {
+      try {
+        const cssRes = await fetch(saved.originalUrl, {
+          headers: { "User-Agent": USER_AGENT3 },
+          signal: AbortSignal.timeout(STATIC_ASSET_TIMEOUT)
+        });
+        if (cssRes.ok) {
+          const cssText = await cssRes.text();
+          const cssAssets = extractCssUrls(cssText).slice(0, STATIC_ASSET_LIMIT);
+          assetUrls = assetUrls.concat(cssAssets);
+          for (const cssAsset of cssAssets) {
+            const cssSaved = await saveStaticAsset(cssAsset, saved.originalUrl, assetsDir);
+            if (cssSaved) assets.set(cssSaved.originalUrl, cssSaved);
+          }
+        }
+      } catch {
+      }
+    }
+  }
   return {
     record: {
       url,
       route: routeForUrl(url),
       html,
-      assets: [],
+      assets: [...assets.values()],
       network: [],
       failedAssets: []
     },
@@ -1855,7 +1945,7 @@ async function crawl(opts, assetsDir, onPage) {
         if (IS_SERVERLESS2) {
           try {
             logger.info(`  [FALLBACK] Static HTML fetch for ${clean}`);
-            const { record, links } = await fetchStaticPage(clean, origin);
+            const { record, links } = await fetchStaticPage(clean, origin, assetsDir);
             records.push(record);
             onPage(record);
             if (currentDepth < opts.depth) {
@@ -10178,21 +10268,21 @@ function tryParseJson(raw, contentType = "") {
 }
 
 // src/generator.ts
-import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync2, rmSync, existsSync as existsSync2 } from "fs";
-import { join as join3, dirname as dirname2 } from "path";
+import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3, rmSync, existsSync as existsSync3 } from "fs";
+import { join as join4, dirname as dirname2 } from "path";
 import { fileURLToPath } from "url";
-import { createHash as createHash2 } from "crypto";
+import { createHash as createHash3 } from "crypto";
 import Handlebars from "handlebars";
 import { readFileSync } from "fs";
 var __dirname = dirname2(fileURLToPath(import.meta.url));
-var TEMPLATES_DIR = join3(__dirname, "..", "templates");
+var TEMPLATES_DIR = join4(__dirname, "..", "templates");
 function tpl(name, data) {
-  const src = readFileSync(join3(TEMPLATES_DIR, name), "utf8");
+  const src = readFileSync(join4(TEMPLATES_DIR, name), "utf8");
   return Handlebars.compile(src)(data);
 }
 function write(path, content) {
   mkdirSync3(dirname2(path), { recursive: true });
-  writeFileSync2(path, content, "utf8");
+  writeFileSync3(path, content, "utf8");
 }
 function prismaModelName(path) {
   return path.split("/").filter(Boolean).map((s) => s.replace(/[^a-zA-Z]/g, "")).filter(Boolean).map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join("") || "FormSubmission";
@@ -10210,7 +10300,7 @@ function safeName(route) {
   }
   const name = decoded.replace(/\//g, "__").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/__+/g, "__").replace(/^[_-]+|[_-]+$/g, "") || "__page__";
   if (name.length > 80) {
-    const hash = createHash2("sha1").update(route).digest("hex").slice(0, 8);
+    const hash = createHash3("sha1").update(route).digest("hex").slice(0, 8);
     return name.slice(0, 72) + "__" + hash;
   }
   return name;
@@ -10258,13 +10348,13 @@ function routeSegments(path) {
 function generateNextApp(outDir, manifest, apiRoutes) {
   const { pages } = manifest;
   const hostname = new URL(manifest.targetOrigin).hostname;
-  mkdirSync3(join3(outDir, "public", "_assets"), { recursive: true });
-  const pagesDataDir = join3(outDir, "captured-pages");
+  mkdirSync3(join4(outDir, "public", "_assets"), { recursive: true });
+  const pagesDataDir = join4(outDir, "captured-pages");
   mkdirSync3(pagesDataDir, { recursive: true });
   const routeMap = {};
   for (const page of pages) {
     const name = safeName(page.route);
-    writeFileSync2(join3(pagesDataDir, `${name}.html`), page.html, "utf8");
+    writeFileSync3(join4(pagesDataDir, `${name}.html`), page.html, "utf8");
     routeMap[page.route] ??= `${name}.html`;
     if (page.route !== "/" && page.route.endsWith(".html")) {
       const cleanRoute = page.route.replace(/\.html$/i, "");
@@ -10280,17 +10370,17 @@ function generateNextApp(outDir, manifest, apiRoutes) {
   for (const auth of authRoutes) {
     if (routeMap[auth.route]) continue;
     const name = safeName(auth.route);
-    writeFileSync2(join3(pagesDataDir, `${name}.html`), authPageHtml(hostname, auth.kind), "utf8");
+    writeFileSync3(join4(pagesDataDir, `${name}.html`), authPageHtml(hostname, auth.kind), "utf8");
     routeMap[auth.route] = `${name}.html`;
   }
-  writeFileSync2(join3(outDir, "route-map.json"), JSON.stringify(routeMap, null, 2), "utf8");
-  const fixturesDir = join3(outDir, "fixtures");
+  writeFileSync3(join4(outDir, "route-map.json"), JSON.stringify(routeMap, null, 2), "utf8");
+  const fixturesDir = join4(outDir, "fixtures");
   mkdirSync3(fixturesDir, { recursive: true });
   for (const spec of apiRoutes) {
     for (const resp of spec.responses) {
       const fname = `${spec.fixtureKey}.${spec.method}.${resp.status}.json`;
       try {
-        writeFileSync2(join3(fixturesDir, fname), JSON.stringify({
+        writeFileSync3(join4(fixturesDir, fname), JSON.stringify({
           status: resp.status,
           contentType: resp.contentType || "application/json",
           body: resp.body
@@ -10299,10 +10389,10 @@ function generateNextApp(outDir, manifest, apiRoutes) {
       }
     }
   }
-  write(join3(outDir, "app", "layout.tsx"), tpl("layout.tsx.hbs", { hostname, targetOrigin: manifest.targetOrigin }));
-  const stalePage = join3(outDir, "app", "[[...slug]]", "page.tsx");
-  if (existsSync2(stalePage)) rmSync(stalePage);
-  write(join3(outDir, "app", "[[...slug]]", "route.ts"), tpl("page.tsx.hbs", {
+  write(join4(outDir, "app", "layout.tsx"), tpl("layout.tsx.hbs", { hostname, targetOrigin: manifest.targetOrigin }));
+  const stalePage = join4(outDir, "app", "[[...slug]]", "page.tsx");
+  if (existsSync3(stalePage)) rmSync(stalePage);
+  write(join4(outDir, "app", "[[...slug]]", "route.ts"), tpl("page.tsx.hbs", {
     targetOrigin: manifest.targetOrigin,
     targetOriginJson: JSON.stringify(manifest.targetOrigin)
   }));
@@ -10311,7 +10401,7 @@ function generateNextApp(outDir, manifest, apiRoutes) {
   for (const spec of filteredRoutes) {
     const segments = routeSegments(spec.path);
     if (segments.length === 0) continue;
-    write(join3(outDir, "app", ...segments, "route.ts"), tpl("route.ts.hbs", {
+    write(join4(outDir, "app", ...segments, "route.ts"), tpl("route.ts.hbs", {
       method: spec.method,
       path: spec.path,
       fixtureKey: spec.fixtureKey,
@@ -10326,18 +10416,18 @@ function generateNextApp(outDir, manifest, apiRoutes) {
     name: prismaModelName(r.path),
     fields: toPrismaFields(r.inferredFields)
   }));
-  write(join3(outDir, "prisma", "schema.prisma"), tpl("schema.prisma.hbs", { models }));
-  write(join3(outDir, "lib", "replay.ts"), tpl("replay.ts.hbs", {}));
-  write(join3(outDir, "next.config.js"), tpl("next.config.js.hbs", {}));
-  write(join3(outDir, "package.json"), tpl("package.json.hbs", {
+  write(join4(outDir, "prisma", "schema.prisma"), tpl("schema.prisma.hbs", { models }));
+  write(join4(outDir, "lib", "replay.ts"), tpl("replay.ts.hbs", {}));
+  write(join4(outDir, "next.config.js"), tpl("next.config.js.hbs", {}));
+  write(join4(outDir, "package.json"), tpl("package.json.hbs", {
     siteName: hostname.replace(/\./g, "-"),
     hasPrisma: models.length > 0
   }));
-  write(join3(outDir, "Dockerfile"), tpl("Dockerfile.hbs", {}));
-  write(join3(outDir, "docker-compose.yml"), tpl("docker-compose.yml.hbs", {}));
-  write(join3(outDir, ".env.example"), 'DATABASE_URL="file:./dev.db"\n');
-  write(join3(outDir, "tsconfig.json"), tpl("tsconfig.json.hbs", {}));
-  write(join3(outDir, "README.md"), tpl("README.md.hbs", {
+  write(join4(outDir, "Dockerfile"), tpl("Dockerfile.hbs", {}));
+  write(join4(outDir, "docker-compose.yml"), tpl("docker-compose.yml.hbs", {}));
+  write(join4(outDir, ".env.example"), 'DATABASE_URL="file:./dev.db"\n');
+  write(join4(outDir, "tsconfig.json"), tpl("tsconfig.json.hbs", {}));
+  write(join4(outDir, "README.md"), tpl("README.md.hbs", {
     targetOrigin: manifest.targetOrigin,
     hostname,
     pagesCount: Object.keys(routeMap).filter((route) => !route.endsWith(".html")).length,
@@ -10372,7 +10462,7 @@ CLONYFY v0.1`);
     logger.info(`Target      : ${opts.url}`);
     logger.info(`Output      : ${opts.out}`);
     logger.info(`Options     : max-pages=${opts.maxPages} depth=${opts.depth} concurrency=${opts.concurrency} ignore-robots=${opts.ignoreRobots} verbose=${opts.verbose ?? false}`);
-    logger.info(`Log file    : ${join4(opts.out, "cloner.log")}`);
+    logger.info(`Log file    : ${join5(opts.out, "cloner.log")}`);
     logger.info(`Tip         : run with --verbose (or DEBUG=1) to see per-asset/rewrite detail on the console`);
     let targetOrigin;
     try {
@@ -10390,9 +10480,9 @@ CLONYFY v0.1`);
     } else {
       logger.info("robots.txt check skipped (--ignore-robots)");
     }
-    const assetsDir = join4(opts.out, "public", "_assets");
+    const assetsDir = join5(opts.out, "public", "_assets");
     mkdirSync4(assetsDir, { recursive: true });
-    const capturedPagesDir = join4(opts.out, "captured-pages");
+    const capturedPagesDir = join5(opts.out, "captured-pages");
     mkdirSync4(capturedPagesDir, { recursive: true });
     const routeMap = {};
     const pageFilename = (route) => `${safeName(route)}.html`;
@@ -10415,9 +10505,9 @@ CLONYFY v0.1`);
       logger.info(`  [${pagesCompleted}/${opts.maxPages}] \u2713 ${page.url}  (assets: ${page.assets.length}, network: ${page.network.length})`);
       try {
         const filename = pageFilename(page.route);
-        writeFileSync3(join4(capturedPagesDir, filename), page.html, "utf8");
+        writeFileSync4(join5(capturedPagesDir, filename), page.html, "utf8");
         routeMap[page.route] = filename;
-        writeFileSync3(join4(opts.out, "route-map.json"), JSON.stringify(routeMap, null, 2), "utf8");
+        writeFileSync4(join5(opts.out, "route-map.json"), JSON.stringify(routeMap, null, 2), "utf8");
       } catch (writeErr) {
         logger.warn(`  [WRITE ERR] ${page.url}: ${writeErr.message}`);
       }
@@ -10440,6 +10530,17 @@ Captured ${records.length} page(s).`);
     });
     if (uniqueRecords.length < records.length) {
       logger.info(`  Deduplicated ${records.length - uniqueRecords.length} duplicate route(s).`);
+    }
+    const completeAssetMap = /* @__PURE__ */ new Map();
+    for (const record of uniqueRecords) {
+      for (const asset of record.assets) {
+        completeAssetMap.set(asset.originalUrl, asset);
+        completeAssetMap.set(asset.originalUrl.split("?")[0].split("#")[0], asset);
+      }
+    }
+    const completeAssets = [...completeAssetMap.values()];
+    for (const record of uniqueRecords) {
+      record.html = rewriteHtml({ ...record, assets: completeAssets }, targetOrigin);
     }
     const allNetwork = uniqueRecords.flatMap((r) => r.network);
     logger.info(`
@@ -10481,7 +10582,7 @@ Total unique assets saved: ${uniqueAssets.size}`);
       capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
       pages: uniqueRecords.map((r) => ({ ...r, html: "" }))
     };
-    writeFileSync3(join4(opts.out, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+    writeFileSync4(join5(opts.out, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
     logger.info("\nGenerating Next.js app...");
     const fullManifest = { ...manifest, pages: uniqueRecords };
     generateNextApp(opts.out, fullManifest, apiRoutes);
@@ -10490,7 +10591,7 @@ Total unique assets saved: ${uniqueAssets.size}`);
     logger.info(`Pages       : ${uniqueRecords.length}`);
     logger.info(`Assets      : ${uniqueAssets.size}`);
     logger.info(`API routes  : ${apiRoutes.length}`);
-    logger.info(`Log file    : ${join4(opts.out, "cloner.log")}`);
+    logger.info(`Log file    : ${join5(opts.out, "cloner.log")}`);
     logger.info(`
 Next steps:`);
     logger.info(`  cd "${opts.out}"`);
@@ -10501,7 +10602,7 @@ Next steps:`);
       pages: uniqueRecords.length,
       assets: uniqueAssets.size,
       apiRoutes: apiRoutes.length,
-      logFile: join4(opts.out, "cloner.log")
+      logFile: join5(opts.out, "cloner.log")
     };
   } catch (err) {
     logger.error(err instanceof Error ? err.message : "Clone failed", err);
@@ -10516,4 +10617,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-ASTMTR5M.js.map
+//# sourceMappingURL=chunk-JNXKRRPA.js.map

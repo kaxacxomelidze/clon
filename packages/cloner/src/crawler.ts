@@ -1,15 +1,26 @@
 import { chromium } from 'playwright';
 import sparticuzChromium from '@sparticuz/chromium';
 import PQueue from 'p-queue';
-import { capturePage } from './capture.js';
+import { createHash } from 'crypto';
+import { existsSync, writeFileSync } from 'fs';
+import { extname, join } from 'path';
+import mime from 'mime-types';
+import { capturePage, extractCssUrls } from './capture.js';
 import { logger } from './logger.js';
 import { normalizePageUrl } from './pageUrls.js';
-import type { ClonerOptions, PageRecord } from './types.js';
+import type { AssetEntry, ClonerOptions, PageRecord } from './types.js';
 
 const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 const NAV_DELAY_MS = IS_SERVERLESS ? 50 : 250;
 const PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS ? 18_000 : 180_000;
 const USER_AGENT = 'CLONYFY/0.1 (+local archival)';
+const STATIC_ASSET_LIMIT = IS_SERVERLESS ? 80 : 250;
+const STATIC_ASSET_TIMEOUT = IS_SERVERLESS ? 4_000 : 10_000;
+const STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
+
+function hashUrl(url: string): string {
+  return createHash('sha1').update(url).digest('hex').slice(0, 16);
+}
 
 async function fetchSitemap(origin: string): Promise<string[]> {
   const candidates = new Set([
@@ -118,7 +129,71 @@ function extractLinksFromHtml(html: string, pageUrl: string, origin: string): st
   return [...found];
 }
 
-async function fetchStaticPage(url: string, origin: string): Promise<{ record: PageRecord; links: string[] }> {
+function pushSrcsetUrls(value: string | null | undefined, out: Set<string>): void {
+  if (!value) return;
+  for (const part of value.split(',')) {
+    const candidate = part.trim().split(/\s+/)[0];
+    if (candidate) out.add(candidate);
+  }
+}
+
+function extractStaticAssetUrls(html: string): string[] {
+  const found = new Set<string>();
+  const attrRe = /\b(?:src|href|poster|data-src|data-lazy-src|data-original|data-bg|data-background|data-image|data-bg-image|data-lazy-background)=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = attrRe.exec(html)) !== null) {
+    const value = match[1].trim();
+    if (value && !normalizePageUrl(value)) found.add(value);
+  }
+
+  const srcsetRe = /\b(?:srcset|data-srcset|data-lazy-srcset)=["']([^"']+)["']/gi;
+  while ((match = srcsetRe.exec(html)) !== null) pushSrcsetUrls(match[1], found);
+
+  for (const cssUrl of extractCssUrls(html)) found.add(cssUrl);
+  return [...found];
+}
+
+async function saveStaticAsset(rawUrl: string, pageUrl: string, assetsDir: string): Promise<AssetEntry | null> {
+  if (/^(data|blob|javascript|mailto|tel):/i.test(rawUrl)) return null;
+
+  let absUrl: string;
+  try {
+    absUrl = new URL(rawUrl, pageUrl).href;
+  } catch {
+    return null;
+  }
+
+  try {
+    const res = await fetch(absUrl, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(STATIC_ASSET_TIMEOUT),
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') ?? '';
+    if (/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
+
+    const len = Number(res.headers.get('content-length') || 0);
+    if (len > STATIC_ASSET_MAX_BYTES) return null;
+
+    const body = Buffer.from(await res.arrayBuffer());
+    if (body.length > STATIC_ASSET_MAX_BYTES) return null;
+
+    const cleanUrl = absUrl.split('?')[0].split('#')[0];
+    const extFromPath = extname(new URL(cleanUrl).pathname).toLowerCase();
+    const extFromMime = mime.extension(contentType);
+    const ext = extFromPath || (extFromMime ? `.${extFromMime}` : '.bin');
+    const filename = `${hashUrl(absUrl)}${ext}`;
+    const localPath = join(assetsDir, filename);
+    const webPath = `/_assets/${filename}`;
+    if (!existsSync(localPath)) writeFileSync(localPath, body);
+
+    return { originalUrl: absUrl, localPath: webPath };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchStaticPage(url: string, origin: string, assetsDir: string): Promise<{ record: PageRecord; links: string[] }> {
   const res = await fetch(url, {
     headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html,application/xhtml+xml' },
     signal: AbortSignal.timeout(IS_SERVERLESS ? 5_000 : 15_000),
@@ -130,12 +205,41 @@ async function fetchStaticPage(url: string, origin: string): Promise<{ record: P
   }
   const html = await res.text();
   const links = extractLinksFromHtml(html, url, origin);
+  const assets = new Map<string, AssetEntry>();
+
+  let assetUrls = extractStaticAssetUrls(html).slice(0, STATIC_ASSET_LIMIT);
+  for (const rawAssetUrl of assetUrls) {
+    const saved = await saveStaticAsset(rawAssetUrl, url, assetsDir);
+    if (!saved) continue;
+    assets.set(saved.originalUrl, saved);
+
+    if (/\.css(?:$|[?#])/i.test(saved.originalUrl)) {
+      try {
+        const cssRes = await fetch(saved.originalUrl, {
+          headers: { 'User-Agent': USER_AGENT },
+          signal: AbortSignal.timeout(STATIC_ASSET_TIMEOUT),
+        });
+        if (cssRes.ok) {
+          const cssText = await cssRes.text();
+          const cssAssets = extractCssUrls(cssText).slice(0, STATIC_ASSET_LIMIT);
+          assetUrls = assetUrls.concat(cssAssets);
+          for (const cssAsset of cssAssets) {
+            const cssSaved = await saveStaticAsset(cssAsset, saved.originalUrl, assetsDir);
+            if (cssSaved) assets.set(cssSaved.originalUrl, cssSaved);
+          }
+        }
+      } catch {
+        // CSS dependency capture is best-effort.
+      }
+    }
+  }
+
   return {
     record: {
       url,
       route: routeForUrl(url),
       html,
-      assets: [],
+      assets: [...assets.values()],
       network: [],
       failedAssets: [],
     },
@@ -248,7 +352,7 @@ export async function crawl(
         if (IS_SERVERLESS) {
           try {
             logger.info(`  [FALLBACK] Static HTML fetch for ${clean}`);
-            const { record, links } = await fetchStaticPage(clean, origin);
+            const { record, links } = await fetchStaticPage(clean, origin, assetsDir);
             records.push(record);
             onPage(record);
             if (currentDepth < opts.depth) {
