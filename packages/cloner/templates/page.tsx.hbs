@@ -43,8 +43,8 @@ const REPLAY_PATCH = `<script>
 </script>`;
 
 function injectReplayPatch(html: string): string {
-  if (html.includes('data-web-cloner-replay')) return html;
-  const patch = REPLAY_PATCH.replace('<script>', '<script data-web-cloner-replay>');
+  if (html.includes('data-clonyfy-replay')) return html;
+  const patch = REPLAY_PATCH.replace('<script>', '<script data-clonyfy-replay>');
   if (html.includes('</head>')) return html.replace('</head>', `${patch}</head>`);
   return patch + html;
 }

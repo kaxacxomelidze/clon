@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard · Web Cloner</title>
+<title>Dashboard · CLONYFY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'">
@@ -155,7 +155,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     <div class="topbar-mark">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
     </div>
-    <span class="topbar-name">Web Cloner</span>
+    <span class="topbar-name">CLONYFY</span>
   </a>
   <div class="topbar-right">
     <a href="/" class="topbar-btn">
@@ -299,8 +299,8 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 <div id="toasts"></div>
 
 <script>
-const PLAN_LABELS = { free:'Free', starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
-const PLAN_PRICES = { starter:13, pro:49, enterprise:199 };
+const PLAN_LABELS = { free:'Free', starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Pro / Unlimited', pro:'Growth', enterprise:'Pro / Unlimited' };
+const PLAN_PRICES = { starter:9.99, popular:19.99, growth:34.99, unlimited:59.99 };
 let dashData = null;
 
 async function apiFetch(method, path, body) {
@@ -365,7 +365,7 @@ function renderDashboard(d) {
 
   const actionsEl = document.getElementById('plan-actions');
   const btns = [];
-  if (plan !== 'enterprise') btns.push(`<button class="btn-upgrade" onclick="openUpgradeModal()">✦ Upgrade Plan</button>`);
+  if (plan !== 'unlimited' && plan !== 'enterprise') btns.push(`<button class="btn-upgrade" onclick="openUpgradeModal()">✦ Upgrade Plan</button>`);
   if (plan !== 'free') {
     if (user.cancelAtPeriodEnd) {
       btns.push(`<button class="btn-reactivate" onclick="reactivate()">Reactivate</button>`);
@@ -472,9 +472,10 @@ function openUpgradeModal() {
     </div>
     <div style="display:grid;gap:10px;margin-bottom:20px" id="upgrade-plan-list">
       ${[
-        { key:'starter', label:'Starter', monthly:13, annual:112, desc:'15 clones/mo · 30 pages · Priority support' },
-        { key:'pro', label:'Pro', monthly:49, annual:422, desc:'100 clones/mo · 200 pages · API access' },
-        { key:'enterprise', label:'Enterprise', monthly:199, annual:1710, desc:'Unlimited clones · 500 pages · Custom SLA' },
+        { key:'starter', label:'Starter', monthly:9.99, annual:95.88, desc:'15 clones/mo - 30 pages - Visual editor' },
+        { key:'popular', label:'Most Popular', monthly:19.99, annual:191.88, desc:'50 clones/mo - 100 pages - Priority processing' },
+        { key:'growth', label:'Growth', monthly:34.99, annual:335.88, desc:'100 clones/mo - 200 pages - API access' },
+        { key:'unlimited', label:'Pro / Unlimited', monthly:59.99, annual:575.88, desc:'Unlimited clones - 500 pages - Dedicated support' },
       ].map(p => `
         <div style="background:#111;border:1px solid #222;border-radius:10px;padding:16px 18px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -556,7 +557,7 @@ function exportMyData() {
   const token = localStorage.getItem('wc_auth_token') || '';
   const a = document.createElement('a');
   a.href = '/api/user/export';
-  a.download = 'webcloner-my-data.json';
+  a.download = 'clonyfy-my-data.json';
   // Use fetch to attach auth header, then blob download
   fetch('/api/user/export', { headers: { 'X-Auth-Token': token } })
     .then(r => r.blob())

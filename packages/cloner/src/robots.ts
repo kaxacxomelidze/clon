@@ -4,7 +4,7 @@ const _require = createRequire(import.meta.url);
 type RobotsInstance = { isAllowed(url: string, ua?: string): boolean | undefined };
 const robotsParser = _require('robots-parser') as (url: string, text: string) => RobotsInstance;
 
-const USER_AGENT = 'WebCloner/0.1';
+const USER_AGENT = 'CLONYFY/0.1';
 
 export async function checkRobots(targetUrl: string): Promise<{ allowed: boolean; reason: string }> {
   const u = new URL(targetUrl);

@@ -30,7 +30,7 @@ export async function runClone(options: ClonerOptions, events: CloneRunEvents = 
   initLogger(opts.out, opts.verbose);
 
   try {
-    logger.info(`\nWeb Cloner v0.1`);
+    logger.info(`\nCLONYFY v0.1`);
     logger.info(`Target      : ${opts.url}`);
     logger.info(`Output      : ${opts.out}`);
     logger.info(`Options     : max-pages=${opts.maxPages} depth=${opts.depth} concurrency=${opts.concurrency} ignore-robots=${opts.ignoreRobots} verbose=${opts.verbose ?? false}`);

@@ -96,7 +96,7 @@ const UI_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Web Cloner Studio</title>
+<title>CLONYFY Studio</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -282,7 +282,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 <div id="topbar">
   <div id="logo">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-    Web Cloner Studio
+    CLONYFY Studio
   </div>
   <div id="url-wrap">
     <input id="url-input" type="url" placeholder="https://example.com" spellcheck="false" autocomplete="off">
@@ -327,7 +327,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
         <rect x="4" y="10" width="56" height="44" rx="4"/><path d="M4 22h56M16 16h2M24 16h2M32 16h2"/>
         <rect x="12" y="30" width="18" height="14" rx="2"/><rect x="34" y="30" width="18" height="6" rx="2"/><rect x="34" y="40" width="18" height="4" rx="2"/>
       </svg>
-      <h2>Web Cloner Studio</h2>
+      <h2>CLONYFY Studio</h2>
       <p>Enter any URL above and click Clone to capture a website with all its assets. Then edit any element visually — text, colors, spacing, fonts — and save instantly.</p>
       <p class="tip">Previously cloned sites appear in the left sidebar</p>
     </div>
@@ -1361,7 +1361,7 @@ export async function startServer(baseOutDir: string, port: number): Promise<voi
 
   const lines = [
     '',
-    '  Web Cloner Studio',
+    '  CLONYFY Studio',
     '  ──────────────────────────────────',
     '  Local:  http://localhost:' + port,
     '',

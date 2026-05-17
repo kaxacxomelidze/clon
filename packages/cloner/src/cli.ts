@@ -7,7 +7,7 @@ import { startServer } from './_server.js';
 
 program
   .name('cloner')
-  .description('Web cloner: captures JS-heavy sites and generates a Next.js full-stack clone')
+  .description('CLONYFY: captures JS-heavy sites and generates a Next.js full-stack clone')
   .version('0.1.0');
 
 program

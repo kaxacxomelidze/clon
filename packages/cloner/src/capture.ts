@@ -126,7 +126,7 @@ window.hbspt.forms.create = window.hbspt.forms.create || function () {};
 const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 const NAVIGATION_TIMEOUT = IS_SERVERLESS ? 12_000 : 30_000;
 const ROUTE_FETCH_TIMEOUT = IS_SERVERLESS ? 5_000 : 15_000;
-const USER_AGENT = 'WebCloner/0.1 (+local archival)';
+const USER_AGENT = 'CLONYFY/0.1 (+local archival)';
 const MAX_ASSET_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024; // Keep serverless clones inside Vercel limits.
 const MAX_CSS_BYTES = (IS_SERVERLESS ? 5 : 25) * 1024 * 1024; // CSS bundles can be larger than media icons/fonts.
 const TRANSPARENT_PNG = Buffer.from(

@@ -116,5 +116,5 @@ Detected fields are inferred by JSON-parsing the postData; fallback to URLSearch
 - Same-origin links only; cross-origin assets are downloaded but not crawled
 - 250ms minimum delay between page navigations
 - 30s per-page navigation timeout
-- `User-Agent: WebCloner/0.1 (+local archival)`
+- `User-Agent: CLONYFY/0.1 (+local archival)`
 - robots.txt enforced by default

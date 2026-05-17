@@ -194,7 +194,7 @@ import { resolve, join as join4 } from "path";
 import { createRequire } from "module";
 var _require = createRequire(import.meta.url);
 var robotsParser = _require("robots-parser");
-var USER_AGENT = "WebCloner/0.1";
+var USER_AGENT = "CLONYFY/0.1";
 async function checkRobots(targetUrl) {
   const u = new URL(targetUrl);
   const robotsUrl = `${u.protocol}//${u.host}/robots.txt`;
@@ -922,7 +922,7 @@ window.hbspt.forms.create = window.hbspt.forms.create || function () {};
 var IS_SERVERLESS = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 var NAVIGATION_TIMEOUT = IS_SERVERLESS ? 12e3 : 3e4;
 var ROUTE_FETCH_TIMEOUT = IS_SERVERLESS ? 5e3 : 15e3;
-var USER_AGENT2 = "WebCloner/0.1 (+local archival)";
+var USER_AGENT2 = "CLONYFY/0.1 (+local archival)";
 var MAX_ASSET_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
 var MAX_CSS_BYTES = (IS_SERVERLESS ? 5 : 25) * 1024 * 1024;
 var TRANSPARENT_PNG = Buffer.from(
@@ -1535,7 +1535,7 @@ async function capturePage(context, pageUrl, assetsDir) {
 var IS_SERVERLESS2 = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 var NAV_DELAY_MS = IS_SERVERLESS2 ? 50 : 250;
 var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 18e3 : 18e4;
-var USER_AGENT3 = "WebCloner/0.1 (+local archival)";
+var USER_AGENT3 = "CLONYFY/0.1 (+local archival)";
 var TRACKING_PARAM = /^(utm_|fbclid|gclid|msclkid|_ga|_gl|mc_eid|yclid|dclid|zanpid|igshid|twclid|li_fat_id|ttclid)/i;
 var AUTH_PATH = /^\/(login|logout|signin|sign-in|sign-out|signout|register|signup|sign-up|forgot-password|reset-password|change-password|verify-email|confirm-email|auth|oauth|sso|account\/activate|account\/confirm)(\/|$|\?)/i;
 function stripTrackingParams(href) {
@@ -10258,7 +10258,7 @@ async function runClone(options, events = {}) {
   initLogger(opts.out, opts.verbose);
   try {
     logger.info(`
-Web Cloner v0.1`);
+CLONYFY v0.1`);
     logger.info(`Target      : ${opts.url}`);
     logger.info(`Output      : ${opts.out}`);
     logger.info(`Options     : max-pages=${opts.maxPages} depth=${opts.depth} concurrency=${opts.concurrency} ignore-robots=${opts.ignoreRobots} verbose=${opts.verbose ?? false}`);
@@ -10406,4 +10406,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-S63AITO2.js.map
+//# sourceMappingURL=chunk-4JMZ2LDL.js.map

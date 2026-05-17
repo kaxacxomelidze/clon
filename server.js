@@ -67,15 +67,24 @@ setInterval(async () => { try { await cleanExpiredSessions(Date.now()); } catch 
 const PLAN_LIMITS = {
   free:       { clonesPerMonth: 3,        maxPages: 20  },
   starter:    { clonesPerMonth: 15,       maxPages: 30  },
+  popular:    { clonesPerMonth: 50,       maxPages: 100 },
+  growth:     { clonesPerMonth: 100,      maxPages: 200 },
+  unlimited:  { clonesPerMonth: Infinity, maxPages: 500 },
   pro:        { clonesPerMonth: 100,      maxPages: 200 },
   enterprise: { clonesPerMonth: Infinity, maxPages: 500 },
 };
+const PAID_PLAN_KEYS = ['starter', 'popular', 'growth', 'unlimited'];
+const LEGACY_PAID_PLAN_KEYS = ['pro', 'enterprise'];
+const ALL_PAID_PLAN_KEYS = [...PAID_PLAN_KEYS, ...LEGACY_PAID_PLAN_KEYS];
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 const SERVERLESS_MAX_PAGES = 20;
 const PLAN_PRICES = {
-  starter:    { monthly: 13,  annual: 112  },
-  pro:        { monthly: 49,  annual: 422  },
-  enterprise: { monthly: 199, annual: 1710 },
+  starter:    { monthly: 9.99,  annual: 95.88  },
+  popular:    { monthly: 19.99, annual: 191.88 },
+  growth:     { monthly: 34.99, annual: 335.88 },
+  unlimited:  { monthly: 59.99, annual: 575.88 },
+  pro:        { monthly: 34.99, annual: 335.88 },
+  enterprise: { monthly: 59.99, annual: 575.88 },
 };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -147,7 +156,7 @@ function renderEmail(templateName, vars) {
     APP_HOST: host,
     SUPPORT_EMAIL: s.support_email || s.smtp_from || `support@${host}`,
     YEAR: new Date().getFullYear(),
-    SUBJECT: vars.SUBJECT || 'Web Cloner',
+    SUBJECT: vars.SUBJECT || 'CLONYFY',
     ...vars,
   };
 
@@ -212,7 +221,7 @@ async function sendEmail(to, subject, html) {
     _mailerKey = key;
   }
   try {
-    await _mailerTransport.sendMail({ from: s.smtp_from || s.smtp_user || 'noreply@webcloner.app', to, subject, html });
+    await _mailerTransport.sendMail({ from: s.smtp_from || s.smtp_user || 'noreply@clonyfy.app', to, subject, html });
   } catch(err) {
     console.error('[Email error]', err.message);
     _mailerTransport = null; // force recreate on next send
@@ -233,7 +242,7 @@ async function runDunning() {
       const graceEnd = renewsAt + 7 * 24 * 3600 * 1000;
       if (!u.renewal_reminder_sent) {
         await updateUser(u.id, { renewal_reminder_sent: 1 });
-        sendEmail(u.email, 'Your Web Cloner subscription has expired',
+        sendEmail(u.email, 'Your CLONYFY subscription has expired',
           renderEmail('renewal-reminder', { SUBJECT: 'Your subscription has expired', NAME: u.name, PLAN: u.plan, EXPIRED_AT: new Date(renewsAt).toLocaleDateString() })
         ).catch(() => {});
       }
@@ -675,7 +684,7 @@ function getOutputs(maxAgeMs = 2000) {
 function invalidateOutputsCache() { _outputsCache = null; }
 
 function sharePasswordFormHtml(shareId, error) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Protected Preview</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#07071a;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;color:#e8e8ff}.card{background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:40px 36px;width:min(400px,92vw)}.logo{font-size:13px;font-weight:700;color:rgba(255,255,255,.3);margin-bottom:28px}h2{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.4px}p{margin:0 0 24px;color:rgba(255,255,255,.3);font-size:13px}.err{color:#e05070;font-size:12px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.15);border-radius:8px;padding:10px 14px;margin-bottom:14px}input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e8e8ff;font-size:14px;padding:12px 16px;outline:none;font-family:inherit;margin-bottom:14px}input:focus{border-color:rgba(91,141,239,.45)}button{width:100%;padding:13px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}</style></head><body><div class="card"><div class="logo">Web Cloner · Protected Preview</div><h2>Password required</h2><p>This preview is password protected.</p>${error ? `<div class="err">${htmlEsc(error)}</div>` : ''}<form method="post" action="/share/${htmlEsc(shareId)}"><input type="password" name="pw" placeholder="Enter password" autofocus required><button type="submit">View Preview</button></form></div></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Protected Preview</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#07071a;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;color:#e8e8ff}.card{background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:40px 36px;width:min(400px,92vw)}.logo{font-size:13px;font-weight:700;color:rgba(255,255,255,.3);margin-bottom:28px}h2{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.4px}p{margin:0 0 24px;color:rgba(255,255,255,.3);font-size:13px}.err{color:#e05070;font-size:12px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.15);border-radius:8px;padding:10px 14px;margin-bottom:14px}input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e8e8ff;font-size:14px;padding:12px 16px;outline:none;font-family:inherit;margin-bottom:14px}input:focus{border-color:rgba(91,141,239,.45)}button{width:100%;padding:13px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}</style></head><body><div class="card"><div class="logo">CLONYFY · Protected Preview</div><h2>Password required</h2><p>This preview is password protected.</p>${error ? `<div class="err">${htmlEsc(error)}</div>` : ''}<form method="post" action="/share/${htmlEsc(shareId)}"><input type="password" name="pw" placeholder="Enter password" autofocus required><button type="submit">View Preview</button></form></div></body></html>`;
 }
 
 function userPublic(u) {
@@ -793,7 +802,7 @@ function githubAPIRequest(method, path, token, body = null) {
     const headers = {
       'Authorization': `Bearer ${token}`,
       'Accept': 'application/vnd.github+json',
-      'User-Agent': 'web-cloner',
+      'User-Agent': 'clonyfy',
       'X-GitHub-Api-Version': '2022-11-28',
     };
     if (payload) {
@@ -887,7 +896,7 @@ async function handleRequest(req, res) {
   res.setHeader('Access-Control-Allow-Origin', reqOrigin || '*');
   if (reqOrigin) res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, X-Web-Cloner-Token, X-Admin-Token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, X-CLONYFY-Token, X-Admin-Token');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -1546,7 +1555,7 @@ async function handleRequest(req, res) {
           base_tree: baseTreeSha,
           tree: entries,
         });
-        const message = String(commitMessage || '').trim() || `Import Web Cloner output (${outDir.split(/[\\/]/).pop()})`;
+        const message = String(commitMessage || '').trim() || `Import CLONYFY output (${outDir.split(/[\\/]/).pop()})`;
         const commit = await githubAPIRequest('POST', `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/git/commits`, token, {
           message,
           tree: newTree.body.sha,
@@ -1693,9 +1702,9 @@ async function handleRequest(req, res) {
       mrr: Math.round(mrr * 100) / 100,
       arr: Math.round(mrr * 12 * 100) / 100,
       pendingPayments: payments.filter(p => p.status === 'pending').length,
-      proUsers: users.filter(u => u.plan === 'pro').length,
+      proUsers: users.filter(u => ['growth', 'pro'].includes(u.plan)).length,
       starterUsers: users.filter(u => u.plan === 'starter').length,
-      enterpriseUsers: users.filter(u => u.plan === 'enterprise').length,
+      enterpriseUsers: users.filter(u => ['unlimited', 'enterprise'].includes(u.plan)).length,
       totalErrors: errors.length,
     });
   }
@@ -1805,7 +1814,7 @@ async function handleRequest(req, res) {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
     const { title, body: msgBody, sentTo } = await readJsonBody(req);
     if (!title || !msgBody) return json(res, { error: 'Title and body are required' }, 400);
-    const validTargets = ['all', 'free', 'starter', 'pro', 'enterprise', 'paid'];
+    const validTargets = ['all', 'free', ...ALL_PAID_PLAN_KEYS, 'paid'];
     const target = validTargets.includes(sentTo) ? sentTo : 'all';
     const users = await getAllUsers();
     const targets = users.filter(u => {
@@ -1855,7 +1864,7 @@ async function handleRequest(req, res) {
     if (!user) return json(res, { error: 'Sign in to submit a payment.' }, 401);
     if (!checkRateLimit(`pay_submit:${ip}`, 5, 3600000)) return json(res, { error: 'Too many requests.' }, 429);
     const { plan, method, txId, note, promoCode, interval } = await readJsonBody(req);
-    if (!plan || !['starter', 'pro', 'enterprise'].includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
+    if (!plan || !ALL_PAID_PLAN_KEYS.includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
     const billingInterval = interval === 'annual' ? 'annual' : 'monthly';
     const validMethods = ['paypal', 'crypto_btc', 'crypto_eth', 'crypto_usdt'];
     if (!method || !validMethods.includes(method)) return json(res, { error: 'Invalid payment method.' }, 400);
@@ -1996,6 +2005,9 @@ async function handleRequest(req, res) {
       'support_email',
       'stripe_publishable_key',
       'stripe_price_starter_monthly', 'stripe_price_starter_annual',
+      'stripe_price_popular_monthly', 'stripe_price_popular_annual',
+      'stripe_price_growth_monthly', 'stripe_price_growth_annual',
+      'stripe_price_unlimited_monthly', 'stripe_price_unlimited_annual',
       'stripe_price_pro_monthly', 'stripe_price_pro_annual',
       'stripe_price_enterprise_monthly', 'stripe_price_enterprise_annual',
       // secret fields — only overwrite when a real value is sent (not masked placeholder)
@@ -2030,7 +2042,7 @@ async function handleRequest(req, res) {
       await updateUser(user.id, { reset_token: resetToken, reset_expiry: Date.now() + 3600 * 1000 });
       const s = getCachedSettings();
       const appUrl = s.app_url || `http://localhost:${PORT}`;
-      sendEmail(user.email, 'Reset your Web Cloner password',
+      sendEmail(user.email, 'Reset your CLONYFY password',
         renderEmail('reset-password', { SUBJECT: 'Reset your password', NAME: user.name, LINK: `${appUrl}/reset-password?token=${resetToken}` })
       ).catch(() => {});
     }
@@ -2137,7 +2149,7 @@ async function handleRequest(req, res) {
     audit(user.id, user.name, 'data_export', null, ip);
     res.writeHead(200, {
       'Content-Type': 'application/json',
-      'Content-Disposition': `attachment; filename="webcloner-data-${user.id}.json"`,
+      'Content-Disposition': `attachment; filename="clonyfy-data-${user.id}.json"`,
     });
     res.end(JSON.stringify(exportData, null, 2));
     return;
@@ -2307,7 +2319,7 @@ async function handleRequest(req, res) {
     const stripe = getStripe();
     if (!stripe) return json(res, { error: 'Stripe is not configured. Contact support.' }, 503);
     const { plan, interval, promoCode } = await readJsonBody(req);
-    if (!plan || !['starter','pro','enterprise'].includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
+    if (!plan || !ALL_PAID_PLAN_KEYS.includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
     const bi = interval === 'annual' ? 'annual' : 'monthly';
     const s = getCachedSettings();
     const priceId = s[STRIPE_PRICE_KEY(plan, bi)];
@@ -2610,7 +2622,7 @@ async function ensureInit() {
 if (!process.env.VERCEL) {
   ensureInit().then(() => {
     createServer(handleRequest).listen(PORT, () => {
-      console.log(`\n🌐 Web Cloner running at: http://localhost:${PORT}\n`);
+      console.log(`\n🌐 CLONYFY running at: http://localhost:${PORT}\n`);
     });
   });
 }

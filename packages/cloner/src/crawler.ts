@@ -8,7 +8,7 @@ import type { ClonerOptions, PageRecord } from './types.js';
 const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 const NAV_DELAY_MS = IS_SERVERLESS ? 50 : 250;
 const PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS ? 18_000 : 180_000; // Vercel functions have a hard wall clock limit.
-const USER_AGENT = 'WebCloner/0.1 (+local archival)';
+const USER_AGENT = 'CLONYFY/0.1 (+local archival)';
 
 // Strip common tracking/UTM query params so the same page isn't crawled multiple times
 // with different analytics decorations (e.g. ?utm_source=twitter vs ?utm_source=email).

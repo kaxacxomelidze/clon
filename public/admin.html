@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin · Web Cloner</title>
+<title>Admin · CLONYFY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'">
@@ -250,7 +250,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="login-logo-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
       </div>
-      <span class="login-logo-text">Web Cloner</span>
+      <span class="login-logo-text">CLONYFY</span>
       <span class="login-badge">Admin</span>
     </div>
     <div class="login-title">Admin Panel</div>
@@ -271,7 +271,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="topbar-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
       </div>
-      <span class="topbar-name">Web Cloner</span>
+      <span class="topbar-name">CLONYFY</span>
     </div>
     <span class="topbar-badge">Admin</span>
     <div class="topbar-right">
@@ -362,8 +362,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <option value="">All Plans</option>
             <option value="free">Free</option>
             <option value="starter">Starter</option>
-            <option value="pro">Pro</option>
-            <option value="enterprise">Enterprise</option>
+            <option value="popular">Most Popular</option>
+            <option value="growth">Growth</option>
+            <option value="unlimited">Pro / Unlimited</option>
           </select>
           <select class="filter-sel" id="users-status-filter" onchange="filterUsers()">
             <option value="">All Status</option>
@@ -453,7 +454,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
           </div>
           <div class="settings-group">
             <div class="settings-label">From Address</div>
-            <input class="settings-input" id="s-smtp-from" placeholder="Web Cloner <noreply@example.com>" style="font-family:inherit">
+            <input class="settings-input" id="s-smtp-from" placeholder="CLONYFY <noreply@example.com>" style="font-family:inherit">
           </div>
           <div class="settings-group">
             <div class="settings-label">App URL (for email links)</div>
@@ -493,27 +494,35 @@ tbody td{padding:11px 14px;vertical-align:middle}
           </div>
           <div class="settings-group">
             <div class="settings-label">Price: Starter Monthly</div>
-            <input class="settings-input" id="s-stripe-p-starter-monthly" placeholder="price_…">
+            <input class="settings-input" id="s-stripe-p-starter-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
             <div class="settings-label">Price: Starter Annual</div>
-            <input class="settings-input" id="s-stripe-p-starter-annual" placeholder="price_…">
+            <input class="settings-input" id="s-stripe-p-starter-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Pro Monthly</div>
-            <input class="settings-input" id="s-stripe-p-pro-monthly" placeholder="price_…">
+            <div class="settings-label">Price: Most Popular Monthly</div>
+            <input class="settings-input" id="s-stripe-p-popular-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Pro Annual</div>
-            <input class="settings-input" id="s-stripe-p-pro-annual" placeholder="price_…">
+            <div class="settings-label">Price: Most Popular Annual</div>
+            <input class="settings-input" id="s-stripe-p-popular-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Enterprise Monthly</div>
-            <input class="settings-input" id="s-stripe-p-enterprise-monthly" placeholder="price_…">
+            <div class="settings-label">Price: Growth Monthly</div>
+            <input class="settings-input" id="s-stripe-p-growth-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Enterprise Annual</div>
-            <input class="settings-input" id="s-stripe-p-enterprise-annual" placeholder="price_…">
+            <div class="settings-label">Price: Growth Annual</div>
+            <input class="settings-input" id="s-stripe-p-growth-annual" placeholder="price_...">
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Price: Pro / Unlimited Monthly</div>
+            <input class="settings-input" id="s-stripe-p-unlimited-monthly" placeholder="price_...">
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Price: Pro / Unlimited Annual</div>
+            <input class="settings-input" id="s-stripe-p-unlimited-annual" placeholder="price_...">
           </div>
 
           <div class="settings-save-row">
@@ -546,8 +555,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
                     <option value="paid">Paid Users Only</option>
                     <option value="free">Free Users Only</option>
                     <option value="starter">Starter Plan</option>
-                    <option value="pro">Pro Plan</option>
-                    <option value="enterprise">Enterprise Plan</option>
+                    <option value="popular">Most Popular Plan</option>
+                    <option value="growth">Growth Plan</option>
+                    <option value="unlimited">Pro / Unlimited Plan</option>
                   </select>
                 </div>
                 <button onclick="sendAnnouncement()" style="margin-top:18px;padding:9px 22px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Send Announcement</button>
@@ -673,8 +683,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
         <label style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Apply to plans (blank = all)</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-starter" value="starter"> Starter</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-pro" value="pro"> Pro</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-enterprise" value="enterprise"> Enterprise</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-popular" value="popular"> Most Popular</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-growth" value="growth"> Growth</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-unlimited" value="unlimited"> Pro / Unlimited</label>
         </div>
       </div>
     </div>
@@ -908,8 +919,9 @@ function renderUsers(users) {
         <select class="plan-sel" onchange="updatePlan('${u.id}', this.value)" title="Change plan">
           <option value="free" ${u.plan==='free'?'selected':''}>Free</option>
           <option value="starter" ${u.plan==='starter'?'selected':''}>Starter</option>
-          <option value="pro" ${u.plan==='pro'?'selected':''}>Pro</option>
-          <option value="enterprise" ${u.plan==='enterprise'?'selected':''}>Enterprise</option>
+          <option value="popular" ${u.plan==='popular'?'selected':''}>Most Popular</option>
+          <option value="growth" ${u.plan==='growth'||u.plan==='pro'?'selected':''}>Growth</option>
+          <option value="unlimited" ${u.plan==='unlimited'||u.plan==='enterprise'?'selected':''}>Pro / Unlimited</option>
         </select>
       </td>
       <td><span class="num-cell">${u.cloneCount}<small>clones</small></span></td>
@@ -1312,8 +1324,9 @@ function openCreatePromo() {
   document.getElementById('pm-expiry').value = '';
   document.getElementById('pm-desc').value = '';
   document.getElementById('pm-starter').checked = false;
-  document.getElementById('pm-pro').checked = false;
-  document.getElementById('pm-enterprise').checked = false;
+  document.getElementById('pm-popular').checked = false;
+  document.getElementById('pm-growth').checked = false;
+  document.getElementById('pm-unlimited').checked = false;
   document.getElementById('promo-modal-overlay').classList.remove('hidden');
 }
 function closePromoModal() { document.getElementById('promo-modal-overlay').classList.add('hidden'); }
@@ -1322,7 +1335,7 @@ async function createPromoCode() {
   const code = document.getElementById('pm-code').value.trim().toUpperCase();
   const discountPercent = parseInt(document.getElementById('pm-discount').value, 10);
   if (!code || !discountPercent) { toast('Code and discount are required', 'err'); return; }
-  const plans = ['starter','pro','enterprise'].filter(p => document.getElementById(`pm-${p}`).checked);
+  const plans = ['starter','popular','growth','unlimited'].filter(p => document.getElementById(`pm-${p}`).checked);
   try {
     const r = await adminFetch('POST', '/api/admin/promo-codes', {
       code, discountPercent,
@@ -1370,12 +1383,10 @@ async function loadAdminSettings() {
     document.getElementById('s-stripe-secret').value = s.stripe_secret_key ? '••••••••' : '';
     document.getElementById('s-stripe-pub').value = s.stripe_publishable_key || '';
     document.getElementById('s-stripe-webhook').value = s.stripe_webhook_secret ? '••••••••' : '';
-    document.getElementById('s-stripe-p-starter-monthly').value = s.stripe_price_starter_monthly || '';
-    document.getElementById('s-stripe-p-starter-annual').value = s.stripe_price_starter_annual || '';
-    document.getElementById('s-stripe-p-pro-monthly').value = s.stripe_price_pro_monthly || '';
-    document.getElementById('s-stripe-p-pro-annual').value = s.stripe_price_pro_annual || '';
-    document.getElementById('s-stripe-p-enterprise-monthly').value = s.stripe_price_enterprise_monthly || '';
-    document.getElementById('s-stripe-p-enterprise-annual').value = s.stripe_price_enterprise_annual || '';
+    ['starter','popular','growth','unlimited'].forEach(plan => {
+      document.getElementById(`s-stripe-p-${plan}-monthly`).value = s[`stripe_price_${plan}_monthly`] || '';
+      document.getElementById(`s-stripe-p-${plan}-annual`).value = s[`stripe_price_${plan}_annual`] || '';
+    });
   } catch(e) { toast(e.message, 'err'); }
 }
 
@@ -1397,10 +1408,12 @@ async function saveAdminSettings() {
     stripe_publishable_key: document.getElementById('s-stripe-pub').value,
     stripe_price_starter_monthly: document.getElementById('s-stripe-p-starter-monthly').value,
     stripe_price_starter_annual: document.getElementById('s-stripe-p-starter-annual').value,
-    stripe_price_pro_monthly: document.getElementById('s-stripe-p-pro-monthly').value,
-    stripe_price_pro_annual: document.getElementById('s-stripe-p-pro-annual').value,
-    stripe_price_enterprise_monthly: document.getElementById('s-stripe-p-enterprise-monthly').value,
-    stripe_price_enterprise_annual: document.getElementById('s-stripe-p-enterprise-annual').value,
+    stripe_price_popular_monthly: document.getElementById('s-stripe-p-popular-monthly').value,
+    stripe_price_popular_annual: document.getElementById('s-stripe-p-popular-annual').value,
+    stripe_price_growth_monthly: document.getElementById('s-stripe-p-growth-monthly').value,
+    stripe_price_growth_annual: document.getElementById('s-stripe-p-growth-annual').value,
+    stripe_price_unlimited_monthly: document.getElementById('s-stripe-p-unlimited-monthly').value,
+    stripe_price_unlimited_annual: document.getElementById('s-stripe-p-unlimited-annual').value,
   };
   if (passField && passField !== '••••••••') body.smtp_pass = passField;
   const googleSecret = document.getElementById('s-google-client-secret').value;
