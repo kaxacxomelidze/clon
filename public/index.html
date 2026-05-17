@@ -38,6 +38,7 @@ input,select,textarea{font:inherit}
 .logo-mark{width:28px;height:28px;border-radius:8px;background:var(--logo-grad);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 16px rgba(91,141,239,.3)}
 .logo-mark img{width:16px;height:16px;color:#fff}
 .logo-text{font-size:13px;font-weight:700;letter-spacing:-.3px;background:var(--logo-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.titlebar-wordmark{width:128px;height:auto;display:block}
 .tabs{display:flex;gap:1px;-webkit-app-region:no-drag;flex:1}
 .tab-btn{padding:5px 16px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text3);transition:all .15s;letter-spacing:.01em}
 .tab-btn:hover{color:var(--text2);background:var(--bg3)}
@@ -666,6 +667,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .auth-brand-icon{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#5b8def,#a855f7);display:flex;align-items:center;justify-content:center;box-shadow:0 0 22px rgba(91,141,239,.55),0 0 50px rgba(91,141,239,.15);flex-shrink:0}
 .auth-brand-icon img{width:19px;height:19px;color:#fff}
 .auth-brand-name{font-size:15px;font-weight:800;background:linear-gradient(135deg,#7fb3ff,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.01em}
+.auth-brand-wordmark{width:156px;height:auto;display:block}
 .auth-hero{position:relative;z-index:1;margin-bottom:30px}
 .auth-hero h1{font-size:31px;font-weight:900;color:#eeeeff;letter-spacing:-.8px;line-height:1.16;margin-bottom:11px}
 .auth-hero h1 em{font-style:normal;background:linear-gradient(130deg,#7fb3ff,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
@@ -702,6 +704,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .auth-logo-icon{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#5b8def,#a855f7);display:flex;align-items:center;justify-content:center;box-shadow:0 0 26px rgba(91,141,239,.5)}
 .auth-logo-icon img{width:22px;height:22px;color:#fff}
 .auth-logo-name{font-size:13px;font-weight:800;background:linear-gradient(135deg,#7fb3ff,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.auth-logo-wordmark{width:150px;height:auto;display:block}
 .auth-card-heading{margin-bottom:22px}
 .auth-card-heading h2{font-size:24px;font-weight:800;color:#eeeeff;letter-spacing:-.45px;margin-bottom:5px}
 .auth-card-heading p{font-size:13px;color:rgba(255,255,255,.27);line-height:1.5}
@@ -896,10 +899,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
     <div class="auth-orb auth-orb-3"></div>
     <div class="auth-left-dots"></div>
     <div class="auth-brand">
-      <div class="auth-brand-icon">
-        <img src="/brand-mark.svg" alt="" aria-hidden="true">
-      </div>
-      <span class="auth-brand-name">CLONYFY</span>
+      <img class="auth-brand-wordmark" src="/brand-wordmark.svg" alt="CLONYFY">
     </div>
     <div class="auth-hero">
       <h1>Clone any website<br><em>in seconds</em></h1>
@@ -955,10 +955,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
     <div class="auth-card">
       <!-- Mobile-only logo -->
       <div class="auth-card-logo">
-        <div class="auth-logo-icon">
-          <img src="/brand-mark.svg" alt="" aria-hidden="true">
-        </div>
-        <span class="auth-logo-name">CLONYFY</span>
+        <img class="auth-logo-wordmark" src="/brand-wordmark.svg" alt="CLONYFY">
       </div>
       <div class="auth-card-heading">
         <h2 id="auth-form-title">Welcome back</h2>
@@ -1063,10 +1060,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 <!-- Title bar -->
 <div class="titlebar">
   <div class="titlebar-logo">
-    <div class="logo-mark">
-      <img src="/brand-mark.svg" alt="" aria-hidden="true">
-    </div>
-    <span class="logo-text">CLONYFY</span>
+    <img class="titlebar-wordmark" src="/brand-wordmark.svg" alt="CLONYFY">
   </div>
   <div class="tabs">
     <button class="tab-btn active" id="t-clone" onclick="switchTab('clone')">Clone</button>
@@ -2276,7 +2270,8 @@ async function handleBuy(plan) {
   if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
   try {
     const promoCode = document.getElementById('pricing-promo-input')?.value.trim() || undefined;
-    if (paySettings.stripe_enabled) {
+    if (paySettings.stripe_ready || paySettings.stripe_enabled) {
+      if (paySettings.stripe_enabled && !paySettings.stripe_ready) throw new Error(paySettings.stripe_error || 'Stripe checkout is not ready yet.');
       const r = await apiFetch('/api/payments/stripe/checkout', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan, interval: pricingInterval, promoCode }),

@@ -35,6 +35,7 @@ input,select{font:inherit}
 .login-logo-mark{width:32px;height:32px;border-radius:9px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(91,141,239,.3)}
 .login-logo-mark img{width:16px;height:16px;color:#fff}
 .login-logo-text{font-size:14px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.login-wordmark{width:148px;height:auto;display:block}
 .login-badge{display:inline-block;background:rgba(168,85,247,.12);color:var(--purple);border:1px solid rgba(168,85,247,.2);border-radius:4px;font-size:10px;font-weight:700;padding:2px 8px;letter-spacing:.08em;text-transform:uppercase;margin-left:auto}
 .login-title{font-size:22px;font-weight:800;letter-spacing:-.4px;margin-bottom:6px}
 .login-sub{font-size:12px;color:var(--text2);margin-bottom:24px;line-height:1.6}
@@ -54,6 +55,7 @@ input,select{font:inherit}
 .topbar-mark{width:28px;height:28px;border-radius:8px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(91,141,239,.25);flex-shrink:0}
 .topbar-mark img{width:14px;height:14px;color:#fff}
 .topbar-name{font-size:13px;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.topbar-wordmark{width:128px;height:auto;display:block}
 .topbar-badge{background:rgba(168,85,247,.12);color:var(--purple);border:1px solid rgba(168,85,247,.2);border-radius:4px;font-size:10px;font-weight:700;padding:2px 8px;letter-spacing:.06em;text-transform:uppercase}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .topbar-back{display:flex;align-items:center;gap:5px;color:var(--text2);font-size:12px;font-weight:600;padding:5px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);text-decoration:none;transition:all .15s}
@@ -248,10 +250,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 <div id="login-wrap">
   <div class="login-card">
     <div class="login-logo">
-      <div class="login-logo-mark">
-        <img src="/brand-mark.svg" alt="" aria-hidden="true">
-      </div>
-      <span class="login-logo-text">CLONYFY</span>
+      <img class="login-wordmark" src="/brand-wordmark.svg" alt="CLONYFY">
       <span class="login-badge">Admin</span>
     </div>
     <div class="login-title">Admin Panel</div>
@@ -269,10 +268,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 <div id="app" class="hidden">
   <div class="topbar">
     <div class="topbar-logo">
-      <div class="topbar-mark">
-        <img src="/brand-mark.svg" alt="" aria-hidden="true">
-      </div>
-      <span class="topbar-name">CLONYFY</span>
+      <img class="topbar-wordmark" src="/brand-wordmark.svg" alt="CLONYFY">
     </div>
     <span class="topbar-badge">Admin</span>
     <div class="topbar-right">
@@ -529,6 +525,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
           <div class="settings-save-row">
             <button class="settings-save-btn" onclick="saveAdminSettings()">Save Settings</button>
             <span class="settings-saved" id="settings-saved">Saved!</span>
+            <button style="padding:8px 14px;background:rgba(91,141,239,.08);border:1px solid rgba(91,141,239,.25);border-radius:7px;color:var(--blue);font-size:12px;font-weight:700;cursor:pointer" onclick="testStripe()">Test Stripe</button>
             <button style="margin-left:auto;padding:8px 14px;background:transparent;border:1px solid var(--border2);border-radius:7px;color:var(--text2);font-size:12px;cursor:pointer" onclick="testEmail()">Send test email</button>
           </div>
         </div>
@@ -762,7 +759,7 @@ async function checkSecurity() {
     if (s.defaultAdminPassword) warnings.push('⚠️ Admin password is still the default <code>admin123</code> — set <code>ADMIN_PASSWORD</code> env var before going live.');
     if (!s.appUrlConfigured) warnings.push('⚠️ App URL not configured — share links will point to localhost.');
     if (!s.smtpConfigured) warnings.push('⚠️ SMTP not configured — emails (verify, reset, receipts) won\'t send.');
-    if (!s.stripeConfigured) warnings.push('⚠️ Stripe not configured — payments are disabled.');
+    if (!s.stripeConfigured) warnings.push(`Stripe not configured - ${esc(s.stripeError || 'payments are disabled.')}`);
     const bar = document.getElementById('security-bar');
     if (bar && warnings.length) {
       bar.innerHTML = warnings.map(w => `<div class="sec-warn">${w}</div>`).join('');
@@ -1439,6 +1436,16 @@ async function testEmail() {
   const host = document.getElementById('s-smtp-host').value.trim();
   if (!host) { toast('Set SMTP host first', 'err'); return; }
   toast('Test email sent (check server console if no SMTP configured)', 'inf');
+}
+
+async function testStripe() {
+  try {
+    const r = await adminFetch('POST', '/api/admin/stripe/test');
+    if (!r.ok) throw new Error(r.error || 'Stripe test failed');
+    toast(`Stripe connected (${r.mode} mode)`, 'ok');
+  } catch(e) {
+    toast('Stripe test failed: ' + e.message, 'err');
+  }
 }
 
 // ── Impersonate user ──────────────────────────────────────────────────────────

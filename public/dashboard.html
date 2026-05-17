@@ -27,6 +27,7 @@ a:hover{text-decoration:underline}
 .topbar-mark{width:28px;height:28px;border-radius:8px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(91,141,239,.25);flex-shrink:0}
 .topbar-mark img{width:14px;height:14px;color:#fff}
 .topbar-name{font-size:13px;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.topbar-wordmark{width:128px;height:auto;display:block}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .topbar-btn{display:flex;align-items:center;gap:5px;color:var(--text2);font-size:12px;font-weight:600;padding:5px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);transition:all .15s;text-decoration:none}
 .topbar-btn:hover{color:var(--text);border-color:var(--border3);text-decoration:none}
@@ -153,10 +154,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 
 <div class="topbar">
   <a class="topbar-logo" href="/">
-    <div class="topbar-mark">
-      <img src="/brand-mark.svg" alt="" aria-hidden="true">
-    </div>
-    <span class="topbar-name">CLONYFY</span>
+    <img class="topbar-wordmark" src="/brand-wordmark.svg" alt="CLONYFY">
   </a>
   <div class="topbar-right">
     <a href="/" class="topbar-btn">
@@ -303,6 +301,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 const PLAN_LABELS = { free:'Free', starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Pro / Unlimited', pro:'Growth', enterprise:'Pro / Unlimited' };
 const PLAN_PRICES = { starter:9.99, popular:19.99, growth:34.99, unlimited:59.99 };
 let dashData = null;
+let dashPaySettings = { stripe_ready: false, stripe_error: 'Payment system is not ready yet.' };
 
 async function apiFetch(method, path, body) {
   const token = localStorage.getItem('wc_auth_token') || '';
@@ -334,6 +333,7 @@ async function init() {
       document.body.prepend(banner);
     }
     renderDashboard(dashData);
+    dashPaySettings = await apiFetch('GET', '/api/payments/settings');
     const billing = await apiFetch('GET', '/api/user/billing');
     renderBilling(billing.payments || []);
     document.getElementById('field-name').value = dashData.user.name || '';
@@ -453,6 +453,10 @@ async function reactivate() {
 
 async function openBillingPortal() {
   try {
+    if (!dashPaySettings.stripe_ready) {
+      toast(dashPaySettings.stripe_error || 'Stripe billing is not ready yet.', 'err');
+      return;
+    }
     const r = await apiFetch('POST', '/api/payments/stripe/portal');
     if (r.error) { toast(r.error, 'err'); return; }
     window.location.href = r.url;
@@ -500,6 +504,10 @@ function openUpgradeModal() {
 
 async function stripeCheckout(plan, interval) {
   try {
+    if (!dashPaySettings.stripe_ready) {
+      toast(dashPaySettings.stripe_error || 'Stripe checkout is not ready yet.', 'err');
+      return;
+    }
     const promoCode = document.getElementById('upgrade-promo')?.value.trim() || undefined;
     const r = await apiFetch('POST', '/api/payments/stripe/checkout', { plan, interval, promoCode });
     if (r.error) { toast(r.error, 'err'); return; }

@@ -226,9 +226,9 @@ function envFirst(...keys) {
 }
 function getStripeSettings(raw = getCachedSettings()) {
   const out = { ...raw };
-  out.stripe_secret_key = String(raw.stripe_secret_key || '').trim() || envFirst('STRIPE_SECRET_KEY', 'STRIPE_SECRET');
+  out.stripe_secret_key = String(raw.stripe_secret_key || '').trim() || envFirst('STRIPE_SECRET_KEY', 'STRIPE_SECRET', 'STRIPE_SK', 'STRIPE_PRIVATE_KEY');
   out.stripe_webhook_secret = String(raw.stripe_webhook_secret || '').trim() || envFirst('STRIPE_WEBHOOK_SECRET');
-  out.stripe_publishable_key = String(raw.stripe_publishable_key || '').trim() || envFirst('STRIPE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY');
+  out.stripe_publishable_key = String(raw.stripe_publishable_key || '').trim() || envFirst('STRIPE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_PK');
   for (const plan of ALL_PAID_PLAN_KEYS) {
     for (const interval of ['monthly', 'annual']) {
       const key = STRIPE_PRICE_KEY(plan, interval);
@@ -756,7 +756,7 @@ function getOutputs(maxAgeMs = 2000) {
 function invalidateOutputsCache() { _outputsCache = null; }
 
 function sharePasswordFormHtml(shareId, error) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Protected Preview</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#07071a;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;color:#e8e8ff}.card{background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:40px 36px;width:min(400px,92vw)}.logo{font-size:13px;font-weight:700;color:rgba(255,255,255,.3);margin-bottom:28px}h2{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.4px}p{margin:0 0 24px;color:rgba(255,255,255,.3);font-size:13px}.err{color:#e05070;font-size:12px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.15);border-radius:8px;padding:10px 14px;margin-bottom:14px}input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e8e8ff;font-size:14px;padding:12px 16px;outline:none;font-family:inherit;margin-bottom:14px}input:focus{border-color:rgba(91,141,239,.45)}button{width:100%;padding:13px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}</style></head><body><div class="card"><div class="logo">CLONYFY · Protected Preview</div><h2>Password required</h2><p>This preview is password protected.</p>${error ? `<div class="err">${htmlEsc(error)}</div>` : ''}<form method="post" action="/share/${htmlEsc(shareId)}"><input type="password" name="pw" placeholder="Enter password" autofocus required><button type="submit">View Preview</button></form></div></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Protected Preview</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#07071a;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;color:#e8e8ff}.card{background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:40px 36px;width:min(400px,92vw)}.logo{width:150px;height:auto;display:block;margin-bottom:28px}.kicker{font-size:11px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}h2{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.4px}p{margin:0 0 24px;color:rgba(255,255,255,.3);font-size:13px}.err{color:#e05070;font-size:12px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.15);border-radius:8px;padding:10px 14px;margin-bottom:14px}input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e8e8ff;font-size:14px;padding:12px 16px;outline:none;font-family:inherit;margin-bottom:14px}input:focus{border-color:rgba(91,141,239,.45)}button{width:100%;padding:13px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}</style></head><body><div class="card"><img class="logo" src="/brand-wordmark.svg" alt="CLONYFY"><div class="kicker">Protected preview</div><h2>Password required</h2><p>This preview is password protected.</p>${error ? `<div class="err">${htmlEsc(error)}</div>` : ''}<form method="post" action="/share/${htmlEsc(shareId)}"><input type="password" name="pw" placeholder="Enter password" autofocus required><button type="submit">View Preview</button></form></div></body></html>`;
 }
 
 function userPublic(u) {
@@ -1920,10 +1920,13 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/api/payments/settings') {
     const s = getStripeSettings();
+    const stripeReason = stripeUnavailableReason();
     return json(res, {
       btc: s.btc, eth: s.eth, usdt_trc20: s.usdt_trc20,
       paypal_email: s.paypal_email, paypal_me: s.paypal_me,
       stripe_enabled: !!s.stripe_secret_key,
+      stripe_ready: !stripeReason,
+      stripe_error: stripeReason,
       stripe_publishable_key: s.stripe_publishable_key || '',
       google_oauth_enabled: !!s.google_client_id,
     });
@@ -2114,6 +2117,25 @@ async function handleRequest(req, res) {
   }
 
   // ── Static pages ───────────────────────────────────────────────────────────
+  if (req.method === 'POST' && url.pathname === '/api/admin/stripe/test') {
+    if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
+    const stripe = getStripe();
+    const reason = stripeUnavailableReason();
+    if (!stripe) return json(res, { ok: false, error: reason || 'Stripe is not configured.' }, 503);
+    try {
+      const account = await stripe.accounts.retrieve();
+      return json(res, {
+        ok: true,
+        accountId: account.id,
+        mode: _stripeKey.startsWith('sk_test_') ? 'test' : 'live',
+        chargesEnabled: !!account.charges_enabled,
+        payoutsEnabled: !!account.payouts_enabled,
+      });
+    } catch (err) {
+      return json(res, { ok: false, error: err.message }, 502);
+    }
+  }
+
   if (req.method === 'GET' && url.pathname === '/dashboard') return serveFile(res, join(__dirname, 'public', 'dashboard.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/reset-password') return serveFile(res, join(__dirname, 'public', 'reset-password.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/tos') return serveFile(res, join(__dirname, 'public', 'tos.html'), 'text/html');
@@ -2717,6 +2739,7 @@ async function handleRequest(req, res) {
       defaultAdminPassword: ADMIN_PASSWORD === 'admin123',
       smtpConfigured: !!(getCachedSettings().smtp_host),
       stripeConfigured: !!(getStripeSettings().stripe_secret_key),
+      stripeError: stripeUnavailableReason(),
       appUrlConfigured: !!(getCachedSettings().app_url),
     });
   }

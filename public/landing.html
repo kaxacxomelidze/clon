@@ -85,6 +85,7 @@ nav{position:sticky;top:0;z-index:500;height:62px;display:flex;align-items:cente
 .nav-logomark{width:32px;height:32px;border-radius:9px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 0 24px rgba(91,141,239,.4),0 0 0 1px rgba(255,255,255,.06)}
 .nav-logomark img{width:18px;height:18px}
 .nav-wordmark{font-size:15px;font-weight:800;letter-spacing:-.4px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-logo-img{width:136px;height:auto;display:block}
 .nav-links{display:flex;align-items:center;gap:2px;flex:1}
 .nav-a{font-size:13.5px;font-weight:500;color:var(--text2);padding:6px 13px;border-radius:7px;transition:color .15s,background .15s;white-space:nowrap}
 .nav-a:hover{color:var(--text);background:rgba(255,255,255,.05)}
@@ -334,6 +335,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
 .footer-mark{width:28px;height:28px;border-radius:8px;background:var(--grad);display:flex;align-items:center;justify-content:center}
 .footer-mark svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .footer-wordmark{font-size:14px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.footer-logo-img{width:132px;height:auto;display:block}
 .footer-socials{display:flex;align-items:center;gap:10px;margin-top:20px}
 .footer-social{width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;transition:all .15s}
 .footer-social:hover{background:rgba(255,255,255,.08);border-color:var(--border3)}
@@ -391,10 +393,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
 <nav role="navigation" aria-label="Main navigation">
   <div class="nav-wrap">
     <a href="/" class="nav-logo" aria-label="CLONYFY home">
-      <div class="nav-logomark" aria-hidden="true">
-        <img src="/brand-mark.svg" alt="" aria-hidden="true">
-      </div>
-      <span class="nav-wordmark">CLONYFY</span>
+      <img class="nav-logo-img" src="/brand-wordmark.svg" alt="CLONYFY">
     </a>
     <div class="nav-links" role="list">
       <a href="#features" class="nav-a" role="listitem">Features</a>
@@ -1002,10 +1001,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   <div class="footer-grid">
     <div>
       <div class="footer-logo-wrap">
-        <div class="footer-mark" aria-hidden="true">
-          <img src="/brand-mark.svg" alt="" aria-hidden="true">
-        </div>
-        <span class="footer-wordmark">CLONYFY</span>
+        <img class="footer-logo-img" src="/brand-wordmark.svg" alt="CLONYFY">
       </div>
       <p class="footer-brand-desc">The fastest way to turn any website into a fully editable Next.js project. Clone, edit, and ship.</p>
       <div class="footer-socials">
