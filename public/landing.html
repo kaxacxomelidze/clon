@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CLONYFY — Clone Any Website in Seconds</title>
 <meta name="description" content="Capture any website and turn it into a fully editable Next.js project. Every page, asset, and API route — automatically.">
-<link rel="icon" href="/icon.ico">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
@@ -83,7 +83,7 @@ nav{position:sticky;top:0;z-index:500;height:62px;display:flex;align-items:cente
 .nav-wrap{width:100%;max-width:1160px;margin:0 auto;display:flex;align-items:center}
 .nav-logo{display:flex;align-items:center;gap:10px;flex-shrink:0;margin-right:36px}
 .nav-logomark{width:32px;height:32px;border-radius:9px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 0 24px rgba(91,141,239,.4),0 0 0 1px rgba(255,255,255,.06)}
-.nav-logomark svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nav-logomark img{width:18px;height:18px}
 .nav-wordmark{font-size:15px;font-weight:800;letter-spacing:-.4px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .nav-links{display:flex;align-items:center;gap:2px;flex:1}
 .nav-a{font-size:13.5px;font-weight:500;color:var(--text2);padding:6px 13px;border-radius:7px;transition:color .15s,background .15s;white-space:nowrap}
@@ -330,6 +330,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
 .footer-grid{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:56px}
 .footer-brand-desc{font-size:13px;color:var(--text3);line-height:1.7;max-width:220px;margin-top:14px}
 .footer-logo-wrap{display:flex;align-items:center;gap:9px}
+.footer-mark img{width:16px;height:16px}
 .footer-mark{width:28px;height:28px;border-radius:8px;background:var(--grad);display:flex;align-items:center;justify-content:center}
 .footer-mark svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .footer-wordmark{font-size:14px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
@@ -391,7 +392,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   <div class="nav-wrap">
     <a href="/" class="nav-logo" aria-label="CLONYFY home">
       <div class="nav-logomark" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <img src="/brand-mark.svg" alt="" aria-hidden="true">
       </div>
       <span class="nav-wordmark">CLONYFY</span>
     </a>
@@ -1002,7 +1003,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
     <div>
       <div class="footer-logo-wrap">
         <div class="footer-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <img src="/brand-mark.svg" alt="" aria-hidden="true">
         </div>
         <span class="footer-wordmark">CLONYFY</span>
       </div>
