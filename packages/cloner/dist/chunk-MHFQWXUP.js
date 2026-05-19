@@ -1650,12 +1650,91 @@ async function capturePage(context, pageUrl, assetsDir) {
 
 // src/crawler.ts
 var IS_SERVERLESS2 = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+var NON_PAGE_EXTS2 = /* @__PURE__ */ new Set([
+  ".7z",
+  ".aac",
+  ".avi",
+  ".avif",
+  ".bin",
+  ".bmp",
+  ".css",
+  ".csv",
+  ".doc",
+  ".docx",
+  ".eot",
+  ".exe",
+  ".gif",
+  ".gz",
+  ".ico",
+  ".jpeg",
+  ".jpg",
+  ".js",
+  ".json",
+  ".map",
+  ".mjs",
+  ".mov",
+  ".mp3",
+  ".mp4",
+  ".ogg",
+  ".ogv",
+  ".otf",
+  ".pdf",
+  ".png",
+  ".ppt",
+  ".pptx",
+  ".rar",
+  ".rss",
+  ".svg",
+  ".tar",
+  ".tgz",
+  ".ttf",
+  ".txt",
+  ".wav",
+  ".webm",
+  ".webp",
+  ".woff",
+  ".woff2",
+  ".xls",
+  ".xlsx",
+  ".xml",
+  ".zip"
+]);
 var NAV_DELAY_MS = IS_SERVERLESS2 ? 50 : 250;
 var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 18e3 : 18e4;
 var USER_AGENT3 = "CLONYFY/0.1 (+local archival)";
 var STATIC_ASSET_LIMIT = IS_SERVERLESS2 ? 80 : 250;
 var STATIC_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 1e4;
 var STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS2 ? 8 : 50) * 1024 * 1024;
+function shouldUseBundledChromium(playwrightPath, platform = process.platform, serverless = IS_SERVERLESS2) {
+  return serverless || platform === "linux" && !existsSync2(playwrightPath);
+}
+function systemBrowserChannel(playwrightPath, platform = process.platform, serverless = IS_SERVERLESS2) {
+  if (serverless || existsSync2(playwrightPath)) return void 0;
+  if (platform === "win32") return "msedge";
+  if (platform === "darwin") return "chrome";
+  return void 0;
+}
+async function getChromiumLaunchOptions() {
+  const playwrightPath = chromium.executablePath();
+  const useBundledChromium = shouldUseBundledChromium(playwrightPath);
+  const channel = systemBrowserChannel(playwrightPath);
+  const executablePath = useBundledChromium ? await sparticuzChromium.executablePath() : void 0;
+  if (useBundledChromium) {
+    logger.debug(`  [BROWSER] Using bundled Chromium: ${executablePath}`);
+  } else if (channel) {
+    logger.debug(`  [BROWSER] Playwright Chromium missing; using system ${channel}`);
+  }
+  return {
+    executablePath,
+    channel,
+    args: [
+      ...useBundledChromium ? sparticuzChromium.args : [],
+      "--disable-blink-features=AutomationControlled",
+      "--no-sandbox",
+      "--disable-setuid-sandbox"
+    ]
+  };
+}
 function hashUrl2(url) {
   return createHash2("sha1").update(url).digest("hex").slice(0, 16);
 }
@@ -1853,15 +1932,10 @@ async function crawl(opts, assetsDir, onPage) {
   const visited = /* @__PURE__ */ new Set();
   const queue = new PQueue({ concurrency: opts.concurrency });
   const records = [];
+  const launchOptions = await getChromiumLaunchOptions();
   const browser = await chromium.launch({
     headless: true,
-    executablePath: IS_SERVERLESS2 ? await sparticuzChromium.executablePath() : void 0,
-    args: [
-      ...IS_SERVERLESS2 ? sparticuzChromium.args : [],
-      "--disable-blink-features=AutomationControlled",
-      "--no-sandbox",
-      "--disable-setuid-sandbox"
-    ]
+    ...launchOptions
   });
   const enqueue = (url, currentDepth) => {
     const clean = normalizePageUrl(url);
@@ -1876,6 +1950,11 @@ async function crawl(opts, assetsDir, onPage) {
     visited.add(clean);
     queue.add(async () => {
       if (records.length >= opts.maxPages) return;
+      const urlPathExt = extname3(new URL(clean).pathname).toLowerCase();
+      if (urlPathExt && NON_PAGE_EXTS2.has(urlPathExt)) {
+        logger.debug(`  [SKIP] ${clean}: non-page extension (${urlPathExt})`);
+        return;
+      }
       await new Promise((r) => setTimeout(r, NAV_DELAY_MS));
       let context = null;
       try {
@@ -1886,6 +1965,11 @@ async function crawl(opts, assetsDir, onPage) {
           extraHTTPHeaders: {
             "Accept-Language": "en-US,en;q=0.9"
           }
+        });
+        context.on("download", (download) => {
+          logger.debug(`  [SKIP] ${clean}: triggered a download (${download.suggestedFilename()})`);
+          download.cancel().catch(() => {
+          });
         });
         await context.addInitScript(() => {
           const collectNav = (value) => {
@@ -9984,7 +10068,8 @@ var URL_ATTRS = {
     "data-video",
     "data-poster",
     "poster",
-    "srcset"
+    "srcset",
+    "style"
   ],
   "link": ["href"],
   "use": ["href", "xlink:href"],
@@ -10124,12 +10209,18 @@ function walkNode(node, assetMap, origin, baseUrl, stats, failedAssets) {
     }
   }
 }
+function preprocessHtml(html) {
+  html = html.replace(/<base\s[^>]*\/?>/gi, "").replace(/<base\s*\/>/gi, "").replace(/<base>/gi, "");
+  html = html.replace(/<meta\s[^>]*\bhttp-equiv\s*=\s*["']?content-security-policy["']?[^>]*\/?>/gi, "");
+  html = html.replace(/<meta\s[^>]*\bhttp-equiv\s*=\s*["']?x-frame-options["']?[^>]*\/?>/gi, "");
+  return html;
+}
 function rewriteHtml(record, origin) {
   const assetMap = buildAssetMap(record.assets);
   const failedAssets = new Set(record.failedAssets ?? []);
   const stats = { attrsRewritten: 0, attrsToRelative: 0, styleUrlsRewritten: 0, externalUrls: 0 };
   const baseUrl = record.url || origin;
-  const doc = parse(record.html);
+  const doc = parse(preprocessHtml(record.html));
   for (const child of doc.childNodes) {
     walkNode(child, assetMap, origin, baseUrl, stats, failedAssets);
   }
@@ -10617,4 +10708,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-JNXKRRPA.js.map
+//# sourceMappingURL=chunk-MHFQWXUP.js.map

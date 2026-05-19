@@ -26,6 +26,49 @@ const STATIC_ASSET_LIMIT = IS_SERVERLESS ? 80 : 250;
 const STATIC_ASSET_TIMEOUT = IS_SERVERLESS ? 4_000 : 10_000;
 const STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
 
+export function shouldUseBundledChromium(
+  playwrightPath: string,
+  platform: NodeJS.Platform = process.platform,
+  serverless = IS_SERVERLESS,
+): boolean {
+  return serverless || (platform === 'linux' && !existsSync(playwrightPath));
+}
+
+export function systemBrowserChannel(
+  playwrightPath: string,
+  platform: NodeJS.Platform = process.platform,
+  serverless = IS_SERVERLESS,
+): 'msedge' | 'chrome' | undefined {
+  if (serverless || existsSync(playwrightPath)) return undefined;
+  if (platform === 'win32') return 'msedge';
+  if (platform === 'darwin') return 'chrome';
+  return undefined;
+}
+
+async function getChromiumLaunchOptions() {
+  const playwrightPath = chromium.executablePath();
+  const useBundledChromium = shouldUseBundledChromium(playwrightPath);
+  const channel = systemBrowserChannel(playwrightPath);
+  const executablePath = useBundledChromium ? await sparticuzChromium.executablePath() : undefined;
+
+  if (useBundledChromium) {
+    logger.debug(`  [BROWSER] Using bundled Chromium: ${executablePath}`);
+  } else if (channel) {
+    logger.debug(`  [BROWSER] Playwright Chromium missing; using system ${channel}`);
+  }
+
+  return {
+    executablePath,
+    channel,
+    args: [
+      ...(useBundledChromium ? sparticuzChromium.args : []),
+      '--disable-blink-features=AutomationControlled',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+    ],
+  };
+}
+
 function hashUrl(url: string): string {
   return createHash('sha1').update(url).digest('hex').slice(0, 16);
 }
@@ -264,16 +307,11 @@ export async function crawl(
   const visited = new Set<string>();
   const queue = new PQueue({ concurrency: opts.concurrency });
   const records: PageRecord[] = [];
+  const launchOptions = await getChromiumLaunchOptions();
 
   const browser = await chromium.launch({
     headless: true,
-    executablePath: IS_SERVERLESS ? await sparticuzChromium.executablePath() : undefined,
-    args: [
-      ...(IS_SERVERLESS ? sparticuzChromium.args : []),
-      '--disable-blink-features=AutomationControlled',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-    ],
+    ...launchOptions,
   });
 
   const enqueue = (url: string, currentDepth: number) => {
