@@ -894,8 +894,8 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .plan-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:.04em}
 .plan-pill.free{background:rgba(122,122,122,.1);color:var(--text2);border:1px solid rgba(122,122,122,.15)}
 .plan-pill.starter{background:rgba(91,141,239,.1);color:#9abcf0;border:1px solid rgba(91,141,239,.2)}
-.plan-pill.pro{background:rgba(168,85,247,.1);color:#c4b5fd;border:1px solid rgba(168,85,247,.2)}
-.plan-pill.enterprise{background:rgba(245,166,35,.1);color:#fbbf24;border:1px solid rgba(245,166,35,.2)}
+.plan-pill.growth,.plan-pill.pro{background:rgba(168,85,247,.1);color:#c4b5fd;border:1px solid rgba(168,85,247,.2)}
+.plan-pill.unlimited,.plan-pill.enterprise{background:rgba(245,166,35,.1);color:#fbbf24;border:1px solid rgba(245,166,35,.2)}
 .plan-renew{font-size:11px;color:var(--text3);flex:1}
 .plan-renew.soon{color:var(--yellow)}
 .profile-upgrade-btn{padding:5px 14px;border-radius:20px;background:var(--logo-grad);color:#fff;font-size:11px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:opacity .15s;box-shadow:0 2px 10px rgba(91,141,239,.25);letter-spacing:.01em;white-space:nowrap}
@@ -1248,7 +1248,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <button class="plan-btn soft" id="plan-btn-growth" onclick="handleBuy('growth')">Get Growth</button>
     </div>
     <div class="plan-card" id="plan-card-unlimited">
-      <div class="plan-name">Pro / Unlimited</div>
+      <div class="plan-name">Unlimited</div>
       <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-unlimited">59.99</span><span class="plan-period" id="period-unlimited">/mo</span></div>
       <div class="plan-desc">For teams that need maximum scale.</div>
       <div class="plan-divider"></div>
@@ -1259,7 +1259,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
         <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Dedicated support</span></div>
         <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Custom crawl rules</span></div>
       </div>
-      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Pro / Unlimited</button>
+      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Unlimited</button>
     </div>
   </div>
 </div>
@@ -2180,12 +2180,14 @@ async function submitRegister(e) {
 }
 
 function onAuthSuccess(user) {
+  user.plan = normalizePlan(user.plan);
   currentUser = user;
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('titlebarUser').style.display = 'flex';
   document.getElementById('userName').textContent = user.name;
   document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
   requestNotificationPermission();
+  syncPlanLimitsToCloneForm();
   loadHistory();
   loadAnnouncements();
   if (!localStorage.getItem('wc_onboarded')) showOnboarding();
@@ -2329,6 +2331,11 @@ function closePricing() {
 // Pricing state
 let pricingInterval = 'monthly';
 let paySettings = {};
+const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
+function planLabel(plan) {
+  return ({ free:'Free', starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[normalizePlan(plan)] || 'Free';
+}
 const PLAN_PRICES = {
   starter:   { monthly: 9.99,  annualMonthly: 7.99,  annual: 95.88  },
   popular:   { monthly: 19.99, annualMonthly: 15.99, annual: 191.88 },
@@ -2368,7 +2375,7 @@ function updatePricingButtons() {
       btn.style.opacity = '0.5';
       btn.style.cursor = 'default';
     } else {
-      btn.textContent = ({ starter:'Get Starter', popular:'Get Most Popular', growth:'Get Growth', unlimited:'Get Pro / Unlimited' })[plan] || `Get ${plan.charAt(0).toUpperCase()+plan.slice(1)}`;
+      btn.textContent = ({ starter:'Get Starter', popular:'Get Most Popular', growth:'Get Growth', unlimited:'Get Unlimited' })[plan] || `Get ${planLabel(plan)}`;
       btn.disabled = false;
       btn.style.opacity = '';
       btn.style.cursor = '';
@@ -2669,10 +2676,9 @@ async function openProfile() {
     ? 'Member since ' + since.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })
     : '';
 
-  const plan = (currentUser.plan || 'free').toLowerCase();
+  const plan = normalizePlan(currentUser.plan || 'free');
   const pill = document.getElementById('profilePlanPill');
-  const planLabels = { free:'Trial', starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
-  pill.textContent = planLabels[plan] || plan;
+  pill.textContent = currentUser.planLabel || planLabel(plan);
   pill.className = 'plan-pill ' + plan;
 
   const renewEl = document.getElementById('profileRenew');
@@ -2682,7 +2688,7 @@ async function openProfile() {
     const daysLeft = Math.ceil((renewDate - Date.now()) / 86400000);
     renewEl.textContent = 'Renews ' + renewDate.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
     renewEl.className = 'plan-renew' + (daysLeft <= 7 ? ' soon' : '');
-    upgradeBtn.style.display = (plan === 'unlimited' || plan === 'enterprise') ? 'none' : '';
+    upgradeBtn.style.display = plan === 'unlimited' ? 'none' : '';
   } else {
     renewEl.textContent = plan === 'free' ? '3 clones/mo · Preview only' : '';
     renewEl.className = 'plan-renew';
@@ -3109,12 +3115,28 @@ async function loadHistory() {
   } catch {}
 }
 
-const _PLAN_CLONE_LIMITS = { free: 3, starter: 15, popular: 50, growth: 100, unlimited: null, pro: null, enterprise: null };
+const _PLAN_CLONE_LIMITS = { free: 3, starter: 15, popular: 50, growth: 100, unlimited: null };
+const _PLAN_PAGE_LIMITS = { free: 20, starter: 30, popular: 100, growth: 200, unlimited: 500 };
+
+function currentPlanLimits() {
+  const plan = normalizePlan(currentUser?.plan || 'free');
+  return {
+    clonesPerMonth: currentUser?.planLimits?.clonesPerMonth ?? _PLAN_CLONE_LIMITS[plan] ?? 3,
+    maxPages: currentUser?.planLimits?.maxPages ?? _PLAN_PAGE_LIMITS[plan] ?? 20,
+  };
+}
+
+function syncPlanLimitsToCloneForm() {
+  const input = document.getElementById('maxPages');
+  if (!input) return;
+  const { maxPages } = currentPlanLimits();
+  input.max = String(maxPages);
+  if ((parseInt(input.value, 10) || 20) > maxPages) input.value = String(maxPages);
+}
 
 function updateUsageMeter() {
   if (!currentUser) return;
-  const plan = (currentUser.plan || 'free').toLowerCase();
-  const limitThisMonth = _PLAN_CLONE_LIMITS[plan] ?? 3;
+  const { clonesPerMonth: limitThisMonth } = currentPlanLimits();
   const meter = document.getElementById('usageMeter');
   const fill = document.getElementById('usageBarFill');
   const text = document.getElementById('usageText');
@@ -3182,9 +3204,11 @@ async function startClone() {
   btn.disabled = true;
   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Cloning...`;
   try {
+    syncPlanLimitsToCloneForm();
+    const maxPages = Math.min(parseInt(document.getElementById('maxPages').value, 10) || 20, currentPlanLimits().maxPages);
     const res = await apiFetch('/api/clone', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ url, maxPages: document.getElementById('maxPages').value, depth: document.getElementById('depth').value, ignoreRobots: document.getElementById('ignoreRobots').checked }),
+      body: JSON.stringify({ url, maxPages, depth: document.getElementById('depth').value, ignoreRobots: document.getElementById('ignoreRobots').checked }),
     });
     const job = await res.json();
     if (job.error) {

@@ -49,7 +49,11 @@ export const getAllUsers = () =>
 export const getUsersPage = async ({ search = '', plan = '', blocked = null, limit = 50, offset = 0 } = {}) => {
   let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
   if (search) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
-  if (plan) query = query.eq('plan', plan);
+  const planAliases = { growth: ['growth', 'pro'], unlimited: ['unlimited', 'enterprise'] };
+  if (plan) {
+    const plans = planAliases[plan] || [plan];
+    query = plans.length > 1 ? query.in('plan', plans) : query.eq('plan', plan);
+  }
   if (blocked === true) query = query.eq('blocked', 1);
   if (blocked === false) query = query.eq('blocked', 0);
   query = query.range(offset, offset + limit - 1);

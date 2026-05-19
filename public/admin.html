@@ -108,8 +108,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .user-email{font-size:11px;color:var(--text2);margin-top:1px}
 .badge-plan{display:inline-flex;align-items:center;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
 .badge-plan.free{background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border2)}
-.badge-plan.pro{background:rgba(91,141,239,.1);color:var(--blue);border:1px solid rgba(91,141,239,.2)}
-.badge-plan.enterprise{background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.2)}
+.badge-plan.growth,.badge-plan.pro{background:rgba(91,141,239,.1);color:var(--blue);border:1px solid rgba(91,141,239,.2)}
+.badge-plan.unlimited,.badge-plan.enterprise{background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.2)}
 .badge-status{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:700}
 .badge-status.active{background:var(--green-bg);color:var(--green);border:1px solid rgba(31,209,122,.2)}
 .badge-status.blocked{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,96,.2)}
@@ -366,7 +366,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <option value="starter">Starter</option>
             <option value="popular">Most Popular</option>
             <option value="growth">Growth</option>
-            <option value="unlimited">Pro / Unlimited</option>
+            <option value="unlimited">Unlimited</option>
           </select>
           <select class="filter-sel" id="users-status-filter" onchange="filterUsers()">
             <option value="">All Status</option>
@@ -520,11 +520,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-stripe-p-growth-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Pro / Unlimited Monthly</div>
+            <div class="settings-label">Price: Unlimited Monthly</div>
             <input class="settings-input" id="s-stripe-p-unlimited-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Pro / Unlimited Annual</div>
+            <div class="settings-label">Price: Unlimited Annual</div>
             <input class="settings-input" id="s-stripe-p-unlimited-annual" placeholder="price_...">
           </div>
 
@@ -588,7 +588,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
                     <option value="starter">Starter Plan</option>
                     <option value="popular">Most Popular Plan</option>
                     <option value="growth">Growth Plan</option>
-                    <option value="unlimited">Pro / Unlimited Plan</option>
+                    <option value="unlimited">Unlimited Plan</option>
                   </select>
                 </div>
                 <button onclick="sendAnnouncement()" style="margin-top:18px;padding:9px 22px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Send Announcement</button>
@@ -716,7 +716,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-starter" value="starter"> Starter</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-popular" value="popular"> Most Popular</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-growth" value="growth"> Growth</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-unlimited" value="unlimited"> Pro / Unlimited</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-unlimited" value="unlimited"> Unlimited</label>
         </div>
       </div>
     </div>
@@ -983,8 +983,8 @@ function renderUsers(users) {
           <option value="free" ${u.plan==='free'?'selected':''}>Free</option>
           <option value="starter" ${u.plan==='starter'?'selected':''}>Starter</option>
           <option value="popular" ${u.plan==='popular'?'selected':''}>Most Popular</option>
-          <option value="growth" ${u.plan==='growth'||u.plan==='pro'?'selected':''}>Growth</option>
-          <option value="unlimited" ${u.plan==='unlimited'||u.plan==='enterprise'?'selected':''}>Pro / Unlimited</option>
+          <option value="growth" ${u.plan==='growth'||u.rawPlan==='pro'?'selected':''}>Growth</option>
+          <option value="unlimited" ${u.plan==='unlimited'||u.rawPlan==='enterprise'?'selected':''}>Unlimited</option>
         </select>
       </td>
       <td><span class="num-cell">${u.cloneCount}<small>clones</small></span></td>

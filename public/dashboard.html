@@ -400,6 +400,8 @@ const PLAN_LABELS = {
   free:'Free', starter:'Starter', popular:'Most Popular',
   growth:'Growth', unlimited:'Unlimited', pro:'Growth', enterprise:'Unlimited',
 };
+const PLAN_ALIASES = { pro:'growth', enterprise:'unlimited' };
+function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
 const PLANS = [
   {
     key: 'starter', label: 'Starter',
@@ -484,7 +486,7 @@ async function init() {
 // ── Render dashboard ──────────────────────────────────────────────────────────
 function renderDashboard(d) {
   const { user, usage } = d;
-  currentPlan = user.plan || 'free';
+  currentPlan = normalizePlan(user.plan || 'free');
 
   document.getElementById('page-sub').textContent = `Welcome back, ${user.name}`;
   if (!user.emailVerified) document.getElementById('verify-banner').classList.remove('hidden');
@@ -506,7 +508,7 @@ function renderDashboard(d) {
 
   const actionsEl = document.getElementById('plan-actions');
   const btns = [];
-  if (!['unlimited', 'enterprise'].includes(currentPlan)) {
+  if (currentPlan !== 'unlimited') {
     btns.push(`<button class="btn-upgrade" onclick="openUpgradeModal()">✦ Upgrade Plan</button>`);
   }
   if (currentPlan !== 'free') {
@@ -605,7 +607,7 @@ function setBillingInterval(interval) {
 function renderPlanGrid() {
   const isAnnual = currentBillingInterval === 'annual';
   const grid = document.getElementById('plan-grid');
-  const normalizedCurrent = { pro:'growth', enterprise:'unlimited' }[currentPlan] || currentPlan;
+  const normalizedCurrent = normalizePlan(currentPlan);
 
   grid.innerHTML = PLANS.map(p => {
     const isCurrent = p.key === normalizedCurrent;

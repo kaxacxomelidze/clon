@@ -123,30 +123,45 @@ const PLAN_LIMITS = {
   popular:    { clonesPerMonth: 50,       maxPages: 100 },
   growth:     { clonesPerMonth: 100,      maxPages: 200 },
   unlimited:  { clonesPerMonth: Infinity, maxPages: 500 },
-  pro:        { clonesPerMonth: 100,      maxPages: 200 },
-  enterprise: { clonesPerMonth: Infinity, maxPages: 500 },
 };
 const PAID_PLAN_KEYS = ['starter', 'popular', 'growth', 'unlimited'];
-const LEGACY_PAID_PLAN_KEYS = ['pro', 'enterprise'];
+const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+const LEGACY_PAID_PLAN_KEYS = Object.keys(PLAN_ALIASES);
 const ALL_PAID_PLAN_KEYS = [...PAID_PLAN_KEYS, ...LEGACY_PAID_PLAN_KEYS];
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
-const SERVERLESS_MAX_PAGES = 20;
 const PLAN_PRICES = {
   starter:    { monthly: 9.99,  annual: 95.88  },
   popular:    { monthly: 19.99, annual: 191.88 },
   growth:     { monthly: 34.99, annual: 335.88 },
   unlimited:  { monthly: 59.99, annual: 575.88 },
-  pro:        { monthly: 34.99, annual: 335.88 },
-  enterprise: { monthly: 59.99, annual: 575.88 },
 };
 const PLAN_LABELS = {
+  free: 'Free',
   starter: 'Starter',
   popular: 'Most Popular',
   growth: 'Growth',
   unlimited: 'Unlimited',
-  pro: 'Pro',
-  enterprise: 'Enterprise',
 };
+function legacyAliasesForPlan(plan) {
+  const normalized = normalizePlan(plan);
+  return Object.keys(PLAN_ALIASES).filter(alias => PLAN_ALIASES[alias] === normalized);
+}
+function normalizePlan(plan) {
+  const key = String(plan || 'free').toLowerCase();
+  return PLAN_ALIASES[key] || (PLAN_LIMITS[key] ? key : 'free');
+}
+function isPaidPlan(plan) {
+  return normalizePlan(plan) !== 'free';
+}
+function getPlanLimits(plan) {
+  return PLAN_LIMITS[normalizePlan(plan)] || PLAN_LIMITS.free;
+}
+function getPlanPrices(plan) {
+  return PLAN_PRICES[normalizePlan(plan)] || { monthly: 0, annual: 0 };
+}
+function getPlanLabel(plan) {
+  return PLAN_LABELS[normalizePlan(plan)] || 'Free';
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function hashPassword(password, salt) {
@@ -314,10 +329,16 @@ function getStripeSettings(raw = getCachedSettings()) {
   out.stripe_secret_key = cleanSettingValue(raw.stripe_secret_key) || envFirst('STRIPE_SECRET_KEY', 'STRIPE_SECRET', 'STRIPE_SK', 'STRIPE_PRIVATE_KEY');
   out.stripe_webhook_secret = cleanSettingValue(raw.stripe_webhook_secret) || envFirst('STRIPE_WEBHOOK_SECRET');
   out.stripe_publishable_key = cleanSettingValue(raw.stripe_publishable_key) || envFirst('STRIPE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_PK');
-  for (const plan of ALL_PAID_PLAN_KEYS) {
+  for (const plan of PAID_PLAN_KEYS) {
     for (const interval of ['monthly', 'annual']) {
       const key = STRIPE_PRICE_KEY(plan, interval);
-      out[key] = cleanSettingValue(raw[key]) || envFirst(STRIPE_PRICE_ENV_KEY(plan, interval));
+      const legacyKeys = legacyAliasesForPlan(plan).map(alias => STRIPE_PRICE_KEY(alias, interval));
+      const legacyEnvKeys = legacyAliasesForPlan(plan).map(alias => STRIPE_PRICE_ENV_KEY(alias, interval));
+      out[key] = cleanSettingValue(raw[key])
+        || envFirst(STRIPE_PRICE_ENV_KEY(plan, interval))
+        || legacyKeys.map(k => cleanSettingValue(raw[k])).find(Boolean)
+        || envFirst(...legacyEnvKeys);
+      for (const legacyKey of legacyKeys) out[legacyKey] = cleanSettingValue(raw[legacyKey]) || out[key];
     }
   }
   return out;
@@ -326,11 +347,12 @@ function stripePeriodEnd(sub) {
   return sub?.current_period_end || sub?.items?.data?.[0]?.current_period_end || null;
 }
 async function ensureStripePrice(stripe, plan, interval) {
+  plan = normalizePlan(plan);
   const s = getStripeSettings();
   const key = STRIPE_PRICE_KEY(plan, interval);
   if (s[key]) return s[key];
 
-  const amount = PLAN_PRICES[plan]?.[interval];
+  const amount = getPlanPrices(plan)?.[interval];
   if (!amount) throw new Error(`No local price exists for ${plan} ${interval}.`);
 
   // Search Stripe for an existing active price matching this plan+interval
@@ -344,7 +366,7 @@ async function ensureStripePrice(stripe, plan, interval) {
 
   if (!priceId) {
     const product = await stripe.products.create({
-      name: `CLONYFY ${PLAN_LABELS[plan] || plan}`,
+      name: `CLONYFY ${getPlanLabel(plan)}`,
       metadata: { app: 'clonyfy', plan },
     });
     const price = await stripe.prices.create({
@@ -432,9 +454,9 @@ async function runDunning() {
 async function checkUsageAlert(userId) {
   try {
     const user = await getUserById(userId);
-    if (!user || user.plan === 'free' || user.usage_alert_sent) return;
-    const plan = user.plan || 'free';
-    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+    if (!user || !isPaidPlan(user.plan) || user.usage_alert_sent) return;
+    const plan = normalizePlan(user.plan);
+    const limits = getPlanLimits(plan);
     if (limits.clonesPerMonth === Infinity) return;
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const used = await getCloneCountThisMonth(userId, monthStart.toISOString());
@@ -873,9 +895,17 @@ function sharePasswordFormHtml(shareId, error) {
 }
 
 function userPublic(u) {
+  const plan = normalizePlan(u.plan);
+  const limits = getPlanLimits(plan);
   return {
     id: u.id, name: u.name, email: u.email,
-    plan: u.plan || 'free',
+    plan,
+    rawPlan: u.plan || 'free',
+    planLabel: getPlanLabel(plan),
+    planLimits: {
+      clonesPerMonth: limits.clonesPerMonth === Infinity ? null : limits.clonesPerMonth,
+      maxPages: limits.maxPages,
+    },
     planRenewsAt: u.plan_renews_at || null,
     billingInterval: u.billing_interval || 'monthly',
     emailVerified: u.email_verified === 1 || u.email_verified === true,
@@ -1353,7 +1383,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/save-page') {
     const saveUser = await getSessionUser(req);
     if (!saveUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((saveUser.plan || 'free') === 'free') return json(res, { error: 'Visual editor requires a paid plan. Upgrade to edit pages.' }, 403);
+    if (!isPaidPlan(saveUser.plan)) return json(res, { error: 'Visual editor requires a paid plan. Upgrade to edit pages.' }, 403);
     // 50MB limit — cloned pages with inlined assets can be several MB
     readJsonBody(req, 50_000_000).then(async ({ outDir, route, html }) => {
       if (!await canUseCloneOutput(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
@@ -1439,8 +1469,8 @@ async function handleRequest(req, res) {
       let { maxPages = '20' } = parsed;
 
       if (cloneUser) {
-        const plan = cloneUser.plan || 'free';
-        const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+        const plan = normalizePlan(cloneUser.plan);
+        const limits = getPlanLimits(plan);
         if (limits.clonesPerMonth !== Infinity) {
           const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
           const used = await getCloneCountThisMonth(cloneUser.id, monthStart.toISOString());
@@ -1449,7 +1479,7 @@ async function handleRequest(req, res) {
           }
         }
         // Per-user hourly burst limit: free=2/hr, paid=5/hr
-        const hourlyMax = ALL_PAID_PLAN_KEYS.includes(plan) ? 5 : 2;
+        const hourlyMax = isPaidPlan(plan) ? 5 : 2;
         if (!checkRateLimit(`clone_user:${cloneUser.id}`, hourlyMax, 3600000)) {
           return json(res, { error: `Too many clone requests. Please wait before starting another.` }, 429);
         }
@@ -1458,7 +1488,7 @@ async function handleRequest(req, res) {
         if (userRunning >= 2) {
           return json(res, { error: 'You already have 2 clones running. Wait for one to finish before starting another.' }, 429);
         }
-        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, (PLAN_LIMITS[plan] || PLAN_LIMITS.free).maxPages));
+        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, limits.maxPages));
       } else {
         if (!checkRateLimit(`clone_anon:${ip}`, 2, 86400000)) return json(res, { error: 'Rate limit exceeded. Sign in for more clones.' }, 429);
         // Cap concurrent running jobs per IP for anonymous users
@@ -1468,9 +1498,7 @@ async function handleRequest(req, res) {
         }
         maxPages = String(Math.min(parseInt(maxPages, 10) || 20, PLAN_LIMITS.free.maxPages));
       }
-      if (IS_VERCEL) {
-        maxPages = String(Math.min(parseInt(maxPages, 10) || SERVERLESS_MAX_PAGES, SERVERLESS_MAX_PAGES));
-      }
+      maxPages = String(Math.max(1, parseInt(maxPages, 10) || 1));
 
       const id = randomUUID();
       const hostname = target.hostname.replace(/\./g, '-');
@@ -1481,6 +1509,7 @@ async function handleRequest(req, res) {
         status: 'running', logs: [], outDir,
         startedAt: new Date().toISOString(),
         pages: null, apiRoutes: null, assets: null,
+        maxPages: parseInt(maxPages, 10), depth: parseInt(depth, 10) || 3, ignoreRobots: !!ignoreRobots,
         userId: cloneUser ? cloneUser.id : null,
         userName: cloneUser ? cloneUser.name : 'Anonymous',
       };
@@ -1656,7 +1685,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/export-zip') {
     const zipUser = await getSessionUser(req);
     if (!zipUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((zipUser.plan || 'free') === 'free') return json(res, { error: 'Export requires a paid plan. Upgrade to download your clones.' }, 403);
+    if (!isPaidPlan(zipUser.plan)) return json(res, { error: 'Export requires a paid plan. Upgrade to download your clones.' }, 403);
     const { outDir } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(zipUser, outDir)) return json(res, { error: 'Not found' }, 404);
@@ -1669,7 +1698,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/download-zip') {
     const dlUser = await getSessionUser(req);
     if (!dlUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((dlUser.plan || 'free') === 'free') return json(res, { error: 'Export requires a paid plan. Upgrade to download your clones.' }, 403);
+    if (!isPaidPlan(dlUser.plan)) return json(res, { error: 'Export requires a paid plan. Upgrade to download your clones.' }, 403);
     const outDir = url.searchParams.get('outDir') || '';
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(dlUser, outDir)) return json(res, { error: 'Not found' }, 404);
@@ -1690,7 +1719,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/github/connect') {
     const ghUser = await getSessionUser(req);
     if (!ghUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((ghUser.plan || 'free') === 'free') return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
+    if (!isPaidPlan(ghUser.plan)) return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
     try {
       const { token } = await readJsonBody(req, 50_000);
       if (!token || String(token).length < 20) return json(res, { error: 'GitHub token is required' }, 400);
@@ -1718,7 +1747,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/github/branches') {
     const ghUser = await getSessionUser(req);
     if (!ghUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((ghUser.plan || 'free') === 'free') return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
+    if (!isPaidPlan(ghUser.plan)) return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
     try {
       const { token, repo } = await readJsonBody(req, 50_000);
       if (!token || String(token).length < 20) return json(res, { error: 'GitHub token is required' }, 400);
@@ -1738,7 +1767,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/github/push') {
     const ghUser = await getSessionUser(req);
     if (!ghUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((ghUser.plan || 'free') === 'free') return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
+    if (!isPaidPlan(ghUser.plan)) return json(res, { error: 'GitHub push requires a paid plan. Upgrade to publish your clones.' }, 403);
     try {
       const { outDir, token, repo, branch = 'main', targetPath = '', commitMessage = '', cleanTarget = false } = await readJsonBody(req, 200_000);
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
@@ -1848,7 +1877,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/share/create') {
     const shareUser = await getSessionUser(req);
     if (!shareUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((shareUser.plan || 'free') === 'free') return json(res, { error: 'Share links require a paid plan. Upgrade to share your clones.' }, 403);
+    if (!isPaidPlan(shareUser.plan)) return json(res, { error: 'Share links require a paid plan. Upgrade to share your clones.' }, 403);
     const { outDir, route, password, expiresInDays } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(shareUser, outDir)) return json(res, { error: 'Not found' }, 404);
@@ -1930,7 +1959,7 @@ async function handleRequest(req, res) {
     const { totalUsers, blockedUsers, totalClones, totalErrors, pendingPayments, activePaidUsers, totalRevenue, monthRevenue } = await getAdminStats();
     const activeNow = [...jobs.values()].filter(j => j.status === 'running').length;
     const mrr = activePaidUsers.reduce((s, u) => {
-      const p = PLAN_PRICES[u.plan] || { monthly: 0, annual: 0 };
+      const p = getPlanPrices(u.plan);
       return s + (u.billing_interval === 'annual' ? p.annual / 12 : p.monthly);
     }, 0);
     return json(res, {
@@ -1938,9 +1967,11 @@ async function handleRequest(req, res) {
       mrr: Math.round(mrr * 100) / 100,
       arr: Math.round(mrr * 12 * 100) / 100,
       pendingPayments, totalErrors,
-      proUsers: activePaidUsers.filter(u => ['growth', 'pro'].includes(u.plan)).length,
-      starterUsers: activePaidUsers.filter(u => u.plan === 'starter').length,
-      enterpriseUsers: activePaidUsers.filter(u => ['unlimited', 'enterprise'].includes(u.plan)).length,
+      growthUsers: activePaidUsers.filter(u => normalizePlan(u.plan) === 'growth').length,
+      starterUsers: activePaidUsers.filter(u => normalizePlan(u.plan) === 'starter').length,
+      unlimitedUsers: activePaidUsers.filter(u => normalizePlan(u.plan) === 'unlimited').length,
+      proUsers: activePaidUsers.filter(u => normalizePlan(u.plan) === 'growth').length,
+      enterpriseUsers: activePaidUsers.filter(u => normalizePlan(u.plan) === 'unlimited').length,
     });
   }
 
@@ -1964,7 +1995,7 @@ async function handleRequest(req, res) {
         const uc = cloneMap[u.id] || [];
         return {
           id: u.id, name: u.name, email: u.email,
-          plan: u.plan || 'free', planRenewsAt: u.plan_renews_at || null,
+          plan: normalizePlan(u.plan), rawPlan: u.plan || 'free', planLabel: getPlanLabel(u.plan), planRenewsAt: u.plan_renews_at || null,
           billingInterval: u.billing_interval || 'monthly',
           blocked: u.blocked === 1, createdAt: u.created_at,
           cloneCount: uc.length,
@@ -1984,7 +2015,7 @@ async function handleRequest(req, res) {
     const user = await getUserById(userId);
     if (!user) return json(res, { error: 'User not found' }, 404);
     const fields = {};
-    if (body.plan !== undefined) fields.plan = body.plan;
+    if (body.plan !== undefined) fields.plan = normalizePlan(body.plan);
     if (body.planRenewsAt !== undefined) fields.plan_renews_at = body.planRenewsAt;
     if (body.billingInterval !== undefined) fields.billing_interval = body.billingInterval;
     if (body.blocked !== undefined) fields.blocked = body.blocked ? 1 : 0;
@@ -2074,8 +2105,8 @@ async function handleRequest(req, res) {
     const users = await getAllUsers();
     const targets = users.filter(u => {
       if (target === 'all') return true;
-      if (target === 'paid') return u.plan !== 'free';
-      return u.plan === target;
+      if (target === 'paid') return isPaidPlan(u.plan);
+      return normalizePlan(u.plan) === normalizePlan(target);
     });
     const id = randomUUID();
     await insertAnnouncement({ id, title, body: msgBody, sentTo: target, recipientCount: targets.length, createdAt: new Date().toISOString() });
@@ -2114,15 +2145,22 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/payments/plans') {
-    return json(res, { plans: PLAN_PRICES });
+    return json(res, {
+      plans: PLAN_PRICES,
+      limits: PLAN_LIMITS,
+      labels: PLAN_LABELS,
+      aliases: PLAN_ALIASES,
+    });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/payments/submit') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Sign in to submit a payment.' }, 401);
     if (!checkRateLimit(`pay_submit:${ip}`, 5, 3600000)) return json(res, { error: 'Too many requests.' }, 429);
-    const { plan, method, txId, note, promoCode, interval } = await readJsonBody(req);
-    if (!plan || !ALL_PAID_PLAN_KEYS.includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
+    const body = await readJsonBody(req);
+    const plan = normalizePlan(body.plan);
+    const { method, txId, note, promoCode, interval } = body;
+    if (!isPaidPlan(plan)) return json(res, { error: 'Invalid plan.' }, 400);
     const billingInterval = interval === 'annual' ? 'annual' : 'monthly';
     const validMethods = ['paypal', 'crypto_btc', 'crypto_eth', 'crypto_usdt'];
     if (!method || !validMethods.includes(method)) return json(res, { error: 'Invalid payment method.' }, 400);
@@ -2140,7 +2178,7 @@ async function handleRequest(req, res) {
         await incrementPromoUsed(codeRow.code);
       }
     }
-    const prices = PLAN_PRICES[plan] || { monthly: 0, annual: 0 };
+    const prices = getPlanPrices(plan);
     const baseAmount = prices[billingInterval] || 0;
     const amount = Math.round(Math.max(0, baseAmount * (1 - discountPercent / 100)) * 100) / 100;
     const payment = {
@@ -2191,13 +2229,14 @@ async function handleRequest(req, res) {
         const renewDate = new Date();
         if (interval === 'annual') renewDate.setFullYear(renewDate.getFullYear() + 1);
         else renewDate.setMonth(renewDate.getMonth() + 1);
-        await updateUser(payment.user_id, { plan: payment.plan, plan_renews_at: renewDate.toISOString(), billing_interval: interval, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+        const confirmedPlan = normalizePlan(payment.plan);
+        await updateUser(payment.user_id, { plan: confirmedPlan, plan_renews_at: renewDate.toISOString(), billing_interval: interval, renewal_reminder_sent: 0, usage_alert_sent: 0 });
         const s = getCachedSettings();
         const appUrl = s.app_url || `http://localhost:${PORT}`;
-        sendEmail(user.email, `Payment confirmed — ${payment.plan} plan activated`,
-          renderEmail('payment-confirmed', { SUBJECT: `${payment.plan} plan activated`, NAME: user.name, PLAN: payment.plan, AMOUNT: String(payment.amount), INTERVAL: interval, RENEWS_AT: renewDate.toLocaleDateString() })
+        sendEmail(user.email, `Payment confirmed — ${getPlanLabel(confirmedPlan)} plan activated`,
+          renderEmail('payment-confirmed', { SUBJECT: `${getPlanLabel(confirmedPlan)} plan activated`, NAME: user.name, PLAN: getPlanLabel(confirmedPlan), AMOUNT: String(payment.amount), INTERVAL: interval, RENEWS_AT: renewDate.toLocaleDateString() })
         ).catch(() => {});
-        audit(null, 'admin', 'payment_confirmed', `userId=${user.id} plan=${payment.plan} amount=${payment.amount}`, ip);
+        audit(null, 'admin', 'payment_confirmed', `userId=${user.id} plan=${confirmedPlan} amount=${payment.amount}`, ip);
       }
     }
     if (status === 'rejected' && payment.user_id) {
@@ -2205,7 +2244,7 @@ async function handleRequest(req, res) {
       if (user) {
         const reasonBlock = reason ? `<p style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;font-size:13px;color:#991b1b;margin:0 0 16px">Reason: ${htmlEsc(reason)}</p>` : '';
         sendEmail(user.email, 'Your payment could not be confirmed',
-          renderEmail('payment-rejected', { SUBJECT: 'Payment not confirmed', NAME: user.name, PLAN: payment.plan, REASON_BLOCK: reasonBlock })
+          renderEmail('payment-rejected', { SUBJECT: 'Payment not confirmed', NAME: user.name, PLAN: getPlanLabel(payment.plan), REASON_BLOCK: reasonBlock })
         ).catch(() => {});
       }
     }
@@ -2228,15 +2267,16 @@ async function handleRequest(req, res) {
     }
     const byPlan = {}, byMethod = {}, byInterval = {};
     for (const p of confirmed) {
-      byPlan[p.plan] = (byPlan[p.plan] || 0) + (p.amount || 0);
+      const planKey = normalizePlan(p.plan);
+      byPlan[planKey] = (byPlan[planKey] || 0) + (p.amount || 0);
       byMethod[p.method] = (byMethod[p.method] || 0) + (p.amount || 0);
       byInterval[p.interval || 'monthly'] = (byInterval[p.interval || 'monthly'] || 0) + (p.amount || 0);
     }
     // MRR from active subscriptions
     const users = await getAllUsers();
-    const activePaid = users.filter(u => u.plan !== 'free' && u.plan_renews_at && new Date(u.plan_renews_at) > now3);
+    const activePaid = users.filter(u => isPaidPlan(u.plan) && u.plan_renews_at && new Date(u.plan_renews_at) > now3);
     const mrr = activePaid.reduce((s, u) => {
-      const p = PLAN_PRICES[u.plan] || { monthly: 0, annual: 0 };
+      const p = getPlanPrices(u.plan);
       return s + (u.billing_interval === 'annual' ? p.annual / 12 : p.monthly);
     }, 0);
     // Churn: users who downgraded to free in the last 30 days (approximated by renewal_reminder_sent)
@@ -2379,14 +2419,21 @@ async function handleRequest(req, res) {
     const userClones = await getClonesByUser(user.id);
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const clonesThisMonth = userClones.filter(c => new Date(c.started_at) >= monthStart).length;
-    const plan = user.plan || 'free';
-    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+    const plan = normalizePlan(user.plan);
+    const limits = getPlanLimits(plan);
     const totalPages = userClones.reduce((s, c) => s + (c.pages || 0), 0);
     const totalAssets = userClones.reduce((s, c) => s + (c.assets || 0), 0);
     return json(res, {
       user: userPublic(user),
       impersonatedBy: user._impersonatedBy || null,
-      usage: { clonesThisMonth, limitThisMonth: limits.clonesPerMonth === Infinity ? null : limits.clonesPerMonth, totalClones: userClones.length, totalPages, totalAssets },
+      usage: {
+        clonesThisMonth,
+        limitThisMonth: limits.clonesPerMonth === Infinity ? null : limits.clonesPerMonth,
+        maxPagesPerClone: limits.maxPages,
+        totalClones: userClones.length,
+        totalPages,
+        totalAssets,
+      },
       recentClones: userClones.slice(0, 10).map(c => ({ id: c.id, url: c.url, status: c.status, pages: c.pages, startedAt: c.started_at })),
     });
   }
@@ -2420,7 +2467,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/user/cancel-subscription') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
-    if (user.plan === 'free') return json(res, { error: 'No active subscription to cancel' }, 400);
+    if (!isPaidPlan(user.plan)) return json(res, { error: 'No active subscription to cancel' }, 400);
     if (user.stripe_subscription_id) {
       const stripe = getStripe();
       if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe is not configured. Contact support.' }, 503);
@@ -2461,7 +2508,7 @@ async function handleRequest(req, res) {
       exportedAt: new Date().toISOString(),
       user: {
         id: user.id, name: user.name, email: user.email,
-        plan: user.plan, createdAt: user.created_at,
+        plan: normalizePlan(user.plan), rawPlan: user.plan, createdAt: user.created_at,
         emailVerified: user.email_verified === 1,
       },
       clones: clones.map(c => ({ id: c.id, url: c.url, status: c.status, pages: c.pages, startedAt: c.started_at, completedAt: c.completed_at })),
@@ -2507,7 +2554,7 @@ async function handleRequest(req, res) {
       code, discountPercent,
       description: String(body.description || '').trim().slice(0, 200),
       maxUses: body.maxUses ? parseInt(body.maxUses, 10) : null,
-      plans: JSON.stringify(Array.isArray(body.plans) ? body.plans : []),
+      plans: JSON.stringify(Array.isArray(body.plans) ? [...new Set(body.plans.map(normalizePlan).filter(isPaidPlan))] : []),
       validUntil: body.validUntil || null,
       createdAt: new Date().toISOString(),
     });
@@ -2640,8 +2687,10 @@ async function handleRequest(req, res) {
     if (!user) return json(res, { error: 'Sign in first.' }, 401);
     const stripe = getStripe();
     if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe is not configured. Contact support.' }, 503);
-    const { plan, interval, promoCode } = await readJsonBody(req);
-    if (!plan || !ALL_PAID_PLAN_KEYS.includes(plan)) return json(res, { error: 'Invalid plan.' }, 400);
+    const checkoutBody = await readJsonBody(req);
+    const plan = normalizePlan(checkoutBody.plan);
+    const { interval, promoCode } = checkoutBody;
+    if (!isPaidPlan(plan)) return json(res, { error: 'Invalid plan.' }, 400);
     const bi = interval === 'annual' ? 'annual' : 'monthly';
     let priceId = '';
     try {
@@ -2734,7 +2783,7 @@ async function handleRequest(req, res) {
         if (session.payment_status === 'paid' && session.subscription) {
           const sub = await stripe.subscriptions.retrieve(session.subscription);
           const userId = sub.metadata?.userId || session.metadata?.userId;
-          const plan = sub.metadata?.plan || session.metadata?.plan;
+          const plan = normalizePlan(sub.metadata?.plan || session.metadata?.plan);
           const bi = sub.metadata?.interval || session.metadata?.interval || 'monthly';
           if (userId && plan) {
             const periodEnd = stripePeriodEnd(sub);
@@ -2757,7 +2806,7 @@ async function handleRequest(req, res) {
         const customerUser = sub.customer ? await getUserByStripeCustomerId(sub.customer) : null;
         const userId = sub.metadata?.userId || customerUser?.id;
         if (userId && sub.status === 'active') {
-          const plan = sub.metadata?.plan || customerUser?.plan;
+          const plan = normalizePlan(sub.metadata?.plan || customerUser?.plan);
           const bi = sub.metadata?.interval || customerUser?.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
@@ -2772,7 +2821,7 @@ async function handleRequest(req, res) {
         const subscriptionId = inv.subscription || inv.parent?.subscription_details?.subscription || null;
         if (u && subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
-          const plan = sub.metadata?.plan || u.plan;
+          const plan = normalizePlan(sub.metadata?.plan || u.plan);
           const bi = sub.metadata?.interval || u.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
@@ -2800,13 +2849,13 @@ async function handleRequest(req, res) {
         const inv = event.data.object;
         const customerId = inv.customer;
         const u = customerId ? await getUserByStripeCustomerId(customerId) : null;
-        if (u && u.plan !== 'free' && !u.renewal_reminder_sent) {
+        if (u && isPaidPlan(u.plan) && !u.renewal_reminder_sent) {
           const renewsAt = inv.period_end ? new Date(inv.period_end * 1000) : null;
           await updateUser(u.id, { renewal_reminder_sent: 1 });
-          sendEmail(u.email, `Your CLONYFY ${u.plan} plan renews soon`,
+          sendEmail(u.email, `Your CLONYFY ${getPlanLabel(u.plan)} plan renews soon`,
             renderEmail('renewal-reminder', {
-              SUBJECT: `Your ${u.plan} plan renews soon`,
-              NAME: u.name, PLAN: u.plan,
+              SUBJECT: `Your ${getPlanLabel(u.plan)} plan renews soon`,
+              NAME: u.name, PLAN: getPlanLabel(u.plan),
               EXPIRED_AT: renewsAt ? renewsAt.toLocaleDateString() : 'soon',
             })
           ).catch(() => {});
@@ -2822,7 +2871,7 @@ async function handleRequest(req, res) {
           // Record failed payment so it appears in billing history
           await insertPayment({
             id: randomUUID(), userId: u.id, userName: u.name, userEmail: u.email,
-            plan: u.plan, amount: (inv.amount_due || 0) / 100,
+            plan: normalizePlan(u.plan), amount: (inv.amount_due || 0) / 100,
             currency: (inv.currency || 'usd').toUpperCase(),
             method: 'stripe', txId: inv.payment_intent || inv.id,
             note: 'Payment failed', promoCode: null, discountPercent: 0,
@@ -2835,7 +2884,7 @@ async function handleRequest(req, res) {
             portalUrl = portal.url;
           } catch {}
           sendEmail(u.email, 'Payment failed — action required',
-            renderEmail('payment-failed', { SUBJECT: 'Payment failed', NAME: u.name, PLAN: u.plan, PORTAL_URL: portalUrl })
+            renderEmail('payment-failed', { SUBJECT: 'Payment failed', NAME: u.name, PLAN: getPlanLabel(u.plan), PORTAL_URL: portalUrl })
           ).catch(() => {});
           audit(u.id, u.name, 'stripe_payment_failed', `invoice=${inv.id}`, null);
         }
@@ -2877,7 +2926,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/deploy/netlify') {
     const deployUser = await getSessionUser(req);
     if (!deployUser) return json(res, { error: 'Not authenticated' }, 401);
-    if ((deployUser.plan || 'free') === 'free') return json(res, { error: 'Deploy requires a paid plan. Upgrade to deploy your clones.' }, 403);
+    if (!isPaidPlan(deployUser.plan)) return json(res, { error: 'Deploy requires a paid plan. Upgrade to deploy your clones.' }, 403);
     let body; try { body = await readJsonBody(req); } catch { return json(res, { error: 'Bad request' }, 400); }
     const { outDir, netlifyToken } = body;
     if (!netlifyToken) return json(res, { error: 'Netlify personal access token is required' }, 400);
