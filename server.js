@@ -1505,7 +1505,10 @@ async function handleRequest(req, res) {
 
       const proc = spawn(process.execPath, [CLI, ...args], {
         cwd: __dirname,
-        env: process.env,
+        env: {
+          ...process.env,
+          ...(IS_VERCEL ? { CLONYFY_SERVERLESS: '1' } : {}),
+        },
       });
       proc.stdout.on('data', (c) => {
         c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));

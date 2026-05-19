@@ -16,6 +16,7 @@ export function isServerlessRuntime(
 ): boolean {
   return env.VERCEL === '1'
     || env.VERCEL === 'true'
+    || env.CLONYFY_SERVERLESS === '1'
     || !!env.VERCEL_ENV
     || !!env.AWS_LAMBDA_FUNCTION_NAME
     || !!env.LAMBDA_TASK_ROOT

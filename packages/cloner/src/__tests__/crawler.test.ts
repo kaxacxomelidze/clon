@@ -40,6 +40,7 @@ describe('isServerlessRuntime', () => {
   it('detects Vercel runtime markers', () => {
     expect(isServerlessRuntime({ VERCEL: '1' }, '/repo')).toBe(true);
     expect(isServerlessRuntime({ VERCEL_ENV: 'production' }, '/repo')).toBe(true);
+    expect(isServerlessRuntime({ CLONYFY_SERVERLESS: '1' }, '/repo')).toBe(true);
   });
 
   it('detects Lambda runtime markers', () => {
