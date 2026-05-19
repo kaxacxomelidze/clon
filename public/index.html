@@ -45,11 +45,21 @@ input,select,textarea{font:inherit}
 .tab-btn.active{background:var(--bg3);color:var(--text);border:1px solid var(--border2)}
 
 /* ── App body ───────────────────────────────────────── */
+.ann-banner{display:flex;align-items:flex-start;gap:12px;padding:12px 20px;background:linear-gradient(135deg,rgba(91,141,239,.12),rgba(168,85,247,.12));border-bottom:1px solid rgba(91,141,239,.3);font-size:12px;color:var(--text);animation:fadeIn .3s}
+.ann-banner-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.ann-banner-body{flex:1;min-width:0}
+.ann-banner-title{font-weight:700;margin-bottom:2px}
+.ann-banner-msg{color:var(--text2);line-height:1.5;white-space:pre-wrap}
+.ann-banner-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:0 4px;flex-shrink:0}
+.ann-banner-close:hover{color:var(--text)}
 .app-body{flex:1;display:flex;overflow:hidden;min-height:0}
 
 /* ── Sidebar ────────────────────────────────────────── */
 .sidebar{width:210px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 .sb-hd{padding:14px 14px 6px;font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.12em}
+.sb-search-wrap{padding:4px 8px 6px}
+.sb-search{width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;padding:5px 8px;outline:none}
+.sb-search:focus{border-color:var(--accent);background:var(--bg4)}
 .sb-list{flex:1;overflow-y:auto;padding:4px 6px}
 .sb-item{display:flex;align-items:center;gap:9px;padding:7px 10px;cursor:pointer;border-radius:7px;margin-bottom:1px;transition:background .1s}
 .sb-item:hover{background:var(--bg3)}
@@ -139,6 +149,13 @@ input[type=number]{width:78px;text-align:center}
 .done-action-btn{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
 .done-action-btn.primary{background:var(--green);color:#000;box-shadow:0 2px 12px rgba(31,209,122,.25)}
 .done-action-btn.primary:hover{opacity:.88}
+.error-card{margin:0 32px 14px;padding:16px 20px;background:rgba(255,69,96,.05);border:1px solid rgba(255,69,96,.18);border-radius:12px;flex-shrink:0;display:none}
+.error-card.show{display:block}
+.error-card-title{font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.error-card-sub{font-size:11px;color:var(--text2);margin-bottom:12px;line-height:1.6}
+.error-card-actions{display:flex;gap:7px;flex-wrap:wrap}
+.retry-btn{display:flex;align-items:center;gap:6px;padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;background:var(--red);color:#fff;border:none;transition:opacity .15s;cursor:pointer}
+.retry-btn:hover{opacity:.85}
 .done-action-btn.secondary{background:var(--bg3);color:var(--text2);border:1px solid var(--border2)}
 .done-action-btn.secondary:hover{background:var(--bg4);color:var(--text)}
 .done-action-btn.edit-btn{background:rgba(91,141,239,.1);color:var(--blue);border:1px solid rgba(91,141,239,.25)}
@@ -483,6 +500,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   .stats-row{padding:8px 12px;gap:6px}
   .done-card{margin:0 12px 10px}
   .done-card-actions{gap:6px}
+  .error-card{margin:0 12px 10px}
   .done-action-btn{padding:5px 10px;font-size:11px}
   .editor-root{flex-direction:column}
   .ed-pages{width:100%;max-width:100%;resize:none;border-right:none;border-bottom:1px solid #1c1c1c;max-height:140px}
@@ -655,6 +673,14 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 
 #auth-screen{position:fixed;inset:0;z-index:10000;background:#06061a;display:flex;align-items:stretch;overflow:hidden;animation:authIn .3s ease}
 #auth-screen.hidden{display:none!important;animation:none}
+/* Boot state: show spinner, hide the card until session check resolves */
+.auth-card{transition:opacity .28s ease,transform .28s ease}
+#auth-screen.auth-checking .auth-card{opacity:0;pointer-events:none;transform:translateY(10px)}
+#auth-screen.auth-checking #auth-boot-spinner{display:flex}
+#auth-boot-spinner{display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;position:absolute;inset:0;pointer-events:none;z-index:2;transition:opacity .2s ease}
+#auth-screen:not(.auth-checking) #auth-boot-spinner{opacity:0}
+.auth-boot-ring{width:36px;height:36px;border:3px solid rgba(91,141,239,.15);border-top-color:#5b8def;border-radius:50%;animation:spin .7s linear infinite}
+.auth-boot-txt{font-size:12px;color:rgba(255,255,255,.2);font-weight:600;letter-spacing:.04em}
 
 /* ─── Left branding panel ──────────────────────────── */
 .auth-left{flex:0 0 46%;background:#050512;border-right:1px solid rgba(255,255,255,.05);display:flex;flex-direction:column;justify-content:center;padding:56px 52px;position:relative;overflow:hidden}
@@ -729,7 +755,8 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .auth-pw-strength{height:3px;border-radius:3px;margin-top:5px;background:rgba(255,255,255,.06);overflow:hidden}
 .auth-pw-strength-bar{height:100%;border-radius:3px;transition:width .35s,background .35s;width:0}
 .auth-pw-hint{font-size:10px;margin-top:3px;font-weight:700;letter-spacing:.02em;min-height:14px}
-.auth-form{display:grid;gap:13px;width:100%;animation:authFormIn .22s ease}
+.auth-form{display:grid;gap:13px;width:100%}
+.auth-form-anim{animation:authFormIn .22s ease}
 .auth-form-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:-1px}
 .auth-remember{display:flex;align-items:center;gap:7px;font-size:12px;color:rgba(255,255,255,.27);cursor:pointer;user-select:none;font-weight:500}
 .auth-remember input[type=checkbox]{width:14px;height:14px;accent-color:#5b8def;cursor:pointer;flex-shrink:0}
@@ -886,12 +913,86 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .hist-badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:800}
 .hist-badge.done{background:rgba(31,209,122,.08);color:#1fd17a;border:1px solid rgba(31,209,122,.15)}
 .hist-empty{padding:28px 0;text-align:center;color:var(--text3);font-size:12px}
+
+/* ── Manual payment modal ───────────────────────────── */
+#mpay-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px)}
+.mpay-card{background:#090909;border:1px solid #1e1e1e;border-radius:20px;width:min(480px,96vw);max-height:90vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.9);display:flex;flex-direction:column}
+.mpay-card::before{content:'';height:3px;background:linear-gradient(90deg,#5b8def,#a855f7,#1fd17a);border-radius:20px 20px 0 0;flex-shrink:0}
+.mpay-hd{padding:20px 24px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.mpay-title{font-size:18px;font-weight:800;letter-spacing:-.3px;margin-bottom:3px}
+.mpay-sub{font-size:12px;color:var(--text2)}
+.mpay-close{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid #1e1e1e;color:var(--text2);font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.mpay-close:hover{background:rgba(255,255,255,.08);color:var(--text)}
+/* Steps */
+.mpay-steps{display:flex;align-items:center;padding:16px 24px 0;gap:0}
+.mpay-step{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--text3);transition:color .2s}
+.mpay-step.active{color:var(--blue)}
+.mpay-step.done{color:var(--green)}
+.mpay-step-num{width:20px;height:20px;border-radius:50%;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0;transition:all .2s}
+.mpay-step.active .mpay-step-num{background:var(--blue);border-color:var(--blue);color:#fff}
+.mpay-step.done .mpay-step-num{background:var(--green);border-color:var(--green);color:#fff}
+.mpay-step-line{flex:1;height:1px;background:#1e1e1e;margin:0 8px;transition:background .2s}
+.mpay-step-line.done{background:var(--green)}
+/* Body */
+.mpay-body{padding:20px 24px 24px;flex:1}
+/* Method grid */
+.mpay-methods{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px}
+.mpay-method-btn{background:#0d0d0d;border:1.5px solid #1e1e1e;border-radius:12px;padding:14px 16px;text-align:left;transition:all .2s;cursor:pointer;display:flex;align-items:center;gap:12px}
+.mpay-method-btn:hover{border-color:#2e2e2e;background:#111}
+.mpay-method-btn.selected{border-color:var(--selected-color,var(--blue));background:var(--selected-bg,rgba(91,141,239,.06));box-shadow:0 0 0 1px var(--selected-color,var(--blue)) inset}
+.mpay-method-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;font-weight:900}
+.mpay-method-name{font-size:13px;font-weight:700;line-height:1.3}
+.mpay-method-tag{font-size:10px;color:var(--text3);margin-top:1px}
+/* Address block */
+.mpay-amount-box{background:linear-gradient(135deg,rgba(91,141,239,.08),rgba(168,85,247,.08));border:1px solid rgba(91,141,239,.2);border-radius:12px;padding:16px 20px;text-align:center;margin-bottom:16px}
+.mpay-amount-label{font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.mpay-amount-val{font-size:32px;font-weight:900;letter-spacing:-.5px}
+.mpay-address-label{font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.mpay-address-box{display:flex;gap:6px;align-items:stretch;margin-bottom:10px}
+.mpay-address-val{flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:9px;padding:10px 14px;font-size:11px;color:var(--text2);font-family:monospace;word-break:break-all;line-height:1.5;user-select:all}
+.mpay-copy-btn{padding:0 14px;background:rgba(91,141,239,.1);border:1px solid rgba(91,141,239,.2);border-radius:9px;color:var(--blue);font-size:11px;font-weight:700;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.mpay-copy-btn:hover{background:rgba(91,141,239,.18)}
+.mpay-copy-btn.copied{background:rgba(31,209,122,.1);border-color:rgba(31,209,122,.2);color:var(--green)}
+.mpay-warning{font-size:11px;color:var(--yellow);background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.15);border-radius:8px;padding:9px 13px;margin-bottom:16px;display:flex;align-items:center;gap:7px}
+/* PayPal direct button */
+.mpay-paypal-link{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:#009cde;border-radius:10px;color:#fff;font-size:13px;font-weight:700;text-decoration:none;margin-bottom:12px;transition:opacity .15s}
+.mpay-paypal-link:hover{opacity:.88;text-decoration:none;color:#fff}
+/* Confirm form */
+.mpay-field{margin-bottom:12px}
+.mpay-field label{display:block;font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}
+.mpay-input{width:100%;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:9px;color:var(--text);font-size:13px;padding:10px 14px;outline:none;transition:border .2s;font-family:inherit}
+.mpay-input:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(91,141,239,.1)}
+.mpay-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%233a3a3a' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.mpay-textarea{resize:vertical;min-height:64px}
+/* Footer row */
+.mpay-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px}
+.mpay-back{padding:9px 16px;background:transparent;border:1px solid #1e1e1e;border-radius:9px;color:var(--text2);font-size:12px;font-weight:700;transition:all .15s}
+.mpay-back:hover{border-color:#2e2e2e;color:var(--text)}
+.mpay-next{padding:10px 22px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;transition:opacity .15s;flex:1}
+.mpay-next:hover{opacity:.88}
+.mpay-next:disabled{opacity:.4;cursor:not-allowed}
+.mpay-submit{padding:10px 22px;background:linear-gradient(135deg,#1fd17a,#5b8def);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;transition:opacity .15s;flex:1;display:flex;align-items:center;justify-content:center;gap:8px}
+.mpay-submit:hover{opacity:.88}
+.mpay-submit:disabled{opacity:.4;cursor:not-allowed}
+.mpay-submit .mpay-spinner{display:none;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.mpay-submit.loading .mpay-submit-label{display:none}
+.mpay-submit.loading .mpay-spinner{display:block}
+.mpay-secure{font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px}
+/* Error */
+.mpay-err{margin-top:10px;font-size:12px;color:var(--red);background:rgba(255,69,96,.06);border:1px solid rgba(255,69,96,.15);border-radius:8px;padding:10px 12px;display:none}
+/* Empty / no-methods state */
+.mpay-empty{text-align:center;padding:32px 20px}
+.mpay-empty-icon{width:56px;height:56px;border-radius:16px;background:#111;border:1px solid #1e1e1e;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px}
+.mpay-empty-title{font-size:16px;font-weight:800;margin-bottom:6px}
+.mpay-empty-sub{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px}
+.mpay-contact-btn{padding:10px 24px;background:rgba(91,141,239,.1);border:1px solid rgba(91,141,239,.2);border-radius:9px;color:var(--blue);font-size:13px;font-weight:700;transition:all .15s}
+.mpay-contact-btn:hover{background:rgba(91,141,239,.18)}
 </style>
 </head>
 <body>
 
 <!-- Auth screen -->
-<div id="auth-screen">
+<div id="auth-screen" class="auth-checking">
   <!-- Left: branding panel -->
   <div class="auth-left">
     <div class="auth-orb auth-orb-1"></div>
@@ -952,6 +1053,10 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   </div>
   <!-- Right: form panel -->
   <div class="auth-right">
+    <div id="auth-boot-spinner">
+      <div class="auth-boot-ring"></div>
+      <div class="auth-boot-txt">Signing you in…</div>
+    </div>
     <div class="auth-card">
       <!-- Mobile-only logo -->
       <div class="auth-card-logo">
@@ -968,7 +1073,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       </div>
       <div id="auth-err" class="auth-err"></div>
       <!-- Login form -->
-      <form class="auth-form" id="auth-login-form" onsubmit="submitLogin(event)">
+      <form class="auth-form auth-form-anim" id="auth-login-form" onsubmit="submitLogin(event)">
         <div class="auth-field">
           <label>Email address</label>
           <div class="auth-input-wrap">
@@ -1307,7 +1412,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <div class="profile-section">
         <div class="profile-section-title">Current Plan</div>
         <div class="plan-row">
-          <span class="plan-pill" id="profilePlanPill">Free</span>
+          <span class="plan-pill" id="profilePlanPill">Trial</span>
           <span class="plan-renew" id="profileRenew">No renewal required</span>
           <button class="profile-upgrade-btn" onclick="closeProfile();openPricing()">✦ Upgrade</button>
         </div>
@@ -1334,11 +1439,16 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 </div>
 
 
+<div id="ann-banners"></div>
+
 <div class="app-body">
 
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sb-hd">History</div>
+    <div class="sb-search-wrap">
+      <input class="sb-search" id="sbSearch" type="text" placeholder="Filter clones…" oninput="renderSidebar()" autocomplete="off">
+    </div>
     <div class="sb-list" id="sidebarList"><div class="sb-empty">No clones yet</div></div>
     <div class="sb-foot">
       <div class="sb-foot-btn" onclick="openOutputFolder()">
@@ -1440,6 +1550,20 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
             </button>
           </div>
           <div class="health-card" id="healthCard"></div>
+        </div>
+        <div class="error-card" id="errorCard">
+          <div class="error-card-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Clone failed
+          </div>
+          <div class="error-card-sub">Check the log output above for details. Common causes: the site blocked the crawler, a network timeout, or an invalid URL.</div>
+          <div class="error-card-actions">
+            <button class="retry-btn" onclick="retryClone()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+              Retry Clone
+            </button>
+            <button class="done-action-btn secondary" onclick="retryCloneIgnoreRobots()">Retry (ignore robots.txt)</button>
+          </div>
         </div>
         <div class="log-area">
           <div class="log-hd">
@@ -1975,24 +2099,30 @@ function switchAuthTab(tab) {
   if (ind) ind.style.left = tab === 'login' ? '3px' : 'calc(50%)';
   const loginForm = document.getElementById('auth-login-form');
   const regForm = document.getElementById('auth-register-form');
-  loginForm.style.display = tab === 'login' ? 'grid' : 'none';
-  regForm.style.display = tab === 'register' ? 'grid' : 'none';
-  const activeForm = tab === 'login' ? loginForm : regForm;
-  activeForm.style.animation = 'none';
-  activeForm.offsetHeight;
-  activeForm.style.animation = '';
   document.getElementById('auth-err').className = 'auth-err';
   document.getElementById('auth-form-title').textContent = tab === 'login' ? 'Welcome back' : 'Create account';
-  document.getElementById('auth-form-sub').textContent = tab === 'login' ? 'Sign in to your workspace' : 'Start cloning websites for free';
+  document.getElementById('auth-form-sub').textContent = tab === 'login' ? 'Sign in to your workspace' : 'Try 3 clones free. Upgrade to unlock everything.';
   if (tab === 'register') { updatePwStrength(''); document.getElementById('auth-reg-pass').value = ''; }
+  // Swap forms without a forced synchronous layout
+  loginForm.style.display = 'none';
+  regForm.style.display = 'none';
+  const activeForm = tab === 'login' ? loginForm : regForm;
+  activeForm.style.display = 'grid';
+  activeForm.classList.remove('auth-form-anim');
+  requestAnimationFrame(() => activeForm.classList.add('auth-form-anim'));
+  // Auto-focus first field
+  requestAnimationFrame(() => {
+    const first = activeForm.querySelector('input');
+    if (first) first.focus();
+  });
 }
 
 function showAuthError(msg) {
   const el = document.getElementById('auth-err');
   el.textContent = msg;
-  el.className = 'auth-err';
-  el.offsetHeight;
-  el.className = 'auth-err show';
+  el.className = 'auth-err'; // hide → removes animation
+  // Use rAF so the browser commits the hidden frame before re-showing with animation
+  requestAnimationFrame(() => { el.className = 'auth-err show'; });
 }
 
 function setAuthLoading(btnId, loading) {
@@ -2005,12 +2135,13 @@ async function submitLogin(e) {
   e.preventDefault();
   const email = document.getElementById('auth-login-email').value.trim();
   const password = document.getElementById('auth-login-pass').value;
+  const remember = document.getElementById('auth-remember-me')?.checked !== false;
   setAuthLoading('auth-login-btn', true);
   document.getElementById('auth-err').className = 'auth-err';
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, remember }),
     });
     const data = await res.json();
     if (data.error) { showAuthError(data.error); return; }
@@ -2056,7 +2187,7 @@ function onAuthSuccess(user) {
   document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
   requestNotificationPermission();
   loadHistory();
-  loadUsageMeter();
+  loadAnnouncements();
   if (!localStorage.getItem('wc_onboarded')) showOnboarding();
 }
 
@@ -2291,67 +2422,234 @@ async function handleBuy(plan) {
   }
 }
 
+// ── Manual payment wizard ─────────────────────────────
+let _mpayState = { plan: null, step: 1, selectedMethod: null };
+
+const MPAY_METHODS = [
+  { key: 'crypto_btc',  label: 'Bitcoin',    tag: 'BTC',     icon: '₿',  color: '#f7931a', bg: 'rgba(247,147,26,.08)',  border: 'rgba(247,147,26,.35)',  settingKey: 'btc',         warning: 'Send BTC only to this address. Other coins will be lost.' },
+  { key: 'crypto_eth',  label: 'Ethereum',   tag: 'ETH',     icon: 'Ξ',  color: '#627eea', bg: 'rgba(98,126,234,.08)',  border: 'rgba(98,126,234,.35)',  settingKey: 'eth',         warning: 'Send ETH only. Do not send ERC-20 tokens to this address.' },
+  { key: 'crypto_usdt', label: 'USDT',       tag: 'TRC-20',  icon: '₮',  color: '#26a17b', bg: 'rgba(38,161,123,.08)',  border: 'rgba(38,161,123,.35)',  settingKey: 'usdt_trc20',  warning: 'Send USDT on the TRON (TRC-20) network only.' },
+  { key: 'paypal',      label: 'PayPal',     tag: 'Instant', icon: 'P',  color: '#009cde', bg: 'rgba(0,156,222,.08)',   border: 'rgba(0,156,222,.35)',   settingKey: 'paypal_email', warning: null },
+];
+
 function openManualPaymentModal(plan) {
-  // Build payment modal for crypto/PayPal options
-  const existing = document.getElementById('manual-pay-modal');
+  const existing = document.getElementById('mpay-overlay');
   if (existing) existing.remove();
-  const mo = document.createElement('div');
-  mo.id = 'manual-pay-modal';
-  mo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)';
+
   const prices = PLAN_PRICES[plan] || PLAN_PRICES.starter;
   const price = pricingInterval === 'annual' ? prices.annual : prices.monthly;
   const period = pricingInterval === 'annual' ? '/yr' : '/mo';
-  let methods = '';
-  if (paySettings.btc)         methods += `<div style="background:rgba(247,147,26,.06);border:1px solid rgba(247,147,26,.2);border-radius:10px;padding:14px;"><div style="font-size:11px;font-weight:800;color:#f7931a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Bitcoin</div><div style="font-size:12px;color:rgba(255,255,255,.5);word-break:break-all;margin-bottom:8px">${paySettings.btc}</div><button onclick="navigator.clipboard.writeText('${paySettings.btc}').then(()=>toast('Copied!','ok'))" style="font-size:11px;padding:4px 10px;border-radius:5px;background:rgba(247,147,26,.15);border:1px solid rgba(247,147,26,.25);color:#f7931a;cursor:pointer;font-family:inherit">Copy address</button></div>`;
-  if (paySettings.eth)         methods += `<div style="background:rgba(98,126,234,.06);border:1px solid rgba(98,126,234,.2);border-radius:10px;padding:14px;"><div style="font-size:11px;font-weight:800;color:#627eea;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Ethereum</div><div style="font-size:12px;color:rgba(255,255,255,.5);word-break:break-all;margin-bottom:8px">${paySettings.eth}</div><button onclick="navigator.clipboard.writeText('${paySettings.eth}').then(()=>toast('Copied!','ok'))" style="font-size:11px;padding:4px 10px;border-radius:5px;background:rgba(98,126,234,.15);border:1px solid rgba(98,126,234,.25);color:#627eea;cursor:pointer;font-family:inherit">Copy address</button></div>`;
-  if (paySettings.usdt_trc20)  methods += `<div style="background:rgba(38,161,123,.06);border:1px solid rgba(38,161,123,.2);border-radius:10px;padding:14px;"><div style="font-size:11px;font-weight:800;color:#26a17b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">USDT (TRC-20)</div><div style="font-size:12px;color:rgba(255,255,255,.5);word-break:break-all;margin-bottom:8px">${paySettings.usdt_trc20}</div><button onclick="navigator.clipboard.writeText('${paySettings.usdt_trc20}').then(()=>toast('Copied!','ok'))" style="font-size:11px;padding:4px 10px;border-radius:5px;background:rgba(38,161,123,.15);border:1px solid rgba(38,161,123,.25);color:#26a17b;cursor:pointer;font-family:inherit">Copy address</button></div>`;
-  if (paySettings.paypal_email) methods += `<div style="background:rgba(0,112,243,.06);border:1px solid rgba(0,112,243,.2);border-radius:10px;padding:14px;"><div style="font-size:11px;font-weight:800;color:#009cde;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">PayPal</div><div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px">${paySettings.paypal_email}</div>${paySettings.paypal_me?`<a href="https://paypal.me/${paySettings.paypal_me}/${price}" target="_blank" style="display:inline-block;font-size:11px;padding:4px 10px;border-radius:5px;background:rgba(0,112,243,.15);border:1px solid rgba(0,112,243,.25);color:#009cde;text-decoration:none">Pay $${price} on PayPal.me</a>`:''}`;
-  if (!methods) methods = '<div style="color:rgba(255,255,255,.3);font-size:13px;text-align:center;padding:20px">No payment methods configured yet. Contact support.</div>';
-  mo.innerHTML = `<div style="background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:32px;width:min(500px,94vw);max-height:85vh;overflow-y:auto;position:relative">
-    <button onclick="this.closest('#manual-pay-modal').remove()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.4);width:28px;height:28px;border-radius:6px;font-size:14px;cursor:pointer">✕</button>
-    <div style="font-size:18px;font-weight:800;margin-bottom:4px">Complete your order</div>
-    <div style="font-size:13px;color:rgba(255,255,255,.3);margin-bottom:20px">${({ starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Pro / Unlimited' })[plan] || (plan.charAt(0).toUpperCase()+plan.slice(1))} plan · $${price}${period}</div>
-    <div style="display:grid;gap:10px;margin-bottom:20px">${methods}</div>
-    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">After paying</div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <select id="manual-pay-method" style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;color:#e8e8ff;font-size:13px;padding:10px 12px;outline:none;font-family:inherit">
-        ${paySettings.btc ? '<option value="crypto_btc">Bitcoin (BTC)</option>' : ''}
-        ${paySettings.eth ? '<option value="crypto_eth">Ethereum (ETH)</option>' : ''}
-        ${paySettings.usdt_trc20 ? '<option value="crypto_usdt">USDT TRC-20</option>' : ''}
-        ${paySettings.paypal_email ? '<option value="paypal">PayPal</option>' : ''}
-      </select>
+  const planLabel = ({ starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[plan] || plan;
+  const availableMethods = MPAY_METHODS.filter(m => paySettings[m.settingKey]);
+
+  _mpayState = { plan, price, period, planLabel, step: 1, selectedMethod: availableMethods[0] || null };
+
+  const ov = document.createElement('div');
+  ov.id = 'mpay-overlay';
+  ov.className = 'mpay-overlay';
+  ov.addEventListener('click', e => { if (e.target === ov) closeMpay(); });
+
+  ov.innerHTML = `
+  <div class="mpay-card" id="mpay-card">
+    <div class="mpay-hd">
+      <div>
+        <div class="mpay-title">Complete your order</div>
+        <div class="mpay-sub" id="mpay-sub">${escHtml(planLabel)} plan · $${price}${period}</div>
+      </div>
+      <button class="mpay-close" onclick="closeMpay()" aria-label="Close">&times;</button>
     </div>
-    <input id="manual-pay-txid" placeholder="Transaction ID / hash / PayPal reference" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;color:#e8e8ff;font-size:13px;padding:10px 12px;outline:none;font-family:inherit;margin-bottom:8px">
-    <textarea id="manual-pay-note" placeholder="Any notes for the admin (optional)" rows="2" style="width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;color:#e8e8ff;font-size:13px;padding:10px 12px;outline:none;font-family:inherit;resize:vertical;margin-bottom:12px"></textarea>
-    <button onclick="submitManualPayment('${plan}')" style="width:100%;padding:13px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Submit payment for review</button>
-    <div id="manual-pay-err" style="display:none;margin-top:10px;font-size:12px;color:#e05070;background:rgba(255,69,96,.06);border:1px solid rgba(255,69,96,.18);border-radius:7px;padding:10px"></div>
+    ${availableMethods.length > 0 ? `
+    <div class="mpay-steps" id="mpay-steps">
+      <div class="mpay-step active" id="mpay-s1"><span class="mpay-step-num">1</span> Method</div>
+      <div class="mpay-step-line" id="mpay-line1"></div>
+      <div class="mpay-step" id="mpay-s2"><span class="mpay-step-num">2</span> Send</div>
+      <div class="mpay-step-line" id="mpay-line2"></div>
+      <div class="mpay-step" id="mpay-s3"><span class="mpay-step-num">3</span> Confirm</div>
+    </div>` : ''}
+    <div class="mpay-body" id="mpay-body"></div>
   </div>`;
-  document.body.appendChild(mo);
-  mo.addEventListener('click', e => { if (e.target === mo) mo.remove(); });
+
+  document.body.appendChild(ov);
+  mpayRenderStep();
+
+  document.addEventListener('keydown', mpayEscHandler);
 }
 
-async function submitManualPayment(plan) {
-  const txId = document.getElementById('manual-pay-txid').value.trim();
-  const note = document.getElementById('manual-pay-note').value.trim();
-  const errEl = document.getElementById('manual-pay-err');
-  errEl.style.display = 'none';
-  if (!txId) { errEl.style.display = 'block'; errEl.textContent = 'Transaction ID is required'; return; }
-  const btn = document.querySelector('#manual-pay-modal button[onclick*="submitManualPayment"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+function mpayEscHandler(e) { if (e.key === 'Escape') closeMpay(); }
+
+function closeMpay() {
+  const el = document.getElementById('mpay-overlay');
+  if (el) el.remove();
+  document.removeEventListener('keydown', mpayEscHandler);
+}
+
+function mpaySetStep(n) {
+  _mpayState.step = n;
+  [1,2,3].forEach(i => {
+    const s = document.getElementById('mpay-s'+i);
+    const l = document.getElementById('mpay-line'+i);
+    if (!s) return;
+    s.className = 'mpay-step' + (i < n ? ' done' : i === n ? ' active' : '');
+    if (l) l.className = 'mpay-step-line' + (i < n ? ' done' : '');
+  });
+  mpayRenderStep();
+}
+
+function mpayRenderStep() {
+  const body = document.getElementById('mpay-body');
+  if (!body) return;
+  const { plan, price, period, step } = _mpayState;
+  const availableMethods = MPAY_METHODS.filter(m => paySettings[m.settingKey]);
+
+  if (availableMethods.length === 0) {
+    body.innerHTML = `
+    <div class="mpay-empty">
+      <div class="mpay-empty-icon">💳</div>
+      <div class="mpay-empty-title">No payment methods available</div>
+      <div class="mpay-empty-sub">Payment methods haven't been configured yet.<br>Please contact support to complete your purchase.</div>
+      <button class="mpay-contact-btn" onclick="closeMpay();window.open('mailto:support@clonyfy.com','_blank')">Contact Support</button>
+    </div>`;
+    return;
+  }
+
+  if (step === 1) {
+    const cards = availableMethods.map(m => {
+      const isSel = _mpayState.selectedMethod?.key === m.key;
+      return `<button class="mpay-method-btn${isSel ? ' selected' : ''}" onclick="mpaySelectMethod('${m.key}')"
+        style="${isSel ? `--selected-color:${m.color};--selected-bg:${m.bg}` : ''}">
+        <div class="mpay-method-icon" style="background:${m.bg};border:1px solid ${m.border};color:${m.color}">${m.icon}</div>
+        <div>
+          <div class="mpay-method-name">${m.label}</div>
+          <div class="mpay-method-tag">${m.tag}</div>
+        </div>
+      </button>`;
+    }).join('');
+    body.innerHTML = `
+    <div class="mpay-methods">${cards}</div>
+    <div class="mpay-footer">
+      <div class="mpay-secure">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Encrypted · No card data stored
+      </div>
+      <button class="mpay-next" onclick="mpaySetStep(2)">Continue →</button>
+    </div>`;
+    return;
+  }
+
+  if (step === 2) {
+    const m = _mpayState.selectedMethod;
+    const address = paySettings[m.settingKey] || '';
+    const isPayPal = m.key === 'paypal';
+    const warnIcon = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+    body.innerHTML = `
+    <div class="mpay-amount-box">
+      <div class="mpay-amount-label">Amount due</div>
+      <div class="mpay-amount-val">$${price}<span style="font-size:16px;font-weight:600;color:var(--text2)">${period}</span></div>
+    </div>
+    <div class="mpay-address-label">${isPayPal ? 'Send to PayPal address' : `Send ${escHtml(m.tag)} to this address`}</div>
+    <div class="mpay-address-box">
+      <div class="mpay-address-val" id="mpay-addr-display"></div>
+      <button class="mpay-copy-btn" id="mpay-copy-btn" onclick="mpayyCopy()">Copy</button>
+    </div>
+    ${isPayPal && paySettings.paypal_me ? `
+      <a class="mpay-paypal-link" href="https://paypal.me/${encodeURIComponent(paySettings.paypal_me)}/${price}" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Pay $${price} on PayPal.me
+      </a>` : ''}
+    <div class="mpay-warning">${warnIcon} ${isPayPal ? 'Add your email in the PayPal notes so we can identify your payment.' : escHtml(m.warning || '')}</div>
+    <div class="mpay-footer">
+      <button class="mpay-back" onclick="mpaySetStep(1)">← Back</button>
+      <button class="mpay-next" onclick="mpaySetStep(3)">I've sent payment →</button>
+    </div>`;
+    // Set address via textContent to avoid XSS
+    document.getElementById('mpay-addr-display').textContent = address;
+    return;
+  }
+
+  if (step === 3) {
+    const methodOptions = availableMethods.map(m =>
+      `<option value="${m.key}" ${_mpayState.selectedMethod?.key === m.key ? 'selected' : ''}>${m.label} (${m.tag})</option>`
+    ).join('');
+    body.innerHTML = `
+    <div class="mpay-field">
+      <label>Payment method used</label>
+      <select class="mpay-input mpay-select" id="mpay-confirm-method">${methodOptions}</select>
+    </div>
+    <div class="mpay-field">
+      <label>Transaction ID / TX hash / reference</label>
+      <input class="mpay-input" id="mpay-txid" placeholder="Paste your transaction hash or PayPal reference">
+    </div>
+    <div class="mpay-field">
+      <label>Notes <span style="color:var(--text3);font-weight:500;text-transform:none;letter-spacing:0">(optional)</span></label>
+      <textarea class="mpay-input mpay-textarea" id="mpay-note" placeholder="Anything else the admin should know…"></textarea>
+    </div>
+    <div class="mpay-err" id="mpay-err"></div>
+    <div class="mpay-footer">
+      <button class="mpay-back" onclick="mpaySetStep(2)">← Back</button>
+      <button class="mpay-submit" id="mpay-submit-btn" onclick="submitManualPayment()">
+        <span class="mpay-submit-label">Submit payment ✓</span>
+        <span class="mpay-spinner"></span>
+      </button>
+    </div>
+    <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--text3)">
+      🔒 Payments reviewed within 24 hours · Access granted immediately on approval
+    </div>`;
+    return;
+  }
+}
+
+function mpaySelectMethod(key) {
+  _mpayState.selectedMethod = MPAY_METHODS.find(m => m.key === key) || null;
+  mpayRenderStep();
+}
+
+function mpayyCopy() {
+  const m = _mpayState.selectedMethod;
+  const text = m ? (paySettings[m.settingKey] || '') : '';
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('mpay-copy-btn');
+    if (!btn) return;
+    btn.textContent = '✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => toast('Copy failed', 'err'));
+}
+
+async function submitManualPayment() {
+  const txId = (document.getElementById('mpay-txid')?.value || '').trim();
+  const note = (document.getElementById('mpay-note')?.value || '').trim();
+  const method = document.getElementById('mpay-confirm-method')?.value || _mpayState.selectedMethod?.key || 'crypto_btc';
+  const errEl = document.getElementById('mpay-err');
+  if (errEl) errEl.style.display = 'none';
+
+  if (!txId) {
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Paste your transaction ID or reference before submitting.'; }
+    document.getElementById('mpay-txid')?.focus();
+    return;
+  }
+
+  const btn = document.getElementById('mpay-submit-btn');
+  if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+
   try {
     const promoCode = document.getElementById('pricing-promo-input')?.value.trim() || undefined;
     const r = await apiFetch('/api/payments/submit', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan, method: document.getElementById('manual-pay-method')?.value || 'crypto_btc', txId, note, promoCode, interval: pricingInterval }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: _mpayState.plan, method, txId, note, promoCode, interval: pricingInterval }),
     });
     const data = await r.json();
-    if (data.error) { errEl.style.display = 'block'; errEl.textContent = data.error; return; }
-    document.getElementById('manual-pay-modal').remove();
-    toast('Payment submitted! Admin will review within 24h.', 'ok');
+    if (data.error) {
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = data.error; }
+      return;
+    }
+    closeMpay();
+    toast('Payment submitted — admin will review within 24 hours.', 'ok');
   } catch(e) {
-    errEl.style.display = 'block'; errEl.textContent = 'Error: ' + e.message;
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Failed to submit: ' + e.message; }
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Submit payment for review'; }
+    if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
   }
 }
 
@@ -2373,7 +2671,7 @@ async function openProfile() {
 
   const plan = (currentUser.plan || 'free').toLowerCase();
   const pill = document.getElementById('profilePlanPill');
-  const planLabels = { free:'Free', starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
+  const planLabels = { free:'Trial', starter:'Starter', pro:'Pro', enterprise:'Enterprise' };
   pill.textContent = planLabels[plan] || plan;
   pill.className = 'plan-pill ' + plan;
 
@@ -2386,7 +2684,7 @@ async function openProfile() {
     renewEl.className = 'plan-renew' + (daysLeft <= 7 ? ' soon' : '');
     upgradeBtn.style.display = (plan === 'unlimited' || plan === 'enterprise') ? 'none' : '';
   } else {
-    renewEl.textContent = plan === 'free' ? 'No renewal required' : '';
+    renewEl.textContent = plan === 'free' ? '3 clones/mo · Preview only' : '';
     renewEl.className = 'plan-renew';
     upgradeBtn.style.display = plan === 'free' ? '' : 'none';
   }
@@ -2588,6 +2886,13 @@ function updateFontPickerFromSelection() {
 }
 
 async function checkExistingSession() {
+  const authScreen = document.getElementById('auth-screen');
+  const revealForm = () => {
+    authScreen.classList.remove('auth-checking');
+    // Small delay so the CSS transition has a starting frame to transition from
+    setTimeout(() => document.getElementById('auth-login-email')?.focus(), 300);
+  };
+
   // Handle OAuth callback token from Google sign-in redirect
   const urlParams = new URLSearchParams(window.location.search);
   const oauthToken = urlParams.get('oauth_token');
@@ -2598,18 +2903,20 @@ async function checkExistingSession() {
   }
   if (oauthError) {
     window.history.replaceState({}, '', window.location.pathname);
+    revealForm();
     showAuthError(oauthError === 'cancelled' ? 'Sign-in cancelled.' : oauthError === 'blocked' ? 'Account suspended.' : 'Google sign-in failed. Please try again.');
     return false;
   }
 
   const token = oauthToken || localStorage.getItem('wc_auth_token');
-  if (!token) return false;
+  if (!token) { revealForm(); return false; }
   try {
     const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token } });
-    if (!res.ok) { localStorage.removeItem('wc_auth_token'); return false; }
+    if (!res.ok) { localStorage.removeItem('wc_auth_token'); revealForm(); return false; }
     const data = await res.json();
     if (data.user) { onAuthSuccess(data.user); return true; }
   } catch {}
+  revealForm();
   return false;
 }
 let activeJobId = null;
@@ -2756,16 +3063,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') startClone(); });
   try { renderProfileSelect(); } catch {}
   try { initFontPicker(); } catch {}
-  // Load payment settings (Google OAuth, Stripe, crypto addresses)
-  try {
-    const r = await fetch('/api/payments/settings');
-    const s = await r.json();
-    paySettings = s;
-    if (s.google_oauth_enabled) {
-      document.getElementById('google-oauth-row').style.display = 'flex';
-    }
-  } catch {}
-  await checkExistingSession();
+  // Load payment settings and session check in parallel — they are independent
+  await Promise.all([
+    fetch('/api/payments/settings').then(r => r.json()).then(s => {
+      paySettings = s;
+      if (s.google_oauth_enabled) {
+        document.getElementById('google-oauth-row').style.display = 'flex';
+      }
+    }).catch(() => {}),
+    checkExistingSession(),
+  ]);
 });
 
 async function loadHistory() {
@@ -2797,27 +3104,57 @@ async function loadHistory() {
       });
     allJobs = [...(jobs || []), ...outputJobs];
     renderSidebar();
+    updateUsageMeter();
     if (allJobs.length > 0) showJob(allJobs[0]);
   } catch {}
 }
 
-async function loadUsageMeter() {
+const _PLAN_CLONE_LIMITS = { free: 3, starter: 15, popular: 50, growth: 100, unlimited: null, pro: null, enterprise: null };
+
+function updateUsageMeter() {
   if (!currentUser) return;
+  const plan = (currentUser.plan || 'free').toLowerCase();
+  const limitThisMonth = _PLAN_CLONE_LIMITS[plan] ?? 3;
+  const meter = document.getElementById('usageMeter');
+  const fill = document.getElementById('usageBarFill');
+  const text = document.getElementById('usageText');
+  if (limitThisMonth === null) { meter.style.display = 'none'; return; }
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const clonesThisMonth = allJobs.filter(j => j.startedAt && new Date(j.startedAt) >= monthStart).length;
+  meter.style.display = 'flex';
+  const pct = Math.min(100, Math.round(clonesThisMonth / limitThisMonth * 100));
+  fill.style.width = pct + '%';
+  fill.style.background = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--logo-grad)';
+  text.textContent = `${clonesThisMonth}/${limitThisMonth} clones this month`;
+}
+
+// ── Announcements ─────────────────────────────────────────────────────────────
+async function loadAnnouncements() {
   try {
-    const res = await apiFetch('/api/user/dashboard');
-    const data = await res.json();
-    if (!data.usage) return;
-    const { clonesThisMonth, limitThisMonth } = data.usage;
-    const meter = document.getElementById('usageMeter');
-    const fill = document.getElementById('usageBarFill');
-    const text = document.getElementById('usageText');
-    if (limitThisMonth === null) { meter.style.display = 'none'; return; }
-    meter.style.display = 'flex';
-    const pct = Math.min(100, Math.round(clonesThisMonth / limitThisMonth * 100));
-    fill.style.width = pct + '%';
-    fill.style.background = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--logo-grad)';
-    text.textContent = `${clonesThisMonth}/${limitThisMonth} clones this month`;
+    const res = await fetch('/api/announcements');
+    if (!res.ok) return;
+    const items = await res.json();
+    const dismissed = JSON.parse(localStorage.getItem('wc_ann_dismissed') || '[]');
+    const unseen = items.filter(a => !dismissed.includes(a.id));
+    const container = document.getElementById('ann-banners');
+    if (!container || !unseen.length) return;
+    container.innerHTML = unseen.map(a => `
+      <div class="ann-banner" id="ann-${escHtml(a.id)}">
+        <div class="ann-banner-icon">📣</div>
+        <div class="ann-banner-body">
+          <div class="ann-banner-title">${escHtml(a.title)}</div>
+          <div class="ann-banner-msg">${escHtml(a.body)}</div>
+        </div>
+        <button class="ann-banner-close" onclick="dismissAnnouncement('${escHtml(a.id)}')" title="Dismiss">×</button>
+      </div>`).join('');
   } catch {}
+}
+
+function dismissAnnouncement(id) {
+  const el = document.getElementById('ann-' + id);
+  if (el) el.remove();
+  const dismissed = JSON.parse(localStorage.getItem('wc_ann_dismissed') || '[]');
+  if (!dismissed.includes(id)) { dismissed.push(id); localStorage.setItem('wc_ann_dismissed', JSON.stringify(dismissed)); }
 }
 
 // ── Clone ─────────────────────────────────────────────────────────────────────
@@ -2859,7 +3196,7 @@ async function startClone() {
     renderSidebar();
     showJob(job);
     document.getElementById('urlInput').value = '';
-    loadUsageMeter();
+    updateUsageMeter();
   } catch(e) {
     toast('Failed to start: ' + e.message, 'err');
   } finally {
@@ -2867,6 +3204,36 @@ async function startClone() {
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Clone`;
   }
 }
+
+// ── Retry clone ───────────────────────────────────────────────────────────────
+async function _submitRetry(ignoreRobots) {
+  const job = allJobs.find(j => j.id === activeJobId);
+  if (!job) { toast('No clone selected', 'err'); return; }
+  const btn = document.querySelector('.retry-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+  try {
+    const res = await apiFetch('/api/clone', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: job.url, maxPages: job.maxPages || document.getElementById('maxPages').value, depth: job.depth || document.getElementById('depth').value, ignoreRobots: ignoreRobots || false }),
+    });
+    const newJob = await res.json();
+    if (newJob.error) {
+      if (res.status === 429) openPricing();
+      toast('Error: ' + newJob.error, 'err');
+      return;
+    }
+    allJobs.unshift(newJob);
+    renderSidebar();
+    showJob(newJob);
+    updateUsageMeter();
+  } catch(e) {
+    toast('Failed to retry: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg> Retry Clone'; }
+  }
+}
+function retryClone() { _submitRetry(false); }
+function retryCloneIgnoreRobots() { _submitRetry(true); }
 
 // ── Job view ──────────────────────────────────────────────────────────────────
 function showJob(job) {
@@ -2880,6 +3247,7 @@ function showJob(job) {
   v.style.overflow = 'hidden';
   document.getElementById('logBody').innerHTML = '';
   document.getElementById('doneCard').className = 'done-card';
+  const _ec = document.getElementById('errorCard'); if (_ec) _ec.className = 'error-card';
   document.getElementById('statPages').textContent = '—';
   document.getElementById('statApi').textContent = '—';
   document.getElementById('statAssets').textContent = '—';
@@ -2930,16 +3298,22 @@ function updateJobView(job) {
     logEl.appendChild(div);
   }
   if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+  const errorCard = document.getElementById('errorCard');
   if (job.status === 'done' && job.outDir) {
     fireCloneNotification(job);
     document.getElementById('doneCard').className = 'done-card show fadein';
+    if (errorCard) errorCard.className = 'error-card';
     document.getElementById('doneCmd').textContent = `cd "${job.outDir}"\nnpm install\nnpm run build && npm start\n\n# → http://localhost:3000`;
     renderHealth(job);
     clearTimer();
     editorOutDir = job.outDir;
     loadEditorPages(job.outDir);
     loadPreviewPages(job.outDir);
+  } else if (job.status === 'error') {
+    if (errorCard) errorCard.className = 'error-card show';
+    document.getElementById('doneCard').className = 'done-card';
   } else if (job.status === 'running' || job.status === 'saving') {
+    if (errorCard) errorCard.className = 'error-card';
     if (!startTime) { startTime = Date.now(); startTimer(); }
   }
   if (job.status !== 'running' && job.status !== 'saving') {
@@ -2984,12 +3358,14 @@ function openEditor() {
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function renderSidebar() {
   const el = document.getElementById('sidebarList');
-  if (!allJobs.length) { el.innerHTML = '<div class="sb-empty">No clones yet</div>'; return; }
-  el.innerHTML = allJobs.map(j => `
+  const q = (document.getElementById('sbSearch')?.value || '').toLowerCase().trim();
+  const jobs = q ? allJobs.filter(j => (j.label || j.hostname || '').toLowerCase().includes(q) || (j.url || '').toLowerCase().includes(q)) : allJobs;
+  if (!jobs.length) { el.innerHTML = `<div class="sb-empty">${q ? 'No matches' : 'No clones yet'}</div>`; return; }
+  el.innerHTML = jobs.map(j => `
     <div class="sb-item ${j.id === activeJobId ? 'active' : ''}" onclick="switchJob('${j.id}')">
       <div class="sb-dot ${j.status}"></div>
       <div class="sb-info">
-        <div class="sb-name">${j.label || j.hostname}</div>
+        <div class="sb-name">${escHtml(j.label || j.hostname)}</div>
         <div class="sb-sub">${j.status === 'running' ? 'cloning...' : j.status === 'saving' ? 'saving...' : j.status === 'done' ? `${j.pages ?? 0} pages` : 'error'}</div>
       </div>
       <button class="sb-rename" onclick="renameClone('${j.id}',event)" title="Rename">✎</button>
@@ -5193,17 +5569,17 @@ const SECTIONS_LIBRARY = [
     layout: [[30,28,'#f1f5f9'],[35,28,'#2563eb'],[30,28,'#f1f5f9']],
     html: `<section style="padding:80px 40px;background:#f8fafc;text-align:center">
   <h2 style="font-size:clamp(28px,3.5vw,42px);font-weight:900;color:#0f172a;letter-spacing:-1.2px;margin:0 0 14px">Simple, transparent pricing</h2>
-  <p style="font-size:17px;color:#64748b;margin:0 0 56px">Start for free. Upgrade when you're ready.</p>
+  <p style="font-size:17px;color:#64748b;margin:0 0 56px">Choose the plan that fits your needs.</p>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:0 auto;text-align:left">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Free</div>
-      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$0<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">Perfect for getting started and exploring the platform.</p>
-      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get started free</a>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Starter</div>
+      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$9<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">Perfect for individuals and side projects.</p>
+      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get Starter</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:#374151">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 5 projects</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 1GB storage</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Community support</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 15 clones/month</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Export &amp; download</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Visual editor</li>
       </ul>
     </div>
     <div style="background:#1e40af;border-radius:16px;padding:32px;color:#fff;position:relative">
@@ -5364,7 +5740,7 @@ const SECTIONS_LIBRARY = [
       <p style="font-size:16px;color:#64748b;line-height:1.6;margin:0">Everything you need to know about the product.</p>
     </div>
     <div style="display:flex;flex-direction:column;gap:0;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
-      <details style="border-bottom:1px solid #e2e8f0"><summary style="padding:20px 24px;font-size:16px;font-weight:700;color:#0f172a;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">Is there a free plan?<span style="font-size:20px;font-weight:300;color:#94a3b8">+</span></summary><div style="padding:0 24px 20px;color:#475569;font-size:15px;line-height:1.65">Yes! Our free plan includes everything you need to get started. No credit card required.</div></details>
+      <details style="border-bottom:1px solid #e2e8f0"><summary style="padding:20px 24px;font-size:16px;font-weight:700;color:#0f172a;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">Do you offer a trial?<span style="font-size:20px;font-weight:300;color:#94a3b8">+</span></summary><div style="padding:0 24px 20px;color:#475569;font-size:15px;line-height:1.65">Yes! You get 3 free clones when you sign up — no credit card required. Upgrade to a paid plan to unlock exports, sharing, GitHub push, and unlimited cloning.</div></details>
       <details style="border-bottom:1px solid #e2e8f0"><summary style="padding:20px 24px;font-size:16px;font-weight:700;color:#0f172a;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">Can I cancel anytime?<span style="font-size:20px;font-weight:300;color:#94a3b8">+</span></summary><div style="padding:0 24px 20px;color:#475569;font-size:15px;line-height:1.65">Absolutely. Cancel your subscription at any time with no questions asked. Your data will be available for 30 days after cancellation.</div></details>
       <details style="border-bottom:1px solid #e2e8f0"><summary style="padding:20px 24px;font-size:16px;font-weight:700;color:#0f172a;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">Do you offer team plans?<span style="font-size:20px;font-weight:300;color:#94a3b8">+</span></summary><div style="padding:0 24px 20px;color:#475569;font-size:15px;line-height:1.65">Yes, our Pro and Enterprise plans support multiple team members with role-based access controls and collaboration features.</div></details>
       <details><summary style="padding:20px 24px;font-size:16px;font-weight:700;color:#0f172a;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">How do I get support?<span style="font-size:20px;font-weight:300;color:#94a3b8">+</span></summary><div style="padding:0 24px 20px;color:#475569;font-size:15px;line-height:1.65">We offer email support on all plans, with priority live chat available on Pro and Enterprise plans. Average response time is under 2 hours.</div></details>

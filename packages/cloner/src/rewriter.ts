@@ -37,7 +37,7 @@ function rewriteUrl(value: string, assetMap: Map<string, string>, baseUrl: strin
 const URL_ATTRS: Record<string, string[]> = {
   '': ['src', 'href', 'action', 'data-src', 'data-href', 'data-url',
        'data-image', 'data-bg', 'data-background', 'data-video', 'data-poster',
-       'poster', 'srcset'],
+       'poster', 'srcset', 'style'],
   'link': ['href'],
   'use': ['href', 'xlink:href'],
   'image': ['href', 'xlink:href'],
@@ -217,13 +217,25 @@ function walkNode(
   }
 }
 
+function preprocessHtml(html: string): string {
+  // Remove <base> tags entirely — rewriting them to <base href="/"> breaks anchor-hash links
+  // on subpages (e.g. <a href="#section"> navigates to /#section instead of /current-path#section).
+  html = html.replace(/<base\s[^>]*\/?>/gi, '').replace(/<base\s*\/>/gi, '').replace(/<base>/gi, '');
+  // Remove Content-Security-Policy meta tags — the original site's CSP allowlists its own CDN
+  // domains but not the clone server, which would block /_assets/ resources in the browser.
+  html = html.replace(/<meta\s[^>]*\bhttp-equiv\s*=\s*["']?content-security-policy["']?[^>]*\/?>/gi, '');
+  // Remove X-Frame-Options meta (rare but safe to strip)
+  html = html.replace(/<meta\s[^>]*\bhttp-equiv\s*=\s*["']?x-frame-options["']?[^>]*\/?>/gi, '');
+  return html;
+}
+
 export function rewriteHtml(record: PageRecord, origin: string): string {
   const assetMap = buildAssetMap(record.assets);
   const failedAssets = new Set<string>(record.failedAssets ?? []);
   const stats: RewriteStats = { attrsRewritten: 0, attrsToRelative: 0, styleUrlsRewritten: 0, externalUrls: 0 };
   const baseUrl = record.url || origin;
 
-  const doc = parse5.parse(record.html);
+  const doc = parse5.parse(preprocessHtml(record.html));
   for (const child of doc.childNodes) {
     walkNode(child, assetMap, origin, baseUrl, stats, failedAssets);
   }

@@ -9,7 +9,8 @@
   "scripts": {
     "build": "npm install --prefix packages/cloner && npm run build --prefix packages/cloner",
     "ui": "node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "npm test --prefix packages/cloner"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

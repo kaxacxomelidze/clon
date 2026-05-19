@@ -8,12 +8,12 @@ import { request as httpsRequest } from 'https';
 import { createRequire } from 'module';
 import 'dotenv/config';
 import {
-  getUserById, getUserByEmail, getAllUsers, insertUser, updateUser, deleteUser,
+  getUserById, getUserByEmail, getAllUsers, getUsersPage, getClonesByUserIds, insertUser, updateUser, deleteUser,
   getUserByVerifyToken, getUserByResetToken,
   getUserByGoogleId, getUserByStripeCustomerId, insertOAuthUser,
   getSession, insertSession, deleteSession, deleteUserSessions, cleanExpiredSessions,
   insertClone, updateCloneLabel, updateCloneStatus, getClonesByUser, getAllClones, deleteCloneById, deleteUserClones, getCloneCountThisMonth,
-  getAllPayments, getPaymentsByUser, getPaymentById, insertPayment, updatePayment, getPendingPaymentByUserPlan,
+  getAllPayments, getPaymentsByUser, getPaymentById, insertPayment, updatePayment, getPendingPaymentByUserPlan, getAdminStats,
   getSettings, saveSettings,
   getShare, insertShare,
   getAllPromoCodes, getPromoCode, insertPromoCode, incrementPromoUsed, deletePromoCode,
@@ -37,19 +37,62 @@ const DEFAULT_APP_URL = (process.env.APP_URL || (process.env.VERCEL_URL ? `https
 
 const jobs = new Map();
 
+// ── Security constants ────────────────────────────────────────────────────────
+// Set PASSWORD_PEPPER and SHARE_PASSWORD_PEPPER in your .env file.
+// Defaults keep backward-compatibility with existing password hashes.
+const PASSWORD_PEPPER = process.env.PASSWORD_PEPPER || 'wc_secret_2025';
+const SHARE_PASSWORD_PEPPER = process.env.SHARE_PASSWORD_PEPPER || 'wc_share_2025';
+if (PASSWORD_PEPPER === 'wc_secret_2025') {
+  console.warn('[WARN] PASSWORD_PEPPER is not set — using insecure default. Add PASSWORD_PEPPER=<random> to .env');
+}
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) { console.error('[FATAL] ADMIN_PASSWORD env var is not set. Admin login is disabled.'); }
+
+// Admin sessions persisted to disk so they survive server restarts.
+const ADMIN_SESSIONS_FILE = join(__dirname, '.admin-sessions.json');
 const adminSessions = new Map(); // token → expiresAt
+
+function _loadAdminSessions() {
+  try {
+    if (!existsSync(ADMIN_SESSIONS_FILE)) return;
+    const raw = JSON.parse(readFileSync(ADMIN_SESSIONS_FILE, 'utf8'));
+    const now = Date.now();
+    for (const [token, exp] of Object.entries(raw)) {
+      if (exp > now) adminSessions.set(token, exp);
+    }
+    if (adminSessions.size) console.log(`[Admin] Restored ${adminSessions.size} active admin session(s).`);
+  } catch { /* first run or corrupted file — start fresh */ }
+}
+
+function _persistAdminSessions() {
+  try {
+    const now = Date.now();
+    const out = {};
+    for (const [token, exp] of adminSessions) {
+      if (exp > now) out[token] = exp;
+    }
+    writeFileSync(ADMIN_SESSIONS_FILE, JSON.stringify(out), 'utf8');
+  } catch (e) { console.warn('[Admin] Could not persist sessions:', e.message); }
+}
+
+_loadAdminSessions();
 
 function isAdmin(req) {
   const t = req.headers['x-admin-token'] || '';
   if (!t) return false;
   const exp = adminSessions.get(t);
   if (!exp) return false;
-  if (Date.now() > exp) { adminSessions.delete(t); return false; }
+  if (Date.now() > exp) { adminSessions.delete(t); _persistAdminSessions(); return false; }
   return true;
 }
-setInterval(() => { const now = Date.now(); for (const [k, v] of adminSessions) { if (now > v) adminSessions.delete(k); } }, 3600000);
+setInterval(() => {
+  const now = Date.now();
+  let changed = false;
+  for (const [k, v] of adminSessions) { if (now > v) { adminSessions.delete(k); changed = true; } }
+  if (changed) _persistAdminSessions();
+}, 3600000);
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const rateLimits = new Map();
@@ -63,6 +106,15 @@ function checkRateLimit(key, maxReq = 10, windowMs = 60000) {
 }
 setInterval(() => { const now = Date.now(); for (const [k, v] of rateLimits) { if (now > v.resetAt) rateLimits.delete(k); } }, 300000);
 setInterval(async () => { try { await cleanExpiredSessions(Date.now()); } catch {} }, 3600000);
+// Evict finished jobs older than 4 hours from memory; they remain in DB and on disk.
+setInterval(() => {
+  const cutoff = Date.now() - 4 * 60 * 60 * 1000;
+  for (const [id, job] of jobs) {
+    if (job.status !== 'running' && job.status !== 'saving' && new Date(job.startedAt).getTime() < cutoff) {
+      jobs.delete(id);
+    }
+  }
+}, 3600000);
 
 // ── Plan limits ────────────────────────────────────────────────────────────────
 const PLAN_LIMITS = {
@@ -98,7 +150,7 @@ const PLAN_LABELS = {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function hashPassword(password, salt) {
-  return createHash('sha256').update(salt + password + 'wc_secret_2025').digest('hex');
+  return createHash('sha256').update(salt + password + PASSWORD_PEPPER).digest('hex');
 }
 async function hashPw(password) {
   if (bcrypt) return { hash: await bcrypt.hash(password, 12), salt: null };
@@ -113,19 +165,29 @@ async function verifyPw(password, user) {
   return h === hashPassword(password, user.salt || '');
 }
 
+// Cache validated sessions for 60 s — avoids 2 Supabase round-trips on every request.
+const _sessionCache = new Map(); // token → { user, exp }
+function _invalidateSession(token) { _sessionCache.delete(token); }
+function _invalidateUserSessions(userId) {
+  for (const [t, e] of _sessionCache) { if (e.user?.id === userId) _sessionCache.delete(t); }
+}
+setInterval(() => { const now = Date.now(); for (const [t, e] of _sessionCache) if (now > e.exp) _sessionCache.delete(t); }, 120000);
+
 async function getSessionUser(req) {
   const token = req.headers['x-auth-token'] || '';
   if (!token) return null;
+  const hit = _sessionCache.get(token);
+  if (hit) {
+    if (Date.now() > hit.exp) { _sessionCache.delete(token); } else return hit.user;
+  }
   const session = await getSession(token);
   if (!session) return null;
-  if (Date.now() > session.expires_at) {
-    await deleteSession(token);
-    return null;
-  }
+  if (Date.now() > session.expires_at) { await deleteSession(token); return null; }
   const user = await getUserById(session.user_id);
   if (!user) return null;
   user._sessionToken = token;
   user._impersonatedBy = session.impersonated_by || null;
+  _sessionCache.set(token, { user, exp: Date.now() + 60000 });
   return user;
 }
 
@@ -138,7 +200,10 @@ const SETTINGS_DEFAULTS = {
 let _settingsCache = { ...SETTINGS_DEFAULTS };
 async function initSettings() { _settingsCache = await getSettings(); }
 const getCachedSettings = () => _settingsCache;
-const invalidateSettingsCache = async () => { _settingsCache = await getSettings(); };
+const invalidateSettingsCache = async () => {
+  _settingsCache = await getSettings();
+  _emailTemplateCache.clear(); // templates may reference APP_URL / SUPPORT_EMAIL from settings
+};
 
 function publicAppUrl(req = null) {
   const configured = String(getCachedSettings().app_url || '').replace(/\/$/, '');
@@ -215,7 +280,7 @@ const STRIPE_PRICE_ENV_KEY = (plan, interval) => `STRIPE_PRICE_${plan}_${interva
 const SECRET_MASK = '••••••••';
 function isMaskedSecret(value) {
   const v = String(value || '').trim();
-  return v === SECRET_MASK || /^\u00e2\u20ac\u00a2+$/.test(v);
+  return v === SECRET_MASK || /^â€¢+$/.test(v);
 }
 function cleanSettingValue(value) {
   if (value === undefined || value === null || isMaskedSecret(value)) return '';
@@ -264,29 +329,42 @@ async function ensureStripePrice(stripe, plan, interval) {
   const s = getStripeSettings();
   const key = STRIPE_PRICE_KEY(plan, interval);
   if (s[key]) return s[key];
+
   const amount = PLAN_PRICES[plan]?.[interval];
   if (!amount) throw new Error(`No local price exists for ${plan} ${interval}.`);
 
-  const product = await stripe.products.create({
-    name: `CLONYFY ${PLAN_LABELS[plan] || plan}`,
-    metadata: { app: 'clonyfy', plan },
-  });
-  const price = await stripe.prices.create({
-    currency: 'usd',
-    unit_amount: Math.round(amount * 100),
-    recurring: { interval: interval === 'annual' ? 'year' : 'month' },
-    product: product.id,
-    metadata: { app: 'clonyfy', plan, billing_interval: interval },
-  });
+  // Search Stripe for an existing active price matching this plan+interval
+  // before creating a new one — prevents duplicate products on settings loss.
+  const existing = await stripe.prices.search({
+    query: `metadata['app']:'clonyfy' AND metadata['plan']:'${plan}' AND metadata['billing_interval']:'${interval}' AND active:'true'`,
+    limit: 1,
+  }).catch(() => ({ data: [] }));
+
+  let priceId = existing.data[0]?.id || '';
+
+  if (!priceId) {
+    const product = await stripe.products.create({
+      name: `CLONYFY ${PLAN_LABELS[plan] || plan}`,
+      metadata: { app: 'clonyfy', plan },
+    });
+    const price = await stripe.prices.create({
+      currency: 'usd',
+      unit_amount: Math.round(amount * 100),
+      recurring: { interval: interval === 'annual' ? 'year' : 'month' },
+      product: product.id,
+      metadata: { app: 'clonyfy', plan, billing_interval: interval },
+    });
+    priceId = price.id;
+  }
 
   try {
-    const current = { ...getCachedSettings(), [key]: price.id };
+    const current = { ...getCachedSettings(), [key]: priceId };
     await saveSettings(current);
     await invalidateSettingsCache();
   } catch (err) {
-    console.warn('[Stripe] created price but could not save setting:', err.message);
+    console.warn('[Stripe] could not save price ID to settings:', err.message);
   }
-  return price.id;
+  return priceId;
 }
 
 // ── Google OAuth state ────────────────────────────────────────────────────────
@@ -362,7 +440,7 @@ async function checkUsageAlert(userId) {
     const used = await getCloneCountThisMonth(userId, monthStart.toISOString());
     const pct = used / limits.clonesPerMonth;
     if (pct >= 0.8) {
-      await await updateUser(userId, { usage_alert_sent: 1 });
+      await updateUser(userId, { usage_alert_sent: 1 });
       const s = getCachedSettings();
       const appUrl = s.app_url || `http://localhost:${PORT}`;
       sendEmail(user.email, "You've used 80% of your monthly clone quota",
@@ -572,7 +650,16 @@ function persistJob(job) {
 async function readPersistedJob(id) {
   const raw = await getCloneTextFile(jobStoragePath(id)).catch(() => null);
   if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
+  try {
+    const job = JSON.parse(raw);
+    // If the job was persisted as running but has no live process, the server
+    // restarted mid-job. Mark it as errored so the UI doesn't spin forever.
+    if (job.status === 'running' && !jobs.has(id)) {
+      job.status = 'error';
+      job.logs = [...(job.logs || []), '[ERROR] Clone was interrupted — server restarted while this job was running.'];
+    }
+    return job;
+  } catch { return null; }
 }
 
 async function readPersistedCloneFileList(outDir) {
@@ -666,6 +753,10 @@ function rewritePreviewAssetUrls(html, outDir) {
   return String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
 }
 
+function safeJsonParse(str, fallback = []) {
+  try { return JSON.parse(str); } catch { return fallback; }
+}
+
 function htmlEsc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -712,12 +803,14 @@ function readJsonBody(req, limitBytes = 100_000) {
   return new Promise((resolveBody, reject) => {
     let body = '';
     let size = 0;
+    let tooLarge = false;
     req.on('data', (c) => {
       size += Buffer.byteLength(c);
-      if (size > limitBytes) { req.destroy(); reject(new Error('request too large')); return; }
+      if (size > limitBytes) { tooLarge = true; req.resume(); return; }
       body += c;
     });
     req.on('end', () => {
+      if (tooLarge) return reject(new Error('request too large'));
       try { resolveBody(JSON.parse(body || '{}')); }
       catch { reject(new Error('bad json')); }
     });
@@ -983,19 +1076,55 @@ function githubErrorStatus(err) {
   return 502;
 }
 
+// Allowed origins for CORS. The app's own origin is always allowed.
+// Stripe webhook calls have no Origin header and bypass this check.
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // same-origin / server-to-server requests have no Origin
+  const appUrl = String(getCachedSettings()?.app_url || DEFAULT_APP_URL);
+  try {
+    const appOrigin = new URL(appUrl).origin;
+    if (origin === appOrigin) return true;
+  } catch {}
+  // Allow localhost in development
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const ip = req.socket?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
   const reqOrigin = req.headers['origin'] || '';
-  res.setHeader('Access-Control-Allow-Origin', reqOrigin || '*');
-  if (reqOrigin) res.setHeader('Vary', 'Origin');
+
+  // CORS — only allow our own origin, not arbitrary third-party sites
+  if (reqOrigin) {
+    if (isAllowedOrigin(reqOrigin)) {
+      res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+      res.setHeader('Vary', 'Origin');
+    }
+    // If origin is not allowed, we omit the CORS header — browser will block the request
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Auth-Token, X-CLONYFY-Token, X-Admin-Token');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // Content-Security-Policy — blocks inline data: URI scripts, rogue iframes, etc.
+  // unsafe-inline is required because the HTML files use inline <script> and <style>.
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' js.stripe.com",
+    "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
+    "font-src 'self' fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' api.stripe.com",
+    "frame-src js.stripe.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; '));
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   // Static UI files
@@ -1113,7 +1242,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/auth/login') {
     if (!checkRateLimit(`login:${ip}`, 10, 300000)) return json(res, { error: 'Too many login attempts. Try again in 5 minutes.' }, 429);
     const body = await readJsonBody(req);
-    const { email, password } = body;
+    const { email, password, remember } = body;
     if (!email || !password) return json(res, { error: 'Email and password are required' }, 400);
     const user = await getUserByEmail(email.toLowerCase().trim());
     const ok = user ? await verifyPw(password, user) : false;
@@ -1123,9 +1252,10 @@ async function handleRequest(req, res) {
       await updateUser(user.id, { hash: await bcrypt.hash(password, 12), salt: null });
     }
     const token = randomUUID();
-    await insertSession({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + 30*24*60*60*1000, impersonatedBy: null });
+    const ttl = remember === false ? 2 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000; // 2h or 30d
+    await insertSession({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + ttl, impersonatedBy: null });
     audit(user.id, user.name, 'login', null, ip);
-    return json(res, { token, user: userPublic(await getUserById(user.id)) });
+    return json(res, { token, user: userPublic(user) }); // user already in memory — no extra DB call
   }
 
   if (req.method === 'GET' && url.pathname === '/api/auth/me') {
@@ -1141,6 +1271,7 @@ async function handleRequest(req, res) {
       const user = session ? await getUserById(session.user_id) : null;
       if (user) audit(user.id, user.name, 'logout', null, ip);
       await deleteSession(token);
+      _invalidateSession(token);
     }
     return json(res, { ok: true });
   }
@@ -1223,15 +1354,20 @@ async function handleRequest(req, res) {
     const saveUser = await getSessionUser(req);
     if (!saveUser) return json(res, { error: 'Not authenticated' }, 401);
     if ((saveUser.plan || 'free') === 'free') return json(res, { error: 'Visual editor requires a paid plan. Upgrade to edit pages.' }, 403);
-    readJsonBody(req).then(async ({ outDir, route, html }) => {
+    // 50MB limit — cloned pages with inlined assets can be several MB
+    readJsonBody(req, 50_000_000).then(async ({ outDir, route, html }) => {
       if (!await canUseCloneOutput(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const map = await loadRouteMapAsync(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const filename = map[route || '/'];
-      if (!filename) return json(res, { error: 'Route not found' }, 404);
+      if (!filename) return json(res, { error: 'Route not found: ' + route }, 404);
       await writeCloneFile(outDir, join('captured-pages', filename), String(html ?? ''), 'text/html; charset=utf-8');
       json(res, { ok: true });
-    }).catch(() => json(res, { error: 'bad json' }, 400));
+    }).catch(err => {
+      if (res.headersSent) return;
+      if (err?.message === 'request too large') return json(res, { error: 'Page HTML too large to save (limit 50MB)' }, 413);
+      return json(res, { error: err?.message || 'Save failed' }, 500);
+    });
     return;
   }
 
@@ -1312,9 +1448,24 @@ async function handleRequest(req, res) {
             return json(res, { error: `Monthly limit reached (${used}/${limits.clonesPerMonth} for ${plan} plan). Upgrade to clone more.` }, 429);
           }
         }
+        // Per-user hourly burst limit: free=2/hr, paid=5/hr
+        const hourlyMax = ALL_PAID_PLAN_KEYS.includes(plan) ? 5 : 2;
+        if (!checkRateLimit(`clone_user:${cloneUser.id}`, hourlyMax, 3600000)) {
+          return json(res, { error: `Too many clone requests. Please wait before starting another.` }, 429);
+        }
+        // Cap concurrent running jobs per user
+        const userRunning = [...jobs.values()].filter(j => j.userId === cloneUser.id && j.status === 'running').length;
+        if (userRunning >= 2) {
+          return json(res, { error: 'You already have 2 clones running. Wait for one to finish before starting another.' }, 429);
+        }
         maxPages = String(Math.min(parseInt(maxPages, 10) || 20, (PLAN_LIMITS[plan] || PLAN_LIMITS.free).maxPages));
       } else {
         if (!checkRateLimit(`clone_anon:${ip}`, 2, 86400000)) return json(res, { error: 'Rate limit exceeded. Sign in for more clones.' }, 429);
+        // Cap concurrent running jobs per IP for anonymous users
+        const anonRunning = [...jobs.values()].filter(j => j.userId === null && j.status === 'running').length;
+        if (anonRunning >= 1) {
+          return json(res, { error: 'An anonymous clone is already running from this server. Sign in for concurrent clones.' }, 429);
+        }
         maxPages = String(Math.min(parseInt(maxPages, 10) || 20, PLAN_LIMITS.free.maxPages));
       }
       if (IS_VERCEL) {
@@ -1704,7 +1855,7 @@ async function handleRequest(req, res) {
     let passwordHash = null, salt = null;
     if (password) {
       salt = randomUUID();
-      passwordHash = createHash('sha256').update(salt + password + 'wc_share_2025').digest('hex');
+      passwordHash = createHash('sha256').update(salt + password + SHARE_PASSWORD_PEPPER).digest('hex');
     }
     const expiresAt = expiresInDays ? Date.now() + Number(expiresInDays) * 86400000 : null;
     await insertShare({ id: shareId, outDir, route: route || '/', createdAt: new Date().toISOString(), passwordHash, salt, expiresAt });
@@ -1736,7 +1887,7 @@ async function handleRequest(req, res) {
       }
       if (!pw) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId)); return; }
       if (!checkRateLimit(`share_pw:${ip}:${shareId}`, 10, 300000)) { res.writeHead(429, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Too many attempts. Try again in 5 minutes.')); return; }
-      const hash = createHash('sha256').update(share.salt + pw + 'wc_share_2025').digest('hex');
+      const hash = createHash('sha256').update(share.salt + pw + SHARE_PASSWORD_PEPPER).digest('hex');
       if (hash !== share.password_hash) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.')); return; }
     }
     const map = await loadRouteMapAsync(share.out_dir);
@@ -1757,67 +1908,70 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/admin/auth') {
     if (!checkRateLimit(`admin_login:${ip}`, 5, 300000)) return json(res, { error: 'Too many attempts. Try again in 5 minutes.' }, 429);
     const { password } = await readJsonBody(req);
+    if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled — ADMIN_PASSWORD env var is not set on the server.' }, 503);
     if (!password || password !== ADMIN_PASSWORD) return json(res, { error: 'Wrong password' }, 401);
     const token = randomUUID();
     adminSessions.set(token, Date.now() + 8 * 3600 * 1000);
+    _persistAdminSessions();
     return json(res, { token });
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/logout') {
     adminSessions.delete(req.headers['x-admin-token'] || '');
+    _persistAdminSessions();
     return json(res, { ok: true });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/stats') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
-    const users = await getAllUsers();
-    const clones = await getAllClones();
-    const payments = await getAllPayments();
-    const errors = await getAllErrors();
+    const { totalUsers, blockedUsers, totalClones, totalErrors, pendingPayments, activePaidUsers, totalRevenue, monthRevenue } = await getAdminStats();
     const activeNow = [...jobs.values()].filter(j => j.status === 'running').length;
-    const confirmed = payments.filter(p => p.status === 'confirmed');
-    const now2 = new Date();
-    const ms = new Date(now2.getFullYear(), now2.getMonth(), 1);
-    const monthRevenue = confirmed.filter(p => new Date(p.processed_at) >= ms).reduce((s, p) => s + (p.amount || 0), 0);
-    const totalRevenue = confirmed.reduce((s, p) => s + (p.amount || 0), 0);
-    // MRR = sum of monthly-equivalent active subscriptions
-    const activePaidUsers = users.filter(u => u.plan !== 'free' && u.plan_renews_at && new Date(u.plan_renews_at) > now2);
     const mrr = activePaidUsers.reduce((s, u) => {
       const p = PLAN_PRICES[u.plan] || { monthly: 0, annual: 0 };
       return s + (u.billing_interval === 'annual' ? p.annual / 12 : p.monthly);
     }, 0);
     return json(res, {
-      totalUsers: users.length,
-      blockedUsers: users.filter(u => u.blocked).length,
-      totalClones: clones.length,
-      activeNow,
-      totalRevenue,
-      monthRevenue,
+      totalUsers, blockedUsers, totalClones, activeNow, totalRevenue, monthRevenue,
       mrr: Math.round(mrr * 100) / 100,
       arr: Math.round(mrr * 12 * 100) / 100,
-      pendingPayments: payments.filter(p => p.status === 'pending').length,
-      proUsers: users.filter(u => ['growth', 'pro'].includes(u.plan)).length,
-      starterUsers: users.filter(u => u.plan === 'starter').length,
-      enterpriseUsers: users.filter(u => ['unlimited', 'enterprise'].includes(u.plan)).length,
-      totalErrors: errors.length,
+      pendingPayments, totalErrors,
+      proUsers: activePaidUsers.filter(u => ['growth', 'pro'].includes(u.plan)).length,
+      starterUsers: activePaidUsers.filter(u => u.plan === 'starter').length,
+      enterpriseUsers: activePaidUsers.filter(u => ['unlimited', 'enterprise'].includes(u.plan)).length,
     });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/users') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
-    const users = await getAllUsers();
-    const clones = await getAllClones();
-    return json(res, users.map(u => {
-      const uc = clones.filter(c => c.user_id === u.id);
-      return {
-        id: u.id, name: u.name, email: u.email,
-        plan: u.plan || 'free', planRenewsAt: u.plan_renews_at || null,
-        billingInterval: u.billing_interval || 'monthly',
-        blocked: u.blocked === 1, createdAt: u.created_at,
-        cloneCount: uc.length,
-        lastCloneAt: uc.length > 0 ? uc[uc.length - 1].started_at : null,
-      };
-    }));
+    const PAGE_SIZE = 50;
+    const search = String(url.searchParams.get('search') || '').trim();
+    const planFilter = String(url.searchParams.get('plan') || '').trim();
+    const statusFilter = url.searchParams.get('status') || '';
+    const page = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10));
+    const blockedFilter = statusFilter === 'blocked' ? true : statusFilter === 'active' ? false : null;
+    const { users, total } = await getUsersPage({ search, plan: planFilter, blocked: blockedFilter, limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+    const clones = await getClonesByUserIds(users.map(u => u.id));
+    const cloneMap = {};
+    for (const c of clones) {
+      if (!cloneMap[c.user_id]) cloneMap[c.user_id] = [];
+      cloneMap[c.user_id].push(c);
+    }
+    return json(res, {
+      users: users.map(u => {
+        const uc = cloneMap[u.id] || [];
+        return {
+          id: u.id, name: u.name, email: u.email,
+          plan: u.plan || 'free', planRenewsAt: u.plan_renews_at || null,
+          billingInterval: u.billing_interval || 'monthly',
+          blocked: u.blocked === 1, createdAt: u.created_at,
+          cloneCount: uc.length,
+          lastCloneAt: uc.length > 0 ? uc[0].started_at : null,
+        };
+      }),
+      total,
+      page,
+      pageSize: PAGE_SIZE,
+    });
   }
 
   if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/users/')) {
@@ -1832,6 +1986,7 @@ async function handleRequest(req, res) {
     if (body.billingInterval !== undefined) fields.billing_interval = body.billingInterval;
     if (body.blocked !== undefined) fields.blocked = body.blocked ? 1 : 0;
     await updateUser(userId, fields);
+    if (fields.blocked !== undefined) _invalidateUserSessions(userId);
     audit(null, 'admin', 'admin_update_user', `userId=${userId} ${JSON.stringify(fields)}`, ip);
     return json(res, { ok: true });
   }
@@ -1842,6 +1997,7 @@ async function handleRequest(req, res) {
     const user = await getUserById(userId);
     if (!user) return json(res, { error: 'User not found' }, 404);
     await deleteUserSessions(userId);
+    _invalidateUserSessions(userId);
     await deleteUserClones(userId);
     await deleteUser(userId);
     audit(null, 'admin', 'admin_delete_user', `userId=${userId} email=${user.email}`, ip);
@@ -1855,17 +2011,18 @@ async function handleRequest(req, res) {
     const user = await getUserById(userId);
     if (!user) return json(res, { error: 'User not found' }, 404);
     const token = randomUUID();
+    const adminTokenFingerprint = (req.headers['x-admin-token'] || '').slice(0, 8);
     await insertSession({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + 2*60*60*1000, impersonatedBy: 'admin' });
-    audit(null, 'admin', 'impersonate', `userId=${userId} email=${user.email}`, ip);
+    audit(null, 'admin', 'impersonate', `userId=${userId} email=${user.email} adminToken=${adminTokenFingerprint}...`, ip);
     return json(res, { token, user: userPublic(user) });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/admin/clones') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
-    const users = await getAllUsers();
     const clones = await getAllClones();
     const userFilter = url.searchParams.get('userId') || '';
     const search = (url.searchParams.get('search') || '').toLowerCase();
+    const statusFilter = url.searchParams.get('status') || '';
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     const pageSize = 50;
     const running = [...jobs.values()]
@@ -1873,10 +2030,11 @@ async function handleRequest(req, res) {
       .map(j => ({ id: j.id, user_id: j.userId, user_name: j.userName || 'Anonymous', url: j.url, status: j.status, pages: j.pages, assets: j.assets, started_at: j.startedAt, completed_at: null }));
     const all = [
       ...running,
-      ...clones.map(c => ({ ...c, user_name: c.user_id ? (users.find(u => u.id === c.user_id)?.name || 'Deleted') : 'Anonymous' })),
+      ...clones.map(c => ({ ...c, user_name: c.user_name || 'Deleted' })),
     ]
       .filter(c => !userFilter || c.user_id === userFilter)
-      .filter(c => !search || c.url.toLowerCase().includes(search) || (c.user_name || '').toLowerCase().includes(search));
+      .filter(c => !statusFilter || c.status === statusFilter)
+      .filter(c => !search || (c.url || '').toLowerCase().includes(search) || (c.user_name || '').toLowerCase().includes(search));
     const total = all.length;
     const items = all.slice((page - 1) * pageSize, page * pageSize).map(c => ({
       id: c.id, userId: c.user_id, userName: c.user_name, url: c.url,
@@ -1923,7 +2081,7 @@ async function handleRequest(req, res) {
     (async () => {
       for (const u of targets) {
         await sendEmail(u.email, title,
-          renderEmail('announcement', { SUBJECT: title, NAME: u.name, TITLE: title, BODY: msgBody.replace(/\n/g, '<br>') })
+          renderEmail('announcement', { SUBJECT: title, NAME: u.name, TITLE: title, BODY: htmlEsc(msgBody).replace(/\n/g, '<br>') })
         ).catch(() => {});
       }
     })();
@@ -1973,7 +2131,7 @@ async function handleRequest(req, res) {
       if (codeRow &&
           (!codeRow.valid_until || new Date(codeRow.valid_until) > new Date()) &&
           (!codeRow.max_uses || codeRow.used_count < codeRow.max_uses) &&
-          (!codeRow.plans || codeRow.plans === '[]' || JSON.parse(codeRow.plans).includes(plan))) {
+          (!codeRow.plans || codeRow.plans === '[]' || safeJsonParse(codeRow.plans).includes(plan))) {
         discountPercent = codeRow.discount_percent || 0;
         appliedCode = codeRow.code;
         await incrementPromoUsed(codeRow.code);
@@ -2004,7 +2162,13 @@ async function handleRequest(req, res) {
     if (statusF) payments = payments.filter(p => p.status === statusF);
     if (methodF) payments = payments.filter(p => p.method === methodF);
     const total = payments.length;
-    const items = payments.slice((page - 1) * pageSize, page * pageSize);
+    const items = payments.slice((page - 1) * pageSize, page * pageSize).map(p => ({
+      id: p.id, userId: p.user_id, userName: p.user_name, userEmail: p.user_email,
+      plan: p.plan, interval: p.interval, amount: p.amount, currency: p.currency,
+      method: p.method, txId: p.tx_id, note: p.note,
+      promoCode: p.promo_code, discountPercent: p.discount_percent,
+      status: p.status, submittedAt: p.submitted_at, processedAt: p.processed_at,
+    }));
     return json(res, { items, total, page, pageSize });
   }
 
@@ -2171,7 +2335,10 @@ async function handleRequest(req, res) {
     if (!checkRateLimit(`forgot:${ip}`, 5, 3600000)) return json(res, { error: 'Too many requests' }, 429);
     const { email } = await readJsonBody(req);
     if (!email) return json(res, { ok: true });
-    const user = await getUserByEmail(String(email).toLowerCase().trim());
+    const normalizedEmail = String(email).toLowerCase().trim();
+    // Silent rate limit per email — avoids user enumeration via timing
+    if (!checkRateLimit(`forgot_email:${normalizedEmail}`, 3, 3600000)) return json(res, { ok: true });
+    const user = await getUserByEmail(normalizedEmail);
     if (user) {
       const resetToken = randomUUID().replace(/-/g, '');
       await updateUser(user.id, { reset_token: resetToken, reset_expiry: Date.now() + 3600 * 1000 });
@@ -2191,8 +2358,15 @@ async function handleRequest(req, res) {
     if (!user) return json(res, { error: 'Reset link is invalid or expired' }, 400);
     const { hash: newHash, salt: newSalt } = await hashPw(password);
     await updateUser(user.id, { hash: newHash, salt: newSalt, reset_token: null, reset_expiry: null });
+    _invalidateUserSessions(user.id);
     audit(user.id, user.name, 'password_reset', null, ip);
     return json(res, { ok: true });
+  }
+
+  // ── Announcements (public, last 3) ─────────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/api/announcements') {
+    const all = await getAllAnnouncements();
+    return json(res, all.slice(0, 3).map(a => ({ id: a.id, title: a.title, body: a.body, createdAt: a.created_at })));
   }
 
   // ── User dashboard & billing ───────────────────────────────────────────────
@@ -2288,7 +2462,7 @@ async function handleRequest(req, res) {
         emailVerified: user.email_verified === 1,
       },
       clones: clones.map(c => ({ id: c.id, url: c.url, status: c.status, pages: c.pages, startedAt: c.started_at, completedAt: c.completed_at })),
-      payments: payments.map(p => ({ id: p.id, plan: p.plan, amount: p.amount, method: p.method, status: p.status, submittedAt: p.submitted_at })),
+      payments: payments.map(p => ({ id: p.id, plan: p.plan, amount: p.amount, currency: p.currency, method: p.method, interval: p.interval, status: p.status, txId: p.tx_id, submittedAt: p.submitted_at, processedAt: p.processed_at })),
     };
     audit(user.id, user.name, 'data_export', null, ip);
     res.writeHead(200, {
@@ -2307,7 +2481,7 @@ async function handleRequest(req, res) {
     if (!found ||
         (found.valid_until && new Date(found.valid_until) <= new Date()) ||
         (found.max_uses && found.used_count >= found.max_uses) ||
-        (found.plans && found.plans !== '[]' && plan && !JSON.parse(found.plans).includes(plan))) {
+        (found.plans && found.plans !== '[]' && plan && !safeJsonParse(found.plans).includes(plan))) {
       return json(res, { error: 'Invalid or expired promo code' }, 404);
     }
     return json(res, { valid: true, code: found.code, discountPercent: found.discount_percent || 0, description: found.description || '' });
@@ -2315,7 +2489,8 @@ async function handleRequest(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/api/admin/promo-codes') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
-    return json(res, await getAllPromoCodes().map(c => ({ ...c, plans: JSON.parse(c.plans || '[]') })));
+    const promoCodes = await getAllPromoCodes();
+    return json(res, promoCodes.map(c => ({ ...c, plans: safeJsonParse(c.plans || '[]') })));
   }
 
   if (req.method === 'POST' && url.pathname === '/api/admin/promo-codes') {
@@ -2618,11 +2793,39 @@ async function handleRequest(req, res) {
         }
       }
 
+      if (event.type === 'invoice.upcoming') {
+        const inv = event.data.object;
+        const customerId = inv.customer;
+        const u = customerId ? await getUserByStripeCustomerId(customerId) : null;
+        if (u && u.plan !== 'free' && !u.renewal_reminder_sent) {
+          const renewsAt = inv.period_end ? new Date(inv.period_end * 1000) : null;
+          await updateUser(u.id, { renewal_reminder_sent: 1 });
+          sendEmail(u.email, `Your CLONYFY ${u.plan} plan renews soon`,
+            renderEmail('renewal-reminder', {
+              SUBJECT: `Your ${u.plan} plan renews soon`,
+              NAME: u.name, PLAN: u.plan,
+              EXPIRED_AT: renewsAt ? renewsAt.toLocaleDateString() : 'soon',
+            })
+          ).catch(() => {});
+          audit(u.id, u.name, 'stripe_renewal_reminder', `invoice=${inv.id}`, null);
+        }
+      }
+
       if (event.type === 'invoice.payment_failed') {
         const inv = event.data.object;
         const customerId = inv.customer;
         const u = customerId ? await getUserByStripeCustomerId(customerId) : null;
         if (u) {
+          // Record failed payment so it appears in billing history
+          await insertPayment({
+            id: randomUUID(), userId: u.id, userName: u.name, userEmail: u.email,
+            plan: u.plan, amount: (inv.amount_due || 0) / 100,
+            currency: (inv.currency || 'usd').toUpperCase(),
+            method: 'stripe', txId: inv.payment_intent || inv.id,
+            note: 'Payment failed', promoCode: null, discountPercent: 0,
+            interval: u.billing_interval || 'monthly', status: 'failed',
+            submittedAt: new Date().toISOString(),
+          }).catch(() => {});
           let portalUrl = appUrl + '/dashboard';
           try {
             const portal = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: appUrl + '/dashboard' });
@@ -2770,7 +2973,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/admin/security') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
     return json(res, {
-      defaultAdminPassword: ADMIN_PASSWORD === 'admin123',
+      adminPasswordSet: !!ADMIN_PASSWORD,
       smtpConfigured: !!(getCachedSettings().smtp_host),
       stripeConfigured: !!(getStripeSettings().stripe_secret_key),
       stripeError: stripeUnavailableReason(),
@@ -2792,6 +2995,17 @@ let _initialized = false;
 async function ensureInit() {
   if (_initialized) return;
   _initialized = true;
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    console.warn('[WARN] SUPABASE_URL or SUPABASE_SERVICE_KEY is not set — clone history and user accounts will not be persisted.');
+  } else {
+    try {
+      await getAllUsers();
+    } catch (dbErr) {
+      console.error(`[WARN] Supabase is unreachable (${dbErr?.message || dbErr}) — clone history and user accounts will not be persisted.`);
+    }
+  }
+
   await initSettings();
   runDunning().catch(() => {});
   setInterval(runDunning, 3600000);

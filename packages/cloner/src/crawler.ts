@@ -11,6 +11,14 @@ import { normalizePageUrl } from './pageUrls.js';
 import type { AssetEntry, ClonerOptions, PageRecord } from './types.js';
 
 const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+
+const NON_PAGE_EXTS = new Set([
+  '.7z','.aac','.avi','.avif','.bin','.bmp','.css','.csv','.doc','.docx',
+  '.eot','.exe','.gif','.gz','.ico','.jpeg','.jpg','.js','.json','.map',
+  '.mjs','.mov','.mp3','.mp4','.ogg','.ogv','.otf','.pdf','.png','.ppt',
+  '.pptx','.rar','.rss','.svg','.tar','.tgz','.ttf','.txt','.wav','.webm',
+  '.webp','.woff','.woff2','.xls','.xlsx','.xml','.zip',
+]);
 const NAV_DELAY_MS = IS_SERVERLESS ? 50 : 250;
 const PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS ? 18_000 : 180_000;
 const USER_AGENT = 'CLONYFY/0.1 (+local archival)';
@@ -278,6 +286,16 @@ export async function crawl(
 
     queue.add(async () => {
       if (records.length >= opts.maxPages) return;
+
+      // Guard: skip URLs whose path extension is a known non-page type.
+      // normalizePageUrl should catch these, but some URLs (sitemap entries,
+      // JS-driven navigations) can arrive with encoded or unusual paths.
+      const urlPathExt = extname(new URL(clean).pathname).toLowerCase();
+      if (urlPathExt && NON_PAGE_EXTS.has(urlPathExt)) {
+        logger.debug(`  [SKIP] ${clean}: non-page extension (${urlPathExt})`);
+        return;
+      }
+
       await new Promise((r) => setTimeout(r, NAV_DELAY_MS));
 
       let context: Awaited<ReturnType<typeof browser.newContext>> | null = null;
@@ -289,6 +307,13 @@ export async function crawl(
           extraHTTPHeaders: {
             'Accept-Language': 'en-US,en;q=0.9',
           },
+        });
+
+        // Abort any navigation that triggers a file download — catches redirect
+        // chains that resolve to PDFs or binaries not detectable by URL alone.
+        context.on('download', (download) => {
+          logger.debug(`  [SKIP] ${clean}: triggered a download (${download.suggestedFilename()})`);
+          download.cancel().catch(() => {});
         });
 
         await context.addInitScript(() => {

@@ -8,21 +8,33 @@ try {
 const PAGES_DIR = join(process.cwd(), 'captured-pages');
 const TARGET_ORIGIN = {{{targetOriginJson}}};
 
-const REPLAY_PATCH = `<script>
+// Importmap that redirects same-origin absolute module imports to the local server.
+// Must be injected as the very first script in <head> so it applies to all subsequent
+// <script type="module"> and dynamic import() calls.
+const IMPORT_MAP = `<script type="importmap">
+{"imports":{"${TARGET_ORIGIN}/":"/"}}
+</script>`;
+
+const REPLAY_PATCH = `<script data-clonyfy-replay>
 (() => {
   const targetOrigin = ${JSON.stringify(TARGET_ORIGIN)};
+
+  // Redirect same-origin absolute URLs to the local server
   const localize = (value) => {
+    if (!value) return value;
+    const s = String(value);
     try {
-      const url = new URL(String(value), window.location.href);
+      const url = new URL(s, window.location.href);
       if (url.origin === targetOrigin) return url.pathname + url.search + url.hash;
     } catch {}
-    return value;
+    return s;
   };
 
+  // fetch() — covers JSON API calls and module preloads
   const nativeFetch = window.fetch;
   window.fetch = function(input, init) {
     if (typeof input === 'string' || input instanceof URL) {
-      return nativeFetch.call(this, localize(input), init);
+      return nativeFetch.call(this, localize(String(input)), init);
     }
     if (input && typeof input === 'object' && 'url' in input) {
       try { input = new Request(localize(input.url), input); } catch {}
@@ -30,23 +42,96 @@ const REPLAY_PATCH = `<script>
     return nativeFetch.call(this, input, init);
   };
 
+  // XMLHttpRequest — covers legacy AJAX
   const nativeOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function(method, url, ...rest) {
     return nativeOpen.call(this, method, localize(url), ...rest);
   };
 
+  // sendBeacon — covers analytics pings (harmless but keeps network clean)
   if (navigator.sendBeacon) {
     const nativeBeacon = navigator.sendBeacon.bind(navigator);
     navigator.sendBeacon = (url, data) => nativeBeacon(localize(url), data);
   }
+
+  // Webpack/Vite chunk-loading public path — bundlers set this to the CDN base URL.
+  // Override it to '/' so dynamic chunk imports resolve against the local server.
+  const patchPublicPath = () => {
+    if (typeof __webpack_public_path__ !== 'undefined') {
+      try { __webpack_public_path__ = '/'; } catch {}
+    }
+    if (window.__webpack_public_path__) window.__webpack_public_path__ = '/';
+    if (window.__vite_public_path__)    window.__vite_public_path__    = '/';
+    if (window.webpackChunkName)        {} // chunk names are fine, no-op
+    // Parcel and Vite store the base in import.meta.env.BASE_URL — can't patch that,
+    // but the importmap above covers ESM dynamic imports from the original origin.
+  };
+  // Run now and after first script execution (bundler may set it after DOMContentLoaded)
+  patchPublicPath();
+  document.addEventListener('DOMContentLoaded', patchPublicPath, { once: true });
+
+  // Service worker unregistration — the original site's SW may intercept requests and
+  // proxy them to the original domain. Unregister all SWs so the clone is self-contained.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      for (const reg of regs) reg.unregister();
+    }).catch(() => {});
+    // Prevent new SW registrations from taking effect in this session
+    const nativeRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    navigator.serviceWorker.register = (...args) => {
+      console.debug('[CLONYFY] Suppressed SW registration:', args[0]);
+      return nativeRegister(...args).then(reg => { reg.unregister(); return reg; }).catch(() => ({} as ServiceWorkerRegistration));
+    };
+  }
 })();
 </script>`;
 
+function resolveRoute(pathname: string): string | undefined {
+  // Normalize: collapse consecutive slashes, decode percent-encoding
+  let p = pathname;
+  try { p = decodeURIComponent(p).replace(/\/+/g, '/') || '/'; } catch {}
+
+  // Exact match
+  if (ROUTE_MAP[p]) return ROUTE_MAP[p];
+
+  // Strip trailing slash (but keep root /)
+  const noSlash = p.replace(/\/$/, '') || '/';
+  if (ROUTE_MAP[noSlash]) return ROUTE_MAP[noSlash];
+
+  // Add trailing slash
+  if (ROUTE_MAP[p + '/']) return ROUTE_MAP[p + '/'];
+
+  // Strip .html extension
+  if (p.endsWith('.html') && ROUTE_MAP[p.slice(0, -5)]) return ROUTE_MAP[p.slice(0, -5)];
+  // Add .html extension
+  if (!p.endsWith('.html') && ROUTE_MAP[p + '.html']) return ROUTE_MAP[p + '.html'];
+
+  // Try /path/index variants
+  if (ROUTE_MAP[noSlash + '/index']) return ROUTE_MAP[noSlash + '/index'];
+  if (ROUTE_MAP[noSlash + '/index.html']) return ROUTE_MAP[noSlash + '/index.html'];
+
+  // Fall back to root
+  return ROUTE_MAP['/'];
+}
+
 function injectReplayPatch(html: string): string {
   if (html.includes('data-clonyfy-replay')) return html;
-  const patch = REPLAY_PATCH.replace('<script>', '<script data-clonyfy-replay>');
-  if (html.includes('</head>')) return html.replace('</head>', `${patch}</head>`);
-  return patch + html;
+
+  // Inject importmap as early as possible in <head> (browsers require it before any
+  // module scripts). If <head> is present, put it right after the opening tag so it
+  // precedes all other scripts. Otherwise prepend to document.
+  let out = html;
+  if (out.includes('<head>')) {
+    out = out.replace('<head>', `<head>${IMPORT_MAP}`);
+  } else if (out.includes('<head ')) {
+    out = out.replace(/(<head[^>]*>)/, `$1${IMPORT_MAP}`);
+  } else {
+    out = IMPORT_MAP + out;
+  }
+
+  // Inject replay patch just before </head> so it runs before page scripts
+  if (out.includes('</head>')) return out.replace('</head>', `${REPLAY_PATCH}</head>`);
+  return REPLAY_PATCH + out;
 }
 
 // Always render dynamically so each request gets the correct snapshot.
@@ -59,16 +144,12 @@ export async function GET(
   const { slug } = await params;
   const pathname = slug && slug.length > 0 ? `/${slug.join('/')}` : '/';
 
-  // Try exact match, then without trailing slash, then fallback to root
-  const filename =
-    ROUTE_MAP[pathname] ??
-    ROUTE_MAP[pathname.replace(/\/$/, '') || '/'] ??
-    ROUTE_MAP['/'];
+  const filename = resolveRoute(pathname);
 
   if (!filename) {
-    const available = Object.keys(ROUTE_MAP).join(', ');
+    const available = Object.keys(ROUTE_MAP).join(', ') || '(none)';
     return new Response(
-      `<!doctype html><html lang="en"><head><title>404 — Not captured</title></head><body><h1>404 — Page not captured</h1><p>No snapshot exists for <code>${pathname}</code>.</p><p>Available routes: ${available}</p></body></html>`,
+      `<!doctype html><html lang="en"><head><title>404 — Not captured</title></head><body style="font-family:system-ui;padding:32px"><h1>404 — Page not captured</h1><p>No snapshot exists for <code>${pathname}</code>.</p><details><summary>Available routes</summary><pre>${available}</pre></details></body></html>`,
       { status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } },
     );
   }
@@ -83,6 +164,9 @@ export async function GET(
 
   const html = injectReplayPatch(readFileSync(htmlPath, 'utf8'));
   return new Response(html, {
-    headers: { 'content-type': 'text/html; charset=utf-8' },
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+    },
   });
 }

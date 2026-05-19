@@ -10,7 +10,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"></noscript>
 <style>
-:root{--bg:#000;--bg2:#080808;--bg3:#0f0f0f;--bg4:#161616;--border:#181818;--border2:#222;--border3:#2e2e2e;--text:#f2f2f2;--text2:#7a7a7a;--text3:#3a3a3a;--blue:#5b8def;--green:#1fd17a;--red:#ff4560;--yellow:#f5a623;--purple:#a855f7;--green-bg:rgba(31,209,122,.07);--red-bg:rgba(255,69,96,.07);--yellow-bg:rgba(245,166,35,.07);--blue-bg:rgba(91,141,239,.08);--grad:linear-gradient(135deg,#5b8def 0%,#a855f7 100%)}
+:root{
+  --bg:#000;--bg2:#080808;--bg3:#0f0f0f;--bg4:#161616;
+  --border:#181818;--border2:#222;--border3:#2e2e2e;
+  --text:#f2f2f2;--text2:#7a7a7a;--text3:#3a3a3a;
+  --blue:#5b8def;--green:#1fd17a;--red:#ff4560;--yellow:#f5a623;--purple:#a855f7;
+  --green-bg:rgba(31,209,122,.07);--red-bg:rgba(255,69,96,.07);
+  --yellow-bg:rgba(245,166,35,.07);--blue-bg:rgba(91,141,239,.08);
+  --grad:linear-gradient(135deg,#5b8def 0%,#a855f7 100%);
+}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
 button{cursor:pointer;font:inherit;background:none;border:none}
@@ -22,11 +30,9 @@ a:hover{text-decoration:underline}
 ::-webkit-scrollbar-thumb{background:#1e1e1e;border-radius:3px}
 .hidden{display:none!important}
 
+/* ── Topbar ── */
 .topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:14px;position:sticky;top:0;z-index:100}
 .topbar-logo{display:flex;align-items:center;gap:9px;text-decoration:none}
-.topbar-mark{width:28px;height:28px;border-radius:8px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(91,141,239,.25);flex-shrink:0}
-.topbar-mark img{width:14px;height:14px;color:#fff}
-.topbar-name{font-size:13px;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .topbar-wordmark{width:128px;height:auto;display:block}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .topbar-btn{display:flex;align-items:center;gap:5px;color:var(--text2);font-size:12px;font-weight:600;padding:5px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);transition:all .15s;text-decoration:none}
@@ -34,35 +40,39 @@ a:hover{text-decoration:underline}
 .logout-btn{color:var(--red);font-size:12px;font-weight:600;padding:5px 10px;border:1px solid rgba(255,69,96,.2);border-radius:6px;background:rgba(255,69,96,.05);transition:all .15s}
 .logout-btn:hover{background:var(--red-bg);border-color:rgba(255,69,96,.4)}
 
-.wrap{max-width:960px;margin:0 auto;padding:28px 24px 60px}
+/* ── Layout ── */
+.wrap{max-width:980px;margin:0 auto;padding:28px 24px 80px}
 .page-title{font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px}
 .page-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
 
-/* Plan hero */
-.plan-hero{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:24px 28px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-.plan-icon{width:48px;height:48px;border-radius:14px;background:var(--grad);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 24px rgba(91,141,239,.3)}
-.plan-icon svg{width:24px;height:24px;color:#fff}
-.plan-hero-info{flex:1;min-width:0}
-.plan-hero-name{font-size:18px;font-weight:800;letter-spacing:-.3px}
-.plan-hero-meta{font-size:12px;color:var(--text2);margin-top:4px;line-height:1.6}
-.plan-hero-meta.warn{color:var(--yellow)}
-.plan-hero-meta.cancelled{color:var(--red)}
-.plan-hero-actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn-upgrade{padding:9px 20px;background:var(--grad);color:#fff;border-radius:8px;font-size:13px;font-weight:700;border:none;transition:opacity .15s;cursor:pointer}
-.btn-upgrade:hover{opacity:.85}
-.btn-cancel{padding:9px 16px;background:transparent;color:var(--red);border:1px solid rgba(255,69,96,.25);border-radius:8px;font-size:12px;font-weight:700;transition:all .15s}
-.btn-cancel:hover{background:var(--red-bg);border-color:rgba(255,69,96,.4)}
-.btn-reactivate{padding:9px 16px;background:rgba(31,209,122,.08);color:var(--green);border:1px solid rgba(31,209,122,.2);border-radius:8px;font-size:12px;font-weight:700;transition:all .15s}
-.btn-reactivate:hover{background:var(--green-bg);border-color:rgba(31,209,122,.4)}
-
-/* Verification banner */
+/* ── Verify banner ── */
 .verify-banner{background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .verify-banner-text{flex:1;font-size:13px;color:var(--yellow)}
 .verify-banner-btn{padding:6px 14px;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);border-radius:6px;color:var(--yellow);font-size:12px;font-weight:700;transition:all .15s}
 .verify-banner-btn:hover{background:rgba(245,166,35,.2)}
 
-/* Stats grid */
-.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+/* ── Plan hero ── */
+.plan-hero{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:24px 28px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;position:relative;overflow:hidden}
+.plan-hero::before{content:'';position:absolute;inset:0;background:var(--grad);opacity:.04;pointer-events:none}
+.plan-icon{width:52px;height:52px;border-radius:14px;background:var(--grad);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 32px rgba(91,141,239,.25)}
+.plan-icon svg{width:26px;height:26px;color:#fff}
+.plan-hero-info{flex:1;min-width:0}
+.plan-hero-name{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.plan-hero-meta{font-size:12px;color:var(--text2);margin-top:5px;line-height:1.6}
+.plan-hero-meta.warn{color:var(--yellow)}
+.plan-hero-meta.cancelled{color:var(--red)}
+.plan-hero-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn-upgrade{padding:10px 22px;background:var(--grad);color:#fff;border-radius:9px;font-size:13px;font-weight:700;border:none;transition:opacity .15s;white-space:nowrap}
+.btn-upgrade:hover{opacity:.85}
+.btn-cancel{padding:9px 16px;background:transparent;color:var(--red);border:1px solid rgba(255,69,96,.25);border-radius:9px;font-size:12px;font-weight:700;transition:all .15s}
+.btn-cancel:hover{background:var(--red-bg);border-color:rgba(255,69,96,.4)}
+.btn-manage{padding:9px 16px;background:var(--blue-bg);color:var(--blue);border:1px solid rgba(91,141,239,.25);border-radius:9px;font-size:12px;font-weight:700;transition:all .15s}
+.btn-manage:hover{background:rgba(91,141,239,.14)}
+.btn-reactivate{padding:9px 16px;background:var(--green-bg);color:var(--green);border:1px solid rgba(31,209,122,.2);border-radius:9px;font-size:12px;font-weight:700;transition:all .15s}
+.btn-reactivate:hover{background:rgba(31,209,122,.12)}
+
+/* ── Stats grid ── */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
 .stat-val{font-size:30px;font-weight:800;letter-spacing:-.6px;line-height:1}
 .stat-val.blue{color:var(--blue)}
@@ -75,13 +85,13 @@ a:hover{text-decoration:underline}
 .quota-fill.warn{background:var(--yellow)}
 .quota-fill.over{background:var(--red)}
 
-/* Section */
-.section{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px}
+/* ── Section ── */
+.section{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
 .section-hd{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.section-title{font-size:13px;font-weight:700;color:var(--text)}
+.section-title{font-size:13px;font-weight:700}
 .section-action{font-size:12px;color:var(--blue);font-weight:600}
 
-/* Table */
+/* ── Table ── */
 table{width:100%;border-collapse:collapse}
 thead th{padding:9px 16px;text-align:left;font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border);background:var(--bg3)}
 tbody tr{border-bottom:1px solid var(--border)}
@@ -90,63 +100,111 @@ tbody tr:hover{background:rgba(255,255,255,.015)}
 tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 .url-cell{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--blue)}
 .date-cell{color:var(--text2);white-space:nowrap}
-.badge-status{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:700}
-.badge-status.done{background:var(--green-bg);color:var(--green);border:1px solid rgba(31,209,122,.2)}
-.badge-status.error{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,96,.2)}
-.badge-status.running{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(245,166,35,.2)}
-.badge-payment{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:700}
-.badge-payment.pending{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(245,166,35,.2)}
-.badge-payment.confirmed{background:var(--green-bg);color:var(--green);border:1px solid rgba(31,209,122,.2)}
-.badge-payment.rejected{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,96,.2)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap}
+.badge.done,.badge.confirmed{background:var(--green-bg);color:var(--green);border:1px solid rgba(31,209,122,.2)}
+.badge.error,.badge.rejected,.badge.failed{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,96,.2)}
+.badge.running,.badge.pending{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(245,166,35,.2)}
 .empty-row{text-align:center;padding:36px!important;color:var(--text3)}
 
-/* Profile section */
+/* ── Profile form ── */
 .profile-form{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:600px){.profile-form{grid-template-columns:1fr}}
 .field-group{display:flex;flex-direction:column;gap:6px}
 .field-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
 .field-input{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;padding:10px 14px;outline:none;transition:border .2s}
 .field-input:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(91,141,239,.12)}
+.field-input:disabled{opacity:.5;cursor:not-allowed}
 .field-full{grid-column:1/-1}
 .save-row{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding-top:4px}
 .save-btn{padding:9px 22px;background:var(--grad);color:#fff;border-radius:8px;font-size:13px;font-weight:700;transition:opacity .15s}
 .save-btn:hover{opacity:.85}
 .save-ok{font-size:12px;color:var(--green);font-weight:600;opacity:0;transition:opacity .3s}
 
-/* Promo code section */
-.promo-row{padding:20px;display:flex;align-items:center;gap:10px}
-.promo-input{flex:1;max-width:280px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;padding:10px 14px;outline:none;transition:border .2s;text-transform:uppercase;letter-spacing:.05em}
-.promo-input:focus{border-color:var(--blue)}
-.promo-btn{padding:10px 20px;background:var(--blue-bg);border:1px solid rgba(91,141,239,.25);color:var(--blue);border-radius:8px;font-size:13px;font-weight:700;transition:all .15s}
-.promo-btn:hover{background:rgba(91,141,239,.15)}
-.promo-result{font-size:12px;margin-left:4px}
-.promo-result.ok{color:var(--green)}
-.promo-result.err{color:var(--red)}
-
-/* Toast */
-#toasts{position:fixed;bottom:16px;right:16px;z-index:9999;display:flex;flex-direction:column-reverse;gap:6px}
-.toast{padding:9px 16px;border-radius:7px;font-size:13px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.5);animation:tin .2s ease}
-@keyframes tin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* ── Toast ── */
+#toasts{position:fixed;bottom:16px;right:16px;z-index:9999;display:flex;flex-direction:column-reverse;gap:6px;pointer-events:none}
+.toast{padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 24px rgba(0,0,0,.6);animation:tin .2s ease;pointer-events:all;max-width:320px}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .toast.ok{background:#0d2218;color:#86efac;border:1px solid #166534}
 .toast.err{background:#1a0d0d;color:#fca5a5;border:1px solid #991b1b}
 .toast.inf{background:#0d2035;color:#93c5fd;border:1px solid #1d4ed8}
 
-/* Confirm modal */
-#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center}
-.modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:28px 32px;width:min(380px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.6)}
+/* ── Confirm modal ── */
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:28px 32px;width:min(400px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.7)}
 .modal-title{font-size:16px;font-weight:800;margin-bottom:8px}
-.modal-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:22px}
+.modal-body{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:24px}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
-.modal-cancel{padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
+.modal-cancel{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border2);color:var(--text2)}
 .modal-cancel:hover{color:var(--text)}
-.modal-confirm{padding:8px 18px;border-radius:7px;font-size:13px;font-weight:700;background:var(--red);color:#fff;border:none}
+.modal-confirm{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;background:var(--red);color:#fff;border:none}
 .modal-confirm:hover{opacity:.85}
+
+/* ── Upgrade modal ── */
+#upgrade-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.upgrade-modal{background:#080808;border:1px solid #1e1e1e;border-radius:20px;width:min(680px,96vw);max-height:92vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.8)}
+.upgrade-header{padding:24px 28px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.upgrade-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.upgrade-sub{font-size:13px;color:var(--text2);margin-top:4px}
+.upgrade-close{width:32px;height:32px;border-radius:8px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.upgrade-close:hover{color:var(--text);border-color:var(--border3)}
+
+/* Billing toggle */
+.billing-toggle{display:flex;align-items:center;gap:0;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;padding:3px;margin:20px 28px 0;width:fit-content}
+.toggle-btn{padding:6px 18px;border-radius:7px;font-size:12px;font-weight:700;color:var(--text2);transition:all .2s;border:none;background:none}
+.toggle-btn.active{background:var(--bg2);color:var(--text);border:1px solid var(--border2);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.annual-badge{font-size:10px;font-weight:800;background:rgba(31,209,122,.12);color:var(--green);border:1px solid rgba(31,209,122,.2);border-radius:5px;padding:2px 7px;margin-left:4px}
+
+/* Plan grid */
+.plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px 28px}
+@media(max-width:500px){.plan-grid{grid-template-columns:1fr}}
+.plan-card{background:#0d0d0d;border:1px solid #1e1e1e;border-radius:14px;padding:18px 20px;position:relative;transition:border-color .2s}
+.plan-card:hover{border-color:#2e2e2e}
+.plan-card.popular-card{border-color:rgba(91,141,239,.35);background:rgba(91,141,239,.03)}
+.plan-card.popular-card::before{content:'Most Popular';position:absolute;top:-1px;right:18px;background:var(--grad);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:0 0 8px 8px;letter-spacing:.04em}
+.plan-card.current-card{border-color:rgba(31,209,122,.3);background:rgba(31,209,122,.02)}
+.plan-card.current-card::before{content:'Current Plan';position:absolute;top:-1px;right:18px;background:rgba(31,209,122,.15);color:var(--green);border:1px solid rgba(31,209,122,.3);border-top:none;font-size:10px;font-weight:800;padding:3px 10px;border-radius:0 0 8px 8px}
+.plan-name{font-size:15px;font-weight:800;letter-spacing:-.2px;margin-bottom:4px}
+.plan-price-row{display:flex;align-items:baseline;gap:4px;margin:10px 0 4px}
+.plan-price{font-size:28px;font-weight:800;letter-spacing:-.5px}
+.plan-interval{font-size:12px;color:var(--text2)}
+.plan-annual-note{font-size:11px;color:var(--green);font-weight:600;margin-bottom:12px}
+.plan-features{list-style:none;display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.plan-features li{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:7px}
+.plan-features li::before{content:'';width:14px;height:14px;border-radius:50%;background:rgba(31,209,122,.12);border:1px solid rgba(31,209,122,.25);flex-shrink:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231fd17a' stroke-width='3'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");background-size:8px;background-repeat:no-repeat;background-position:center}
+.plan-cta{width:100%;padding:11px;border-radius:9px;font-size:13px;font-weight:700;border:none;transition:all .2s;position:relative}
+.plan-cta.primary{background:var(--grad);color:#fff}
+.plan-cta.primary:hover{opacity:.88}
+.plan-cta.secondary{background:#161616;color:var(--text2);border:1px solid #2a2a2a}
+.plan-cta.secondary:hover{background:#1a1a1a;color:var(--text)}
+.plan-cta.current{background:rgba(31,209,122,.08);color:var(--green);border:1px solid rgba(31,209,122,.2);cursor:default}
+.plan-cta:disabled{opacity:.5;cursor:not-allowed}
+.plan-cta .spinner{display:none;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
+.plan-cta.loading .btn-label{display:none}
+.plan-cta.loading .spinner{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Promo row inside modal */
+.upgrade-promo{padding:0 28px 24px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.upgrade-promo-input{flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;padding:9px 14px;outline:none;transition:border .2s;text-transform:uppercase;letter-spacing:.05em}
+.upgrade-promo-input:focus{border-color:var(--blue)}
+.upgrade-promo-btn{padding:9px 18px;background:var(--blue-bg);border:1px solid rgba(91,141,239,.25);color:var(--blue);border-radius:8px;font-size:13px;font-weight:700;transition:all .15s;white-space:nowrap}
+.upgrade-promo-btn:hover{background:rgba(91,141,239,.15)}
+.promo-result{font-size:12px;font-weight:600}
+.promo-result.ok{color:var(--green)}
+.promo-result.err{color:var(--red)}
+.upgrade-footer{padding:12px 28px 24px;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px}
+.upgrade-footer svg{flex-shrink:0}
 
 @media(max-width:640px){
   .stats-grid{grid-template-columns:1fr 1fr}
   .plan-hero{flex-direction:column;align-items:flex-start}
   thead th:nth-child(n+4){display:none}
   tbody td:nth-child(n+4){display:none}
+  .plan-grid{padding:12px 16px}
+  .upgrade-header{padding:20px 20px 0}
+  .billing-toggle{margin:16px 16px 0}
+  .upgrade-promo{padding:0 16px 20px}
+  .upgrade-footer{padding:8px 16px 20px}
 }
 </style>
 </head>
@@ -167,13 +225,13 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 
 <div class="wrap">
   <div class="page-title">Dashboard</div>
-  <div class="page-sub" id="page-sub">Manage your subscription, usage, and account settings.</div>
+  <div class="page-sub" id="page-sub">Manage your subscription, usage, and account.</div>
 
   <!-- Email verification banner -->
   <div id="verify-banner" class="verify-banner hidden">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     <span class="verify-banner-text">Please verify your email address to unlock all features.</span>
-    <button class="verify-banner-btn" onclick="resendVerification()">Resend verification email</button>
+    <button class="verify-banner-btn" onclick="resendVerification()">Resend email</button>
   </div>
 
   <!-- Plan hero -->
@@ -210,7 +268,15 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
   <div class="section">
     <div class="section-hd">
       <div class="section-title">Recent Clones</div>
-      <a href="/" class="section-action">Open App →</a>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="clone-status-filter" onchange="filterClones()" style="font-size:11px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text2);cursor:pointer">
+          <option value="">All</option>
+          <option value="done">Done</option>
+          <option value="running">Running</option>
+          <option value="error">Failed</option>
+        </select>
+        <a href="/" class="section-action">Open App →</a>
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table>
@@ -227,19 +293,9 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     </div>
     <div style="overflow-x:auto">
       <table>
-        <thead><tr><th>Plan</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th></tr></thead>
+        <thead><tr><th>Plan</th><th>Amount</th><th>Interval</th><th>Date</th><th>Status</th></tr></thead>
         <tbody id="billing-tbody"><tr><td colspan="5" class="empty-row">Loading…</td></tr></tbody>
       </table>
-    </div>
-  </div>
-
-  <!-- Promo code -->
-  <div class="section">
-    <div class="section-hd"><div class="section-title">Apply Promo Code</div></div>
-    <div class="promo-row">
-      <input class="promo-input" id="promo-input" placeholder="LAUNCH50" maxlength="32">
-      <button class="promo-btn" onclick="validatePromo()">Apply</button>
-      <span class="promo-result" id="promo-result"></span>
     </div>
   </div>
 
@@ -253,11 +309,11 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
       </div>
       <div class="field-group">
         <label class="field-label">Email</label>
-        <input class="field-input" id="field-email" placeholder="you@example.com" type="email">
+        <input class="field-input" id="field-email" placeholder="you@example.com" type="email" disabled>
       </div>
       <div class="field-group">
         <label class="field-label">New password</label>
-        <input class="field-input" id="field-pw" type="password" placeholder="Leave blank to keep current" minlength="6">
+        <input class="field-input" id="field-pw" type="password" placeholder="Leave blank to keep current">
       </div>
       <div class="field-group">
         <label class="field-label">Confirm new password</label>
@@ -270,12 +326,13 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     </div>
   </div>
 
-  <div class="section" style="margin-top:16px;border:1px solid rgba(255,69,96,.15)">
+  <!-- Danger zone -->
+  <div class="section" style="border-color:rgba(255,69,96,.15)">
     <div class="section-hd"><div class="section-title" style="color:var(--red)">Danger Zone</div></div>
     <div style="padding:16px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
-      <button onclick="exportMyData()" style="padding:8px 18px;background:transparent;border:1px solid var(--border2);border-radius:7px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer">Download My Data (GDPR)</button>
-      <button onclick="confirmDeleteAccount()" style="padding:8px 18px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.2);border-radius:7px;font-size:12px;font-weight:700;color:var(--red);cursor:pointer">Delete Account</button>
-      <span style="font-size:11px;color:var(--text3)">Account deletion is permanent and cannot be undone.</span>
+      <button onclick="exportMyData()" style="padding:8px 18px;background:transparent;border:1px solid var(--border2);border-radius:7px;font-size:12px;font-weight:600;color:var(--text2)">Download My Data (GDPR)</button>
+      <button onclick="confirmDeleteAccount()" style="padding:8px 18px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.2);border-radius:7px;font-size:12px;font-weight:700;color:var(--red)">Delete Account</button>
+      <span style="font-size:11px;color:var(--text3)">Permanent and cannot be undone.</span>
     </div>
   </div>
 
@@ -284,7 +341,46 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
   </div>
 </div>
 
-<!-- Confirm modal -->
+<!-- ── Upgrade modal ── -->
+<div id="upgrade-overlay" class="hidden" onclick="handleOverlayClick(event)">
+  <div class="upgrade-modal" role="dialog" aria-modal="true" aria-label="Upgrade Plan">
+
+    <div class="upgrade-header">
+      <div>
+        <div class="upgrade-title">Choose a Plan</div>
+        <div class="upgrade-sub">Upgrade anytime. Cancel anytime. No surprises.</div>
+      </div>
+      <button class="upgrade-close" onclick="closeUpgradeModal()" aria-label="Close">&times;</button>
+    </div>
+
+    <!-- Monthly / Annual toggle -->
+    <div class="billing-toggle">
+      <button class="toggle-btn active" id="toggle-monthly" onclick="setBillingInterval('monthly')">Monthly</button>
+      <button class="toggle-btn" id="toggle-annual" onclick="setBillingInterval('annual')">
+        Annual <span class="annual-badge">Save 20%</span>
+      </button>
+    </div>
+
+    <!-- Plan cards -->
+    <div class="plan-grid" id="plan-grid">
+      <!-- Rendered by JS -->
+    </div>
+
+    <!-- Promo code -->
+    <div class="upgrade-promo">
+      <input class="upgrade-promo-input" id="upgrade-promo" placeholder="PROMO CODE" maxlength="32" oninput="this.value=this.value.toUpperCase()">
+      <button class="upgrade-promo-btn" onclick="applyPromo()">Apply</button>
+      <span class="promo-result" id="upgrade-promo-result"></span>
+    </div>
+
+    <div class="upgrade-footer">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Secured by Stripe · End-to-end encrypted · Cancel anytime from your dashboard
+    </div>
+  </div>
+</div>
+
+<!-- ── Confirm modal ── -->
 <div id="modal-overlay" class="hidden">
   <div class="modal-card">
     <div class="modal-title" id="modal-title">Confirm</div>
@@ -295,14 +391,45 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     </div>
   </div>
 </div>
+
 <div id="toasts"></div>
 
 <script>
-const PLAN_LABELS = { free:'Free', starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Pro / Unlimited', pro:'Growth', enterprise:'Pro / Unlimited' };
-const PLAN_PRICES = { starter:9.99, popular:19.99, growth:34.99, unlimited:59.99 };
+// ── Constants ─────────────────────────────────────────────────────────────────
+const PLAN_LABELS = {
+  free:'Free', starter:'Starter', popular:'Most Popular',
+  growth:'Growth', unlimited:'Unlimited', pro:'Growth', enterprise:'Unlimited',
+};
+const PLANS = [
+  {
+    key: 'starter', label: 'Starter',
+    monthly: 9.99, annual: 95.88,
+    features: ['15 clones / month', '30 pages per clone', 'All static assets', 'Next.js export', 'Visual editor'],
+  },
+  {
+    key: 'popular', label: 'Most Popular', popular: true,
+    monthly: 19.99, annual: 191.88,
+    features: ['50 clones / month', '100 pages per clone', 'Priority processing', 'API route detection', 'Visual editor'],
+  },
+  {
+    key: 'growth', label: 'Growth',
+    monthly: 34.99, annual: 335.88,
+    features: ['100 clones / month', '200 pages per clone', 'Everything in Popular', 'Concurrent clones ×2', 'Email support'],
+  },
+  {
+    key: 'unlimited', label: 'Unlimited',
+    monthly: 59.99, annual: 575.88,
+    features: ['Unlimited clones', '500 pages per clone', 'Everything in Growth', 'Highest priority', 'Dedicated support'],
+  },
+];
+
 let dashData = null;
 let dashPaySettings = { stripe_ready: false, stripe_error: 'Payment system is not ready yet.' };
+let currentBillingInterval = 'monthly';
+let currentPlan = 'free';
+let checkoutInProgress = false;
 
+// ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body) {
   const token = localStorage.getItem('wc_auth_token') || '';
   const res = await fetch(path, {
@@ -313,71 +440,86 @@ async function apiFetch(method, path, body) {
   return res.json();
 }
 
+// ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  // Support admin impersonation via URL token
   const urlParams = new URLSearchParams(location.search);
+
   const impersonateToken = urlParams.get('impersonate_token');
   if (impersonateToken) {
     localStorage.setItem('wc_auth_token', impersonateToken);
     history.replaceState(null, '', '/dashboard');
   }
+
+  const stripeResult = urlParams.get('stripe');
+  if (stripeResult) history.replaceState(null, '', '/dashboard');
+
   const token = localStorage.getItem('wc_auth_token');
   if (!token) { location.href = '/'; return; }
+
   try {
     dashData = await apiFetch('GET', '/api/user/dashboard');
     if (dashData.error) { location.href = '/'; return; }
+
     if (dashData.impersonatedBy) {
       const banner = document.createElement('div');
       banner.style.cssText = 'background:rgba(245,166,35,.12);border-bottom:1px solid rgba(245,166,35,.25);padding:8px 24px;font-size:12px;color:#f5a623;font-weight:600;text-align:center';
-      banner.textContent = '⚠ Admin impersonation session — you are viewing this dashboard as this user';
+      banner.textContent = '⚠ Admin impersonation session — viewing dashboard as this user';
       document.body.prepend(banner);
     }
+
     renderDashboard(dashData);
+
     dashPaySettings = await apiFetch('GET', '/api/payments/settings');
     const billing = await apiFetch('GET', '/api/user/billing');
     renderBilling(billing.payments || []);
+
     document.getElementById('field-name').value = dashData.user.name || '';
     document.getElementById('field-email').value = dashData.user.email || '';
+
+    if (stripeResult === 'success') toast('Payment successful — your plan is now active!', 'ok');
+    else if (stripeResult === 'cancelled') toast('Checkout cancelled. No charge was made.', 'inf');
   } catch { toast('Failed to load dashboard', 'err'); }
 }
 
+// ── Render dashboard ──────────────────────────────────────────────────────────
 function renderDashboard(d) {
   const { user, usage } = d;
-  const plan = user.plan || 'free';
-  document.getElementById('page-sub').textContent = `Welcome back, ${user.name}`;
+  currentPlan = user.plan || 'free';
 
-  // Verification banner
+  document.getElementById('page-sub').textContent = `Welcome back, ${user.name}`;
   if (!user.emailVerified) document.getElementById('verify-banner').classList.remove('hidden');
 
   // Plan hero
-  document.getElementById('plan-name').textContent = (PLAN_LABELS[plan] || plan) + ' Plan';
+  document.getElementById('plan-name').textContent = (PLAN_LABELS[currentPlan] || currentPlan) + ' Plan';
   const meta = document.getElementById('plan-meta');
   if (user.cancelAtPeriodEnd && user.planRenewsAt) {
-    meta.textContent = `Cancels on ${fmtDate(user.planRenewsAt)} — access until then`;
+    meta.textContent = `Cancels ${fmtDate(user.planRenewsAt)} — access until then`;
     meta.className = 'plan-hero-meta cancelled';
   } else if (user.planRenewsAt) {
-    const d2 = Math.ceil((new Date(user.planRenewsAt) - Date.now()) / 86400000);
-    meta.textContent = `Renews ${fmtDate(user.planRenewsAt)} (${d2} days)`;
-    meta.className = 'plan-hero-meta' + (d2 <= 7 ? ' warn' : '');
+    const days = Math.ceil((new Date(user.planRenewsAt) - Date.now()) / 86400000);
+    meta.textContent = `Renews ${fmtDate(user.planRenewsAt)} · ${days} day${days !== 1 ? 's' : ''} remaining`;
+    meta.className = 'plan-hero-meta' + (days <= 7 ? ' warn' : '');
   } else {
-    meta.textContent = plan === 'free' ? 'Unlimited — no renewal needed' : 'No renewal date set';
+    meta.textContent = currentPlan === 'free' ? 'Free forever — upgrade anytime' : 'No renewal date set';
     meta.className = 'plan-hero-meta';
   }
 
   const actionsEl = document.getElementById('plan-actions');
   const btns = [];
-  if (plan !== 'unlimited' && plan !== 'enterprise') btns.push(`<button class="btn-upgrade" onclick="openUpgradeModal()">✦ Upgrade Plan</button>`);
-  if (plan !== 'free') {
+  if (!['unlimited', 'enterprise'].includes(currentPlan)) {
+    btns.push(`<button class="btn-upgrade" onclick="openUpgradeModal()">✦ Upgrade Plan</button>`);
+  }
+  if (currentPlan !== 'free') {
     if (user.cancelAtPeriodEnd) {
-      btns.push(`<button class="btn-reactivate" onclick="reactivate()">Reactivate</button>`);
+      btns.push(`<button class="btn-reactivate" onclick="openUpgradeModal()">Reactivate</button>`);
     } else {
-      btns.push(`<button class="btn-cancel" onclick="cancelSub()">Cancel subscription</button>`);
+      btns.push(`<button class="btn-cancel" onclick="cancelSub()">Cancel</button>`);
     }
-    btns.push(`<button class="btn-reactivate" style="background:rgba(91,141,239,.08);color:var(--blue);border-color:rgba(91,141,239,.25)" onclick="openBillingPortal()">Manage Billing</button>`);
+    btns.push(`<button class="btn-manage" onclick="openBillingPortal()">Manage Billing</button>`);
   }
   actionsEl.innerHTML = btns.join('');
 
-  // Usage stats
+  // Stats
   document.getElementById('stat-clones-month').textContent = usage.clonesThisMonth;
   document.getElementById('stat-total-clones').textContent = usage.totalClones;
   document.getElementById('stat-total-pages').textContent = usage.totalPages;
@@ -390,51 +532,192 @@ function renderDashboard(d) {
     fill.className = 'quota-fill' + (pct >= 100 ? ' over' : pct >= 80 ? ' warn' : '');
   } else {
     document.getElementById('stat-clones-limit').textContent = 'Unlimited';
-    document.getElementById('quota-fill').style.width = '0%';
   }
 
-  // Clones table
-  const tbody = document.getElementById('clones-tbody');
-  if (!d.recentClones.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No clones yet — <a href="/">start cloning</a></td></tr>';
-  } else {
-    tbody.innerHTML = d.recentClones.map(c => `<tr>
-      <td class="url-cell" title="${esc(c.url)}"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(trimUrl(c.url))}</a></td>
-      <td style="font-weight:700;color:var(--blue)">${c.pages ?? '—'}</td>
-      <td style="color:var(--text2)">${c.assets ?? '—'}</td>
-      <td class="date-cell">${relTime(c.startedAt)}</td>
-      <td><span class="badge-status ${c.status}">${c.status}</span></td>
-    </tr>`).join('');
-  }
+  // Clones table (rendered via filterClones so the status filter works)
+  filterClones();
 }
 
-function renderBilling(payments) {
-  const tbody = document.getElementById('billing-tbody');
-  if (!payments.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No payments yet</td></tr>';
+function filterClones() {
+  const statusF = document.getElementById('clone-status-filter')?.value || '';
+  const clones = dashData?.recentClones || [];
+  const filtered = statusF ? clones.filter(c => c.status === statusF) : clones;
+  const tbody = document.getElementById('clones-tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-row">${clones.length ? 'No clones match this filter' : 'No clones yet — <a href="/">start cloning</a>'}</td></tr>`;
     return;
   }
-  const methodLabels = { paypal:'PayPal', crypto_btc:'Bitcoin', crypto_eth:'Ethereum', crypto_usdt:'USDT' };
-  tbody.innerHTML = payments.map(p => `<tr>
-    <td style="font-weight:700;text-transform:capitalize">${p.plan}</td>
-    <td style="color:var(--green);font-weight:700">$${p.amount}${p.discountPercent ? ` <span style="color:var(--text2);font-size:11px">(-${p.discountPercent}%)</span>` : ''}</td>
-    <td style="color:var(--text2)">${methodLabels[p.method] || p.method}</td>
-    <td class="date-cell">${fmtDate(p.submittedAt)}</td>
-    <td><span class="badge-payment ${p.status}">${p.status}</span></td>
+  tbody.innerHTML = filtered.map(c => `<tr>
+    <td class="url-cell" title="${esc(c.url)}"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(trimUrl(c.url))}</a></td>
+    <td style="font-weight:700;color:var(--blue)">${c.pages ?? '—'}</td>
+    <td style="color:var(--text2)">${c.assets ?? '—'}</td>
+    <td class="date-cell">${relTime(c.startedAt)}</td>
+    <td><span class="badge ${c.status}">${c.status}</span></td>
   </tr>`).join('');
 }
 
-async function resendVerification() {
-  try {
-    const r = await apiFetch('POST', '/api/auth/resend-verification');
-    if (r.error) throw new Error(r.error);
-    toast('Verification email sent! Check your inbox.', 'ok');
-  } catch(e) { toast(e.message, 'err'); }
+// ── Billing history ───────────────────────────────────────────────────────────
+function renderBilling(payments) {
+  const tbody = document.getElementById('billing-tbody');
+  if (!payments.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No billing history yet</td></tr>';
+    return;
+  }
+  const methodLabel = m => ({ stripe:'Stripe', paypal:'PayPal', crypto_btc:'Bitcoin', crypto_eth:'Ethereum', crypto_usdt:'USDT' }[m] || m);
+  tbody.innerHTML = payments.map(p => `<tr>
+    <td style="font-weight:700;text-transform:capitalize">${esc(p.plan)}</td>
+    <td style="color:${p.status==='failed'?'var(--red)':'var(--green)'};font-weight:700">
+      $${Number(p.amount).toFixed(2)}
+      ${p.discountPercent ? `<span style="color:var(--text2);font-size:11px">(-${p.discountPercent}%)</span>` : ''}
+    </td>
+    <td style="color:var(--text2)">${esc(methodLabel(p.method))}${p.interval ? ` · ${p.interval}` : ''}</td>
+    <td class="date-cell">${fmtDate(p.submittedAt)}</td>
+    <td><span class="badge ${p.status}">${p.status}</span></td>
+  </tr>`).join('');
 }
 
+// ── Upgrade modal ─────────────────────────────────────────────────────────────
+function openUpgradeModal() {
+  document.getElementById('upgrade-promo-result').textContent = '';
+  document.getElementById('upgrade-promo-result').className = 'promo-result';
+  document.getElementById('upgrade-promo').value = '';
+  renderPlanGrid();
+  document.getElementById('upgrade-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeUpgradeModal() {
+  document.getElementById('upgrade-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('upgrade-overlay')) closeUpgradeModal();
+}
+
+function setBillingInterval(interval) {
+  currentBillingInterval = interval;
+  document.getElementById('toggle-monthly').classList.toggle('active', interval === 'monthly');
+  document.getElementById('toggle-annual').classList.toggle('active', interval === 'annual');
+  renderPlanGrid();
+}
+
+function renderPlanGrid() {
+  const isAnnual = currentBillingInterval === 'annual';
+  const grid = document.getElementById('plan-grid');
+  const normalizedCurrent = { pro:'growth', enterprise:'unlimited' }[currentPlan] || currentPlan;
+
+  grid.innerHTML = PLANS.map(p => {
+    const isCurrent = p.key === normalizedCurrent;
+    const price = isAnnual ? (p.annual / 12).toFixed(2) : p.monthly.toFixed(2);
+    const annualTotal = p.annual.toFixed(2);
+
+    let cardClass = 'plan-card';
+    if (p.popular && !isCurrent) cardClass += ' popular-card';
+    if (isCurrent) cardClass += ' current-card';
+
+    let ctaClass = 'plan-cta';
+    let ctaText = `Get ${p.label}`;
+    let ctaDisabled = '';
+    let ctaOnclick = `stripeCheckout('${p.key}')`;
+
+    if (isCurrent) {
+      ctaClass += ' current';
+      ctaText = 'Current Plan';
+      ctaDisabled = 'disabled';
+      ctaOnclick = '';
+    } else if (p.popular) {
+      ctaClass += ' primary';
+    } else {
+      ctaClass += ' secondary';
+    }
+
+    return `
+    <div class="${cardClass}">
+      <div class="plan-name">${esc(p.label)}</div>
+      <div class="plan-price-row">
+        <span class="plan-price">$${price}</span>
+        <span class="plan-interval">/mo</span>
+      </div>
+      ${isAnnual ? `<div class="plan-annual-note">$${annualTotal} billed annually</div>` : '<div style="height:18px"></div>'}
+      <ul class="plan-features">
+        ${p.features.map(f => `<li>${esc(f)}</li>`).join('')}
+      </ul>
+      <button class="${ctaClass}" id="cta-${p.key}" ${ctaDisabled} ${ctaOnclick ? `onclick="${ctaOnclick}"` : ''}>
+        <span class="btn-label">${ctaText}</span>
+        <span class="spinner"></span>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function stripeCheckout(plan) {
+  if (checkoutInProgress) return;
+  if (!dashPaySettings.stripe_ready) {
+    toast(dashPaySettings.stripe_error || 'Stripe is not configured yet.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById(`cta-${plan}`);
+  if (btn) { btn.classList.add('loading'); btn.disabled = true; }
+  checkoutInProgress = true;
+
+  try {
+    const promoCode = document.getElementById('upgrade-promo')?.value.trim() || undefined;
+    const r = await apiFetch('POST', '/api/payments/stripe/checkout', {
+      plan,
+      interval: currentBillingInterval,
+      promoCode: promoCode || undefined,
+    });
+    if (r.error) { toast(r.error, 'err'); return; }
+    window.location.href = r.url;
+  } catch(e) {
+    toast('Checkout failed: ' + e.message, 'err');
+  } finally {
+    checkoutInProgress = false;
+    if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+  }
+}
+
+async function applyPromo() {
+  const code = document.getElementById('upgrade-promo').value.trim();
+  const result = document.getElementById('upgrade-promo-result');
+  if (!code) return;
+  result.className = 'promo-result';
+  result.textContent = 'Checking…';
+  try {
+    const r = await apiFetch('POST', '/api/payments/validate-promo', { code });
+    if (r.error) {
+      result.className = 'promo-result err';
+      result.textContent = r.error;
+    } else {
+      result.className = 'promo-result ok';
+      result.textContent = `✓ ${r.discountPercent}% off applied at checkout`;
+    }
+  } catch {
+    result.className = 'promo-result err';
+    result.textContent = 'Failed to validate';
+  }
+}
+
+// ── Billing portal ────────────────────────────────────────────────────────────
+async function openBillingPortal() {
+  if (!dashPaySettings.stripe_ready) {
+    toast(dashPaySettings.stripe_error || 'Stripe billing is not ready.', 'err');
+    return;
+  }
+  try {
+    const r = await apiFetch('POST', '/api/payments/stripe/portal');
+    if (r.error) { toast(r.error, 'err'); return; }
+    window.location.href = r.url;
+  } catch(e) { toast('Could not open billing portal: ' + e.message, 'err'); }
+}
+
+// ── Cancel subscription ───────────────────────────────────────────────────────
 async function cancelSub() {
-  openModal('Cancel Subscription',
-    'Your plan will remain active until the renewal date, then downgrade to Free. Are you sure?',
+  openModal(
+    'Cancel Subscription',
+    'Your plan stays active until the renewal date, then reverts to Free. You can reactivate anytime.',
     async () => {
       try {
         const r = await apiFetch('POST', '/api/user/cancel-subscription');
@@ -447,86 +730,16 @@ async function cancelSub() {
   );
 }
 
-async function reactivate() {
-  openUpgradeModal();
-}
-
-async function openBillingPortal() {
+// ── Verification ──────────────────────────────────────────────────────────────
+async function resendVerification() {
   try {
-    if (!dashPaySettings.stripe_ready) {
-      toast(dashPaySettings.stripe_error || 'Stripe billing is not ready yet.', 'err');
-      return;
-    }
-    const r = await apiFetch('POST', '/api/payments/stripe/portal');
-    if (r.error) { toast(r.error, 'err'); return; }
-    window.location.href = r.url;
-  } catch(e) { toast('Could not open billing portal: ' + e.message, 'err'); }
+    const r = await apiFetch('POST', '/api/auth/resend-verification');
+    if (r.error) throw new Error(r.error);
+    toast('Verification email sent — check your inbox', 'ok');
+  } catch(e) { toast(e.message, 'err'); }
 }
 
-function openUpgradeModal() {
-  const overlay = document.getElementById('upgrade-modal-overlay');
-  if (overlay) { overlay.style.display = 'flex'; return; }
-  const mo = document.createElement('div');
-  mo.id = 'upgrade-modal-overlay';
-  mo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-  mo.innerHTML = `
-  <div style="background:#0a0a0a;border:1px solid #222;border-radius:16px;max-width:540px;width:100%;padding:28px;max-height:90vh;overflow-y:auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div style="font-size:18px;font-weight:800;letter-spacing:-.3px">Upgrade Plan</div>
-      <button onclick="document.getElementById('upgrade-modal-overlay').style.display='none'" style="color:#666;font-size:20px;cursor:pointer;background:none;border:none;line-height:1">&times;</button>
-    </div>
-    <div style="display:grid;gap:10px;margin-bottom:20px" id="upgrade-plan-list">
-      ${[
-        { key:'starter', label:'Starter', monthly:9.99, annual:95.88, desc:'15 clones/mo - 30 pages - Visual editor' },
-        { key:'popular', label:'Most Popular', monthly:19.99, annual:191.88, desc:'50 clones/mo - 100 pages - Priority processing' },
-        { key:'growth', label:'Growth', monthly:34.99, annual:335.88, desc:'100 clones/mo - 200 pages - API access' },
-        { key:'unlimited', label:'Pro / Unlimited', monthly:59.99, annual:575.88, desc:'Unlimited clones - 500 pages - Dedicated support' },
-      ].map(p => `
-        <div style="background:#111;border:1px solid #222;border-radius:10px;padding:16px 18px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="font-weight:800;font-size:15px">${p.label}</div>
-            <div style="font-size:12px;color:#71717a">${p.desc}</div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button onclick="stripeCheckout('${p.key}','monthly')" style="flex:1;padding:9px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">$${p.monthly}/mo</button>
-            <button onclick="stripeCheckout('${p.key}','annual')" style="flex:1;padding:9px;background:#1a1a1a;color:#d4d4d8;border:1px solid #333;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">$${p.annual}/yr <span style="font-size:10px;color:#1fd17a">(save ${Math.round(100-(p.annual/(p.monthly*12))*100)}%)</span></button>
-          </div>
-        </div>`).join('')}
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <input id="upgrade-promo" placeholder="Promo code" style="flex:1;background:#111;border:1px solid #222;border-radius:7px;color:#f2f2f2;font-size:13px;padding:8px 12px;outline:none">
-    </div>
-    <div style="font-size:11px;color:#52525b;text-align:center">Powered by Stripe · Secure checkout · Cancel anytime</div>
-  </div>`;
-  document.body.appendChild(mo);
-  mo.addEventListener('click', e => { if (e.target === mo) mo.style.display = 'none'; });
-}
-
-async function stripeCheckout(plan, interval) {
-  try {
-    if (!dashPaySettings.stripe_ready) {
-      toast(dashPaySettings.stripe_error || 'Stripe checkout is not ready yet.', 'err');
-      return;
-    }
-    const promoCode = document.getElementById('upgrade-promo')?.value.trim() || undefined;
-    const r = await apiFetch('POST', '/api/payments/stripe/checkout', { plan, interval, promoCode });
-    if (r.error) { toast(r.error, 'err'); return; }
-    window.location.href = r.url;
-  } catch(e) { toast('Checkout error: ' + e.message, 'err'); }
-}
-
-async function validatePromo() {
-  const code = document.getElementById('promo-input').value.trim();
-  const result = document.getElementById('promo-result');
-  if (!code) return;
-  try {
-    const r = await apiFetch('POST', '/api/payments/validate-promo', { code });
-    if (r.error) { result.className = 'promo-result err'; result.textContent = r.error; return; }
-    result.className = 'promo-result ok';
-    result.textContent = `✓ ${r.discountPercent}% off — apply at checkout`;
-  } catch { result.className = 'promo-result err'; result.textContent = 'Failed to validate'; }
-}
-
+// ── Profile ───────────────────────────────────────────────────────────────────
 async function saveProfile() {
   const name = document.getElementById('field-name').value.trim();
   const pw = document.getElementById('field-pw').value;
@@ -535,16 +748,10 @@ async function saveProfile() {
   if (pw && pw !== pw2) { toast('Passwords do not match', 'err'); return; }
   if (pw && pw.length < 8) { toast('Password must be at least 8 characters', 'err'); return; }
   try {
-    const token = localStorage.getItem('wc_auth_token') || '';
     const body = { name };
     if (pw) body.password = pw;
-    const r = await fetch('/api/user/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
-      body: JSON.stringify(body),
-    });
-    const data = await r.json();
-    if (data.error) throw new Error(data.error);
+    const r = await apiFetch('PUT', '/api/user/profile', body);
+    if (r.error) throw new Error(r.error);
     document.getElementById('field-pw').value = '';
     document.getElementById('field-pw2').value = '';
     const ok = document.getElementById('save-ok');
@@ -554,25 +761,14 @@ async function saveProfile() {
   } catch(e) { toast(e.message, 'err'); }
 }
 
-function logout() {
-  const token = localStorage.getItem('wc_auth_token');
-  if (token) fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }).catch(() => {});
-  localStorage.removeItem('wc_auth_token');
-  location.href = '/';
-}
-
-// ── GDPR: export data ─────────────────────────────────────────────────────────
+// ── GDPR ──────────────────────────────────────────────────────────────────────
 function exportMyData() {
   const token = localStorage.getItem('wc_auth_token') || '';
-  const a = document.createElement('a');
-  a.href = '/api/user/export';
-  a.download = 'clonyfy-my-data.json';
-  // Use fetch to attach auth header, then blob download
   fetch('/api/user/export', { headers: { 'X-Auth-Token': token } })
     .then(r => r.blob())
     .then(blob => {
       const url = URL.createObjectURL(blob);
-      a.href = url;
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'clonyfy-data.json' });
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -580,58 +776,85 @@ function exportMyData() {
     }).catch(() => toast('Export failed', 'err'));
 }
 
-// ── GDPR: delete account ──────────────────────────────────────────────────────
 function confirmDeleteAccount() {
-  const pw = prompt('Enter your password to permanently delete your account:');
-  if (!pw) return;
-  openModal('Delete Account', 'This action is irreversible. All your data and clone history will be deleted.', async () => {
-    try {
-      const token = localStorage.getItem('wc_auth_token') || '';
-      const res = await fetch('/api/user/account', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
-        body: JSON.stringify({ password: pw }),
-      });
-      const r = await res.json();
-      if (r.error) throw new Error(r.error);
-      localStorage.removeItem('wc_auth_token');
-      toast('Account deleted. Goodbye!', 'ok');
-      setTimeout(() => { location.href = '/'; }, 2000);
-    } catch(e) { toast(e.message, 'err'); }
-  });
+  openModal(
+    '⚠️ Delete Account',
+    `<p style="margin:0 0 14px;color:var(--text2)">This is <strong>permanent and irreversible</strong>. All your clones, billing history, and data will be deleted.</p>
+     <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:6px">Enter your password to confirm</label>
+     <input id="del-account-pw" type="password" placeholder="Your password" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none" autofocus>`,
+    async () => {
+      const pw = document.getElementById('del-account-pw')?.value || '';
+      if (!pw) { toast('Password is required', 'err'); return; }
+      try {
+        const token = localStorage.getItem('wc_auth_token') || '';
+        const res = await fetch('/api/user/account', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+          body: JSON.stringify({ password: pw }),
+        });
+        const r = await res.json();
+        if (r.error) throw new Error(r.error);
+        localStorage.removeItem('wc_auth_token');
+        toast('Account deleted', 'ok');
+        setTimeout(() => { location.href = '/'; }, 1800);
+      } catch(e) { toast(e.message, 'err'); }
+    },
+    true
+  );
 }
 
-// ── Modal ──────────────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function logout() {
+  const token = localStorage.getItem('wc_auth_token');
+  if (token) fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }).catch(() => {});
+  localStorage.removeItem('wc_auth_token');
+  location.href = '/';
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
 let modalCb = null;
-function openModal(title, body, cb) {
+function openModal(title, body, cb, isHtml = false) {
   document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-body').textContent = body;
+  const el = document.getElementById('modal-body');
+  if (isHtml) el.innerHTML = body; else el.textContent = body;
   modalCb = cb;
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
-function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); modalCb = null; }
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  modalCb = null;
+}
 document.getElementById('modal-confirm-btn').onclick = () => { closeModal(); if (modalCb) modalCb(); };
 document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
 
-// ── Toast ──────────────────────────────────────────────────────────────────────
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeUpgradeModal();
+    closeModal();
+  }
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'inf') {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = msg;
   document.getElementById('toasts').prepend(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => el.remove(), 4500);
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function trimUrl(u) { try { const p = new URL(u); return p.hostname + (p.pathname !== '/' ? p.pathname.slice(0,30) : ''); } catch { return u; } }
+function trimUrl(u) { try { const p = new URL(u); return p.hostname + (p.pathname !== '/' ? p.pathname.slice(0, 28) : ''); } catch { return u; } }
 function fmtDate(iso) { if (!iso) return '—'; return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }); }
 function relTime(iso) {
   if (!iso) return '—';
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60000) return 'just now';
-  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-  if (diff < 7*86400000) return `${Math.floor(diff/86400000)}d ago`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  if (diff < 7 * 86400000) return `${Math.floor(diff / 86400000)}d ago`;
   return fmtDate(iso);
 }
 

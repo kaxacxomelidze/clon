@@ -46,6 +46,22 @@ export const getUserByEmail = (email) =>
 export const getAllUsers = () =>
   all(supabase.from('users').select('*').order('created_at', { ascending: false }));
 
+export const getUsersPage = async ({ search = '', plan = '', blocked = null, limit = 50, offset = 0 } = {}) => {
+  let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+  if (search) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+  if (plan) query = query.eq('plan', plan);
+  if (blocked === true) query = query.eq('blocked', 1);
+  if (blocked === false) query = query.eq('blocked', 0);
+  query = query.range(offset, offset + limit - 1);
+  const { data, error, count } = await query;
+  if (error) throw new Error(error.message);
+  return { users: data || [], total: count || 0 };
+};
+
+export const getClonesByUserIds = (userIds) =>
+  userIds.length === 0 ? Promise.resolve([]) :
+  all(supabase.from('clones').select('user_id, started_at').in('user_id', userIds).order('started_at', { ascending: false }));
+
 export const insertUser = async (u) => {
   const { error } = await supabase.from('users').insert({
     id: u.id, name: u.name, email: u.email, hash: u.hash || '',
@@ -165,6 +181,34 @@ export const deleteCloneById = async (id) => {
 
 export const deleteUserClones = async (userId) => {
   await supabase.from('clones').delete().eq('user_id', userId);
+};
+
+// Aggregate stats for admin dashboard — avoids loading entire tables.
+export const getAdminStats = async () => {
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const [
+    { count: totalUsers },
+    { count: blockedUsers },
+    { count: totalClones },
+    { count: totalErrors },
+    { count: pendingPayments },
+    { data: paidUsers },
+    { data: confirmedPayments },
+  ] = await Promise.all([
+    supabase.from('users').select('*', { count: 'exact', head: true }),
+    supabase.from('users').select('*', { count: 'exact', head: true }).eq('blocked', 1),
+    supabase.from('clones').select('*', { count: 'exact', head: true }),
+    supabase.from('errors').select('*', { count: 'exact', head: true }),
+    supabase.from('payments').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('users').select('plan, billing_interval, plan_renews_at').neq('plan', 'free'),
+    supabase.from('payments').select('amount, processed_at').eq('status', 'confirmed'),
+  ]);
+  const now = new Date();
+  const activePaidUsers = (paidUsers || []).filter(u => u.plan_renews_at && new Date(u.plan_renews_at) > now);
+  const confirmed = confirmedPayments || [];
+  const totalRevenue = confirmed.reduce((s, p) => s + (p.amount || 0), 0);
+  const monthRevenue = confirmed.filter(p => new Date(p.processed_at) >= monthStart).reduce((s, p) => s + (p.amount || 0), 0);
+  return { totalUsers: totalUsers || 0, blockedUsers: blockedUsers || 0, totalClones: totalClones || 0, totalErrors: totalErrors || 0, pendingPayments: pendingPayments || 0, activePaidUsers, totalRevenue, monthRevenue };
 };
 
 export const getCloneCountThisMonth = async (userId, monthStart) => {
