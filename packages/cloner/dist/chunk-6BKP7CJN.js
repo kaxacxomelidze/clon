@@ -1649,7 +1649,10 @@ async function capturePage(context, pageUrl, assetsDir) {
 }
 
 // src/crawler.ts
-var IS_SERVERLESS2 = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+function isServerlessRuntime(env = process.env, cwd = process.cwd()) {
+  return env.VERCEL === "1" || env.VERCEL === "true" || !!env.VERCEL_ENV || !!env.AWS_LAMBDA_FUNCTION_NAME || !!env.LAMBDA_TASK_ROOT || cwd.startsWith("/var/task");
+}
+var IS_SERVERLESS2 = isServerlessRuntime();
 var NON_PAGE_EXTS2 = /* @__PURE__ */ new Set([
   ".7z",
   ".aac",
@@ -10708,4 +10711,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-MHFQWXUP.js.map
+//# sourceMappingURL=chunk-6BKP7CJN.js.map

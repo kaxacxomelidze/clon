@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { shouldUseBundledChromium, systemBrowserChannel } from '../crawler.js';
+import { isServerlessRuntime, shouldUseBundledChromium, systemBrowserChannel } from '../crawler.js';
 
 let tempDir = '';
 
@@ -33,6 +33,23 @@ describe('shouldUseBundledChromium', () => {
 
   it('does not use the Linux bundled Chromium on Windows development machines', () => {
     expect(shouldUseBundledChromium('/missing/chromium.exe', 'win32', false)).toBe(false);
+  });
+});
+
+describe('isServerlessRuntime', () => {
+  it('detects Vercel runtime markers', () => {
+    expect(isServerlessRuntime({ VERCEL: '1' }, '/repo')).toBe(true);
+    expect(isServerlessRuntime({ VERCEL_ENV: 'production' }, '/repo')).toBe(true);
+  });
+
+  it('detects Lambda runtime markers', () => {
+    expect(isServerlessRuntime({ AWS_LAMBDA_FUNCTION_NAME: 'api' }, '/repo')).toBe(true);
+    expect(isServerlessRuntime({ LAMBDA_TASK_ROOT: '/var/task' }, '/repo')).toBe(true);
+  });
+
+  it('detects bundled serverless task paths', () => {
+    expect(isServerlessRuntime({}, '/var/task')).toBe(true);
+    expect(isServerlessRuntime({}, '/var/task/packages/cloner')).toBe(true);
   });
 });
 

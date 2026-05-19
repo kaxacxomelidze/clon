@@ -10,7 +10,19 @@ import { logger } from './logger.js';
 import { normalizePageUrl } from './pageUrls.js';
 import type { AssetEntry, ClonerOptions, PageRecord } from './types.js';
 
-const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+export function isServerlessRuntime(
+  env: NodeJS.ProcessEnv = process.env,
+  cwd = process.cwd(),
+): boolean {
+  return env.VERCEL === '1'
+    || env.VERCEL === 'true'
+    || !!env.VERCEL_ENV
+    || !!env.AWS_LAMBDA_FUNCTION_NAME
+    || !!env.LAMBDA_TASK_ROOT
+    || cwd.startsWith('/var/task');
+}
+
+const IS_SERVERLESS = isServerlessRuntime();
 
 const NON_PAGE_EXTS = new Set([
   '.7z','.aac','.avi','.avif','.bin','.bmp','.css','.csv','.doc','.docx',
