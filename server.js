@@ -215,7 +215,27 @@ const STRIPE_PRICE_ENV_KEY = (plan, interval) => `STRIPE_PRICE_${plan}_${interva
 const SECRET_MASK = '••••••••';
 function isMaskedSecret(value) {
   const v = String(value || '').trim();
-  return v === SECRET_MASK || /^â€¢+$/.test(v);
+  return v === SECRET_MASK || /^\u00e2\u20ac\u00a2+$/.test(v);
+}
+function cleanSettingValue(value) {
+  if (value === undefined || value === null || isMaskedSecret(value)) return '';
+  return String(value).trim();
+}
+function validateStripeSetting(key, value) {
+  if (!value) return '';
+  if (key === 'stripe_secret_key' && !/^sk_(test|live)_[A-Za-z0-9_]+$/.test(value)) {
+    return 'Stripe Secret Key must start with sk_test_ or sk_live_.';
+  }
+  if (key === 'stripe_publishable_key' && !/^pk_(test|live)_[A-Za-z0-9_]+$/.test(value)) {
+    return 'Stripe Publishable Key must start with pk_test_ or pk_live_.';
+  }
+  if (key === 'stripe_webhook_secret' && !/^whsec_[A-Za-z0-9_]+$/.test(value)) {
+    return 'Stripe Webhook Secret must start with whsec_.';
+  }
+  if (key.startsWith('stripe_price_') && !/^price_[A-Za-z0-9_]+$/.test(value)) {
+    return `${key} must be a Stripe price id that starts with price_.`;
+  }
+  return '';
 }
 function envFirst(...keys) {
   for (const key of keys) {
@@ -226,13 +246,13 @@ function envFirst(...keys) {
 }
 function getStripeSettings(raw = getCachedSettings()) {
   const out = { ...raw };
-  out.stripe_secret_key = String(raw.stripe_secret_key || '').trim() || envFirst('STRIPE_SECRET_KEY', 'STRIPE_SECRET', 'STRIPE_SK', 'STRIPE_PRIVATE_KEY');
-  out.stripe_webhook_secret = String(raw.stripe_webhook_secret || '').trim() || envFirst('STRIPE_WEBHOOK_SECRET');
-  out.stripe_publishable_key = String(raw.stripe_publishable_key || '').trim() || envFirst('STRIPE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_PK');
+  out.stripe_secret_key = cleanSettingValue(raw.stripe_secret_key) || envFirst('STRIPE_SECRET_KEY', 'STRIPE_SECRET', 'STRIPE_SK', 'STRIPE_PRIVATE_KEY');
+  out.stripe_webhook_secret = cleanSettingValue(raw.stripe_webhook_secret) || envFirst('STRIPE_WEBHOOK_SECRET');
+  out.stripe_publishable_key = cleanSettingValue(raw.stripe_publishable_key) || envFirst('STRIPE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'STRIPE_PK');
   for (const plan of ALL_PAID_PLAN_KEYS) {
     for (const interval of ['monthly', 'annual']) {
       const key = STRIPE_PRICE_KEY(plan, interval);
-      out[key] = String(raw[key] || '').trim() || envFirst(STRIPE_PRICE_ENV_KEY(plan, interval));
+      out[key] = cleanSettingValue(raw[key]) || envFirst(STRIPE_PRICE_ENV_KEY(plan, interval));
     }
   }
   return out;
@@ -2106,7 +2126,12 @@ async function handleRequest(req, res) {
       'google_client_id', 'google_client_secret',
     ];
     for (const k of plainKeys) {
-      if (body[k] !== undefined && !isMaskedSecret(body[k])) current[k] = String(body[k] || '').trim();
+      if (body[k] !== undefined && !isMaskedSecret(body[k])) {
+        const value = String(body[k] || '').trim();
+        const stripeError = validateStripeSetting(k, value);
+        if (stripeError) return json(res, { error: stripeError }, 400);
+        current[k] = value;
+      }
     }
     if (body.smtp_secure !== undefined) current.smtp_secure = body.smtp_secure === true || body.smtp_secure === 'true';
     await saveSettings(current);
@@ -2448,35 +2473,40 @@ async function handleRequest(req, res) {
     }
     const appUrl = publicAppUrl(req);
 
-    // Ensure Stripe customer exists
-    let customerId = user.stripe_customer_id;
-    if (!customerId) {
-      const customer = await stripe.customers.create({ email: user.email, name: user.name, metadata: { userId: user.id } });
-      customerId = customer.id;
-      await updateUser(user.id, { stripe_customer_id: customerId });
-    }
+    let session;
+    try {
+      // Ensure Stripe customer exists
+      let customerId = user.stripe_customer_id;
+      if (!customerId) {
+        const customer = await stripe.customers.create({ email: user.email, name: user.name, metadata: { userId: user.id } });
+        customerId = customer.id;
+        await updateUser(user.id, { stripe_customer_id: customerId });
+      }
 
-    // Validate promo code via Stripe if provided
-    let discounts = undefined;
-    if (promoCode) {
-      try {
-        const codes = await stripe.promotionCodes.list({ code: promoCode, active: true, limit: 1 });
-        if (codes.data.length > 0) discounts = [{ promotion_code: codes.data[0].id }];
-      } catch {}
-    }
+      // Validate promo code via Stripe if provided
+      let discounts = undefined;
+      if (promoCode) {
+        try {
+          const codes = await stripe.promotionCodes.list({ code: promoCode, active: true, limit: 1 });
+          if (codes.data.length > 0) discounts = [{ promotion_code: codes.data[0].id }];
+        } catch {}
+      }
 
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      client_reference_id: user.id,
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      allow_promotion_codes: !discounts,
-      ...(discounts ? { discounts } : {}),
-      metadata: { userId: user.id, plan, interval: bi },
-      subscription_data: { metadata: { userId: user.id, plan, interval: bi } },
-      success_url: `${appUrl}/dashboard?stripe=success`,
-      cancel_url: `${appUrl}/dashboard?stripe=cancelled`,
-    });
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        client_reference_id: user.id,
+        mode: 'subscription',
+        line_items: [{ price: priceId, quantity: 1 }],
+        allow_promotion_codes: !discounts,
+        ...(discounts ? { discounts } : {}),
+        metadata: { userId: user.id, plan, interval: bi },
+        subscription_data: { metadata: { userId: user.id, plan, interval: bi } },
+        success_url: `${appUrl}/dashboard?stripe=success`,
+        cancel_url: `${appUrl}/dashboard?stripe=cancelled`,
+      });
+    } catch (err) {
+      return json(res, { error: `Stripe checkout failed: ${err.message}` }, 502);
+    }
     audit(user.id, user.name, 'stripe_checkout_created', `plan=${plan} interval=${bi}`, ip);
     return json(res, { url: session.url });
   }
@@ -2489,11 +2519,15 @@ async function handleRequest(req, res) {
     if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe not configured' }, 503);
     if (!user.stripe_customer_id) return json(res, { error: 'No Stripe subscription found' }, 400);
     const appUrl = publicAppUrl(req);
-    const portal = await stripe.billingPortal.sessions.create({
-      customer: user.stripe_customer_id,
-      return_url: `${appUrl}/dashboard`,
-    });
-    return json(res, { url: portal.url });
+    try {
+      const portal = await stripe.billingPortal.sessions.create({
+        customer: user.stripe_customer_id,
+        return_url: `${appUrl}/dashboard`,
+      });
+      return json(res, { url: portal.url });
+    } catch (err) {
+      return json(res, { error: `Stripe portal failed: ${err.message}` }, 502);
+    }
   }
 
   // POST /api/stripe/webhook — Stripe event handler (requires raw body)
