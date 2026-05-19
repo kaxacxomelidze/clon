@@ -2373,6 +2373,35 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/tos') return serveFile(res, join(__dirname, 'public', 'tos.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/privacy') return serveFile(res, join(__dirname, 'public', 'privacy.html'), 'text/html');
 
+  if (req.method === 'POST' && url.pathname === '/api/auth/resend-verification') {
+    const user = await getSessionUser(req);
+    if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.email_verified === 1 || user.email_verified === true) return json(res, { ok: true, alreadyVerified: true });
+    if (!checkRateLimit(`verify:${user.id}`, 3, 3600000)) return json(res, { error: 'Too many verification emails. Try again later.' }, 429);
+
+    const verifyToken = randomUUID().replace(/-/g, '');
+    await updateUser(user.id, { verify_token: verifyToken, verify_expiry: Date.now() + 24 * 3600 * 1000 });
+    const appUrl = publicAppUrl(req);
+    sendEmail(user.email, 'Verify your CLONYFY email',
+      renderEmail('verify-email', { SUBJECT: 'Verify your email', NAME: user.name, LINK: `${appUrl}/api/auth/verify-email?token=${verifyToken}` })
+    ).catch(() => {});
+    return json(res, { ok: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/auth/verify-email') {
+    const token = String(url.searchParams.get('token') || '').trim();
+    const redirectTo = (status) => {
+      res.writeHead(302, { Location: `/dashboard?verify=${encodeURIComponent(status)}` });
+      res.end();
+    };
+    if (!token) return redirectTo('missing');
+    const user = await getUserByVerifyToken(token, Date.now());
+    if (!user) return redirectTo('expired');
+    await updateUser(user.id, { email_verified: 1, verify_token: null, verify_expiry: null });
+    audit(user.id, user.name, 'email_verified', null, ip);
+    return redirectTo('success');
+  }
+
   // ── Password reset ─────────────────────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/auth/forgot-password') {
     if (!checkRateLimit(`forgot:${ip}`, 5, 3600000)) return json(res, { error: 'Too many requests' }, 429);
