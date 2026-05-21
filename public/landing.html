@@ -280,7 +280,7 @@ h1.hero-h1{font-size:clamp(42px,6vw,82px);font-weight:900;line-height:1.02;lette
 .pricing-toggle .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s,box-shadow .2s;box-shadow:0 1px 4px rgba(0,0,0,.4)}
 .pricing-toggle.on .knob{transform:translateX(20px)}
 .pricing-badge{font-size:11px;font-weight:700;color:var(--green);background:rgba(62,207,142,.1);border:1px solid rgba(62,207,142,.2);padding:2px 8px;border-radius:100px}
-.plans{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-top:32px}
+.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-top:32px}
 .plan{background:var(--bg);padding:30px 26px;display:flex;flex-direction:column;position:relative;transition:background .2s}
 .plan:hover{background:var(--bg2)}
 .plan.pop{background:var(--bg2);border-top:2px solid transparent;border-image:var(--grad) 1}
@@ -833,76 +833,61 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
           <li><span class="ck">&check;</span> 3 clones / month</li>
           <li><span class="ck">&check;</span> Up to 20 pages each</li>
           <li><span class="ck">&check;</span> Visual preview</li>
-          <li><span class="ck">&check;</span> Basic editor</li>
           <li><span class="dash">&ndash;</span> <span style="color:var(--text3)">ZIP export</span></li>
-          <li><span class="dash">&ndash;</span> <span style="color:var(--text3)">Priority processing</span></li>
+          <li><span class="dash">&ndash;</span> <span style="color:var(--text3)">Visual editor</span></li>
         </ul>
         <a href="/app" class="plan-cta ghost">Get started</a>
       </div>
       <div class="plan fade-up fade-up-d1">
         <div class="plan-name">Starter</div>
-        <div class="plan-amt" data-monthly="$9.99" data-annual="$7.99">$9.99</div>
+        <div class="plan-amt" data-monthly="$19.99" data-annual="$15.99">$19.99</div>
         <div class="plan-per">per month</div>
-        <div class="plan-desc">For freelancers and solo builders.</div>
+        <div class="plan-desc">For solo builders cloning live websites.</div>
         <div class="plan-divider"></div>
         <ul class="plan-feats">
-          <li><span class="ck">&check;</span> 15 clones / month</li>
-          <li><span class="ck">&check;</span> Up to 30 pages each</li>
-          <li><span class="ck">&check;</span> Everything in Free</li>
-          <li><span class="ck">&check;</span> ZIP export</li>
-          <li><span class="ck">&check;</span> Visual editor</li>
-          <li><span class="dash">&ndash;</span> <span style="color:var(--text3)">API access</span></li>
+          <li><span class="ck">&check;</span> 10 website clones / month</li>
+          <li><span class="ck">&check;</span> Unlimited screens</li>
+          <li><span class="ck">&check;</span> Code &amp; ZIP export</li>
+          <li><span class="ck">&check;</span> Visual Builder &amp; Editor</li>
+          <li><span class="ck">&check;</span> 6 days/week support</li>
+          <li><span class="ck">&check;</span> Cancel anytime</li>
         </ul>
         <a href="/app" class="plan-cta ghost">Get Starter</a>
       </div>
       <div class="plan pop fade-up fade-up-d2">
         <div class="plan-popular">Most popular</div>
-        <div class="plan-name">Most Popular</div>
-        <div class="plan-amt" data-monthly="$19.99" data-annual="$15.99">$19.99</div>
+        <div class="plan-name">Growth</div>
+        <div class="plan-amt" data-monthly="$29.99" data-annual="$23.99">$29.99</div>
         <div class="plan-per">per month</div>
-        <div class="plan-desc">For builders who clone weekly.</div>
+        <div class="plan-desc">For builders and agencies that need more output.</div>
         <div class="plan-divider"></div>
         <ul class="plan-feats">
-          <li><span class="ck">&check;</span> 50 clones / month</li>
-          <li><span class="ck">&check;</span> Up to 100 pages each</li>
-          <li><span class="ck">&check;</span> Everything in Starter</li>
-          <li><span class="ck">&check;</span> Priority processing</li>
-          <li><span class="ck">&check;</span> Email support</li>
-          <li><span class="dash">&ndash;</span> <span style="color:var(--text3)">Advanced API access</span></li>
+          <li><span class="ck">&check;</span> 25 website clones / month</li>
+          <li><span class="ck">&check;</span> Unlimited screens</li>
+          <li><span class="ck">&check;</span> Code &amp; ZIP export</li>
+          <li><span class="ck">&check;</span> Figma export</li>
+          <li><span class="ck">&check;</span> Visual Builder &amp; Editor</li>
+          <li><span class="ck">&check;</span> Access to templates</li>
+          <li><span class="ck">&check;</span> API access</li>
         </ul>
-        <a href="/app" class="plan-cta fill">Get Most Popular</a>
+        <a href="/app" class="plan-cta fill">Get Growth</a>
       </div>
       <div class="plan fade-up fade-up-d3">
-        <div class="plan-name">Growth</div>
-        <div class="plan-amt" data-monthly="$34.99" data-annual="$27.99">$34.99</div>
-        <div class="plan-per">per month</div>
-        <div class="plan-desc">For agencies and power users.</div>
-        <div class="plan-divider"></div>
-        <ul class="plan-feats">
-          <li><span class="ck">&check;</span> 100 clones / month</li>
-          <li><span class="ck">&check;</span> Up to 200 pages each</li>
-          <li><span class="ck">&check;</span> Everything in Most Popular</li>
-          <li><span class="ck">&check;</span> API access</li>
-          <li><span class="ck">&check;</span> Priority support</li>
-          <li><span class="ck">&check;</span> Custom output templates</li>
-        </ul>
-        <a href="/app" class="plan-cta ghost">Get Growth</a>
-      </div>
-      <div class="plan fade-up fade-up-d4">
-        <div class="plan-name">Unlimited</div>
+        <div class="plan-name">Scale</div>
         <div class="plan-amt" data-monthly="$59.99" data-annual="$47.99">$59.99</div>
         <div class="plan-per">per month</div>
         <div class="plan-desc">Unlimited scale for teams.</div>
         <div class="plan-divider"></div>
         <ul class="plan-feats">
-          <li><span class="ck">&check;</span> Unlimited clones</li>
-          <li><span class="ck">&check;</span> Up to 500 pages each</li>
-          <li><span class="ck">&check;</span> Everything in Growth</li>
-          <li><span class="ck">&check;</span> Dedicated support</li>
-          <li><span class="ck">&check;</span> SLA guarantee</li>
-          <li><span class="ck">&check;</span> On-premise option</li>
+          <li><span class="ck">&check;</span> Unlimited website clones</li>
+          <li><span class="ck">&check;</span> Unlimited screens</li>
+          <li><span class="ck">&check;</span> Code &amp; ZIP export</li>
+          <li><span class="ck">&check;</span> Figma export</li>
+          <li><span class="ck">&check;</span> Visual Builder &amp; Editor</li>
+          <li><span class="ck">&check;</span> 7 days/week priority support</li>
+          <li><span class="ck">&check;</span> Cancel anytime</li>
         </ul>
-        <a href="/app" class="plan-cta ghost">Get Unlimited</a>
+        <a href="/app" class="plan-cta ghost">Get Scale</a>
       </div>
     </div>
   </div>
@@ -1257,7 +1242,7 @@ const SB_BOT = [
     id: 'pricing',
     label: 'Pricing & plans',
     keywords: ['price','pricing','cost','plan','paid','fee','charge','money','buy','cheap','expensive'],
-    reply: `We have 5 plans:<br><br><strong>Free</strong> - 3 clones/mo, 20 pages each<br><strong>Starter</strong> - $9.99/mo, 15 clones, 30 pages<br><strong>Most Popular</strong> - $19.99/mo, 50 clones, 100 pages<br><strong>Growth</strong> - $34.99/mo, 100 clones, 200 pages<br><strong>Unlimited</strong> - $59.99/mo, unlimited clones<br><br>Yearly billing saves 20%. <a href="/app" style="color:#93c5fd">Start free</a>`,
+    reply: `We have 4 plans:<br><br><strong>Free</strong> - 3 clones/mo, 20 pages each<br><strong>Starter</strong> - $19.99/mo, 10 website clones, unlimited screens<br><strong>Growth</strong> - $29.99/mo, 25 website clones, Figma export, API access<br><strong>Scale</strong> - $59.99/mo, unlimited website clones and priority support<br><br>Yearly billing saves 20%. <a href="/app" style="color:#93c5fd">Start free</a>`,
   },
   {
     id: 'whatclone',

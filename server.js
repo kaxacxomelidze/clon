@@ -122,30 +122,27 @@ setInterval(() => {
 // ── Plan limits ────────────────────────────────────────────────────────────────
 const PLAN_LIMITS = {
   free:       { clonesPerMonth: 3,        maxPages: 20  },
-  starter:    { clonesPerMonth: 15,       maxPages: 30  },
-  popular:    { clonesPerMonth: 50,       maxPages: 100 },
-  growth:     { clonesPerMonth: 100,      maxPages: 200 },
+  starter:    { clonesPerMonth: 10,       maxPages: 500 },
+  growth:     { clonesPerMonth: 25,       maxPages: 500 },
   unlimited:  { clonesPerMonth: Infinity, maxPages: 500 },
 };
-const PAID_PLAN_KEYS = ['starter', 'popular', 'growth', 'unlimited'];
-const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+const PAID_PLAN_KEYS = ['starter', 'growth', 'unlimited'];
+const PLAN_ALIASES = { popular: 'growth', pro: 'growth', scale: 'unlimited', enterprise: 'unlimited' };
 const LEGACY_PAID_PLAN_KEYS = Object.keys(PLAN_ALIASES);
 const ALL_PAID_PLAN_KEYS = [...PAID_PLAN_KEYS, ...LEGACY_PAID_PLAN_KEYS];
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 const USE_INLINE_CLONE = IS_VERCEL || process.env.CLONYFY_INLINE_CLONE === '1';
 const SERVERLESS_MAX_PAGES = Math.max(1, parseInt(process.env.CLONYFY_SERVERLESS_MAX_PAGES || '20', 10) || 20);
 const PLAN_PRICES = {
-  starter:    { monthly: 9.99,  annual: 95.88  },
-  popular:    { monthly: 19.99, annual: 191.88 },
-  growth:     { monthly: 34.99, annual: 335.88 },
+  starter:    { monthly: 19.99, annual: 191.88 },
+  growth:     { monthly: 29.99, annual: 287.88 },
   unlimited:  { monthly: 59.99, annual: 575.88 },
 };
 const PLAN_LABELS = {
   free: 'Free',
   starter: 'Starter',
-  popular: 'Most Popular',
   growth: 'Growth',
-  unlimited: 'Unlimited',
+  unlimited: 'Scale',
 };
 function legacyAliasesForPlan(plan) {
   const normalized = normalizePlan(plan);

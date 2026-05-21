@@ -401,31 +401,26 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PLAN_LABELS = {
-  free:'Free', starter:'Starter', popular:'Most Popular',
-  growth:'Growth', unlimited:'Unlimited', pro:'Growth', enterprise:'Unlimited',
+  free:'Free', starter:'Starter',
+  growth:'Growth', unlimited:'Scale', popular:'Growth', pro:'Growth', scale:'Scale', enterprise:'Scale',
 };
-const PLAN_ALIASES = { pro:'growth', enterprise:'unlimited' };
+const PLAN_ALIASES = { popular:'growth', pro:'growth', scale:'unlimited', enterprise:'unlimited' };
 function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
 const PLANS = [
   {
     key: 'starter', label: 'Starter',
-    monthly: 9.99, annual: 95.88,
-    features: ['15 clones / month', '30 pages per clone', 'All static assets', 'Next.js export', 'Visual editor'],
-  },
-  {
-    key: 'popular', label: 'Most Popular', popular: true,
     monthly: 19.99, annual: 191.88,
-    features: ['50 clones / month', '100 pages per clone', 'Priority processing', 'API route detection', 'Visual editor'],
+    features: ['10 website clones / month', 'Unlimited screens', 'Code & ZIP export', 'Visual Builder & Editor', '6 days/week support', 'Cancel anytime'],
   },
   {
-    key: 'growth', label: 'Growth',
-    monthly: 34.99, annual: 335.88,
-    features: ['100 clones / month', '200 pages per clone', 'Everything in Popular', 'Concurrent clones ×2', 'Email support'],
+    key: 'growth', label: 'Growth', popular: true,
+    monthly: 29.99, annual: 287.88,
+    features: ['25 website clones / month', 'Unlimited screens', 'Code & ZIP export', 'Figma export', 'Visual Builder & Editor', 'Access to templates', 'API access', '6 days/week support', 'Cancel anytime'],
   },
   {
-    key: 'unlimited', label: 'Unlimited',
+    key: 'unlimited', label: 'Scale',
     monthly: 59.99, annual: 575.88,
-    features: ['Unlimited clones', '500 pages per clone', 'Everything in Growth', 'Highest priority', 'Dedicated support'],
+    features: ['Unlimited website clones', 'Unlimited screens', 'Code & ZIP export', 'Figma export', 'Visual Builder & Editor', 'Access to templates', 'API access', '7 days/week priority support', 'Cancel anytime'],
   },
 ];
 

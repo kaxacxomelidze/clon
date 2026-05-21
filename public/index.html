@@ -1211,60 +1211,49 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   <div class="pricing-cards">
     <div class="plan-card" id="plan-card-starter">
       <div class="plan-name">Starter</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-starter">9.99</span><span class="plan-period" id="period-starter">/mo</span></div>
-      <div class="plan-desc">For individuals cloning occasional sites.</div>
+      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-starter">19.99</span><span class="plan-period" id="period-starter">/mo</span></div>
+      <div class="plan-desc">For solo builders cloning and editing live sites.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>15 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>30 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Asset capture and CSS rewriting</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>10 website clones</strong> per month</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
         <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Next.js export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>6 days/week support</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Cancel anytime</span></div>
       </div>
       <button class="plan-btn soft" id="plan-btn-starter" onclick="handleBuy('starter')">Get Starter</button>
     </div>
-    <div class="plan-card featured" id="plan-card-popular">
+    <div class="plan-card featured" id="plan-card-growth">
       <div class="plan-badge">Most Popular</div>
-      <div class="plan-name">Most Popular</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-popular">19.99</span><span class="plan-period" id="period-popular">/mo</span></div>
-      <div class="plan-desc">For builders who clone and edit every week.</div>
-      <div class="plan-divider"></div>
-      <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>50 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>100 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Starter features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Priority processing</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Email support</span></div>
-      </div>
-      <button class="plan-btn grad" id="plan-btn-popular" onclick="handleBuy('popular')">Get Most Popular</button>
-    </div>
-    <div class="plan-card" id="plan-card-growth">
       <div class="plan-name">Growth</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-growth">34.99</span><span class="plan-period" id="period-growth">/mo</span></div>
-      <div class="plan-desc">For agencies and power users shipping client work.</div>
+      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-growth">29.99</span><span class="plan-period" id="period-growth">/mo</span></div>
+      <div class="plan-desc">For builders and agencies that need more output.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>100 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>200 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Most Popular features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>API route detection + fixtures</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Docker + compose export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>25 website clones</strong> per month</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Figma export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor and templates</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>API access</span></div>
       </div>
-      <button class="plan-btn soft" id="plan-btn-growth" onclick="handleBuy('growth')">Get Growth</button>
+      <button class="plan-btn grad" id="plan-btn-growth" onclick="handleBuy('growth')">Get Growth</button>
     </div>
     <div class="plan-card" id="plan-card-unlimited">
-      <div class="plan-name">Unlimited</div>
+      <div class="plan-name">Scale</div>
       <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-unlimited">59.99</span><span class="plan-period" id="period-unlimited">/mo</span></div>
       <div class="plan-desc">For teams that need maximum scale.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited clones</strong></span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>500 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Growth features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Dedicated support</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Custom crawl rules</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited website clones</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Figma export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor, templates, and API access</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>7 days/week priority support</span></div>
       </div>
-      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Unlimited</button>
+      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Scale</button>
     </div>
   </div>
 </div>
@@ -2364,15 +2353,14 @@ function closePricing() {
 // Pricing state
 let pricingInterval = 'monthly';
 let paySettings = {};
-const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+const PLAN_ALIASES = { popular: 'growth', pro: 'growth', scale: 'unlimited', enterprise: 'unlimited' };
 function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
 function planLabel(plan) {
-  return ({ free:'Free', starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[normalizePlan(plan)] || 'Free';
+  return ({ free:'Free', starter:'Starter', growth:'Growth', unlimited:'Scale' })[normalizePlan(plan)] || 'Free';
 }
 const PLAN_PRICES = {
-  starter:   { monthly: 9.99,  annualMonthly: 7.99,  annual: 95.88  },
-  popular:   { monthly: 19.99, annualMonthly: 15.99, annual: 191.88 },
-  growth:    { monthly: 34.99, annualMonthly: 27.99, annual: 335.88 },
+  starter:   { monthly: 19.99, annualMonthly: 15.99, annual: 191.88 },
+  growth:    { monthly: 29.99, annualMonthly: 23.99, annual: 287.88 },
   unlimited: { monthly: 59.99, annualMonthly: 47.99, annual: 575.88 },
 };
 
@@ -2399,16 +2387,17 @@ function setPricingInterval(iv) {
 
 function updatePricingButtons() {
   const userPlan = currentUser?.plan || 'free';
-  for (const plan of ['starter', 'popular', 'growth', 'unlimited']) {
+  const normalizedUserPlan = normalizePlan(userPlan);
+  for (const plan of ['starter', 'growth', 'unlimited']) {
     const btn = document.getElementById('plan-btn-' + plan);
     if (!btn) continue;
-    if (userPlan === plan) {
+    if (normalizedUserPlan === plan) {
       btn.textContent = 'Current plan';
       btn.disabled = true;
       btn.style.opacity = '0.5';
       btn.style.cursor = 'default';
     } else {
-      btn.textContent = ({ starter:'Get Starter', popular:'Get Most Popular', growth:'Get Growth', unlimited:'Get Unlimited' })[plan] || `Get ${planLabel(plan)}`;
+      btn.textContent = ({ starter:'Get Starter', growth:'Get Growth', unlimited:'Get Scale' })[plan] || `Get ${planLabel(plan)}`;
       btn.disabled = false;
       btn.style.opacity = '';
       btn.style.cursor = '';
@@ -2479,7 +2468,7 @@ function openManualPaymentModal(plan) {
   const prices = PLAN_PRICES[plan] || PLAN_PRICES.starter;
   const price = pricingInterval === 'annual' ? prices.annual : prices.monthly;
   const period = pricingInterval === 'annual' ? '/yr' : '/mo';
-  const planLabel = ({ starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[plan] || plan;
+  const planLabel = ({ starter:'Starter', growth:'Growth', unlimited:'Scale' })[normalizePlan(plan)] || plan;
   const availableMethods = MPAY_METHODS.filter(m => paySettings[m.settingKey]);
 
   _mpayState = { plan, price, period, planLabel, step: 1, selectedMethod: availableMethods[0] || null };
@@ -3169,8 +3158,8 @@ async function loadHistory(options = {}) {
   }
 }
 
-const _PLAN_CLONE_LIMITS = { free: 3, starter: 15, popular: 50, growth: 100, unlimited: null };
-const _PLAN_PAGE_LIMITS = { free: 20, starter: 30, popular: 100, growth: 200, unlimited: 500 };
+const _PLAN_CLONE_LIMITS = { free: 3, starter: 10, growth: 25, unlimited: null };
+const _PLAN_PAGE_LIMITS = { free: 20, starter: 500, growth: 500, unlimited: 500 };
 
 function currentPlanLimits() {
   const plan = normalizePlan(currentUser?.plan || 'free');
@@ -5666,37 +5655,37 @@ const SECTIONS_LIBRARY = [
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:0 auto;text-align:left">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Starter</div>
-      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$9<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">Perfect for individuals and side projects.</p>
+      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$19<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For solo builders cloning live websites.</p>
       <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get Starter</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:#374151">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 15 clones/month</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Export &amp; download</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 10 website clones/month</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Code &amp; ZIP export</li>
         <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Visual editor</li>
       </ul>
     </div>
     <div style="background:#1e40af;border-radius:16px;padding:32px;color:#fff;position:relative">
       <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#3b82f6,#6366f1);padding:4px 16px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">Most Popular</div>
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#93c5fd;margin-bottom:16px">Pro</div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#93c5fd;margin-bottom:16px">Growth</div>
       <div style="font-size:48px;font-weight:900;letter-spacing:-2px;line-height:1;margin-bottom:8px">$29<span style="font-size:16px;color:rgba(255,255,255,.5);font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:rgba(255,255,255,.65);margin:0 0 24px;line-height:1.55">For growing teams that need more power and flexibility.</p>
-      <a href="#" style="display:block;text-align:center;padding:12px;background:#fff;color:#1e40af;border-radius:9px;font-weight:800;font-size:14px;text-decoration:none;margin-bottom:24px">Get Pro</a>
+      <p style="font-size:14px;color:rgba(255,255,255,.65);margin:0 0 24px;line-height:1.55">For builders and agencies that need more output.</p>
+      <a href="#" style="display:block;text-align:center;padding:12px;background:#fff;color:#1e40af;border-radius:9px;font-weight:800;font-size:14px;text-decoration:none;margin-bottom:24px">Get Growth</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:rgba(255,255,255,.8)">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Unlimited projects</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> 100GB storage</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Priority support</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Advanced analytics</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> 25 website clones/month</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Unlimited screens</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Figma export</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> API access</li>
       </ul>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Enterprise</div>
-      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$99<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For large teams with custom needs and dedicated support.</p>
-      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Contact sales</a>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Scale</div>
+      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$59<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For teams that need maximum scale.</p>
+      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get Scale</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:#374151">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Custom limits</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> SSO &amp; SAML</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Dedicated account manager</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Unlimited website clones</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Unlimited screens</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Priority support</li>
         <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> SLA guarantee</li>
       </ul>
     </div>
