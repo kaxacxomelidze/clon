@@ -1068,9 +1068,78 @@ function runProcess(file, args, opts = {}) {
   });
 }
 
+function routeToStaticPath(route) {
+  const cleanRoute = String(route || '/').split('?')[0].split('#')[0];
+  if (cleanRoute === '/' || !cleanRoute.replace(/\//g, '')) return 'index.html';
+  const parts = cleanRoute
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => part.replace(/[<>:"\\|?*\x00-\x1F]/g, '-'));
+  const last = parts[parts.length - 1] || '';
+  if (/\.[a-z0-9]{1,8}$/i.test(last)) return join(...parts);
+  return join(...parts, 'index.html');
+}
+
+function copyDirRecursive(src, dest) {
+  if (!existsSync(src)) return;
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
+    else if (entry.isFile()) copyFileSync(srcPath, destPath);
+  }
+}
+
+async function materializeStaticWebsite(outDir) {
+  const materialized = await materializeCloneOutput(outDir);
+  const siteDir = join(OUTPUT_DIR, `__static_${randomUUID().slice(0, 8)}`);
+  mkdirSync(siteDir, { recursive: true });
+  try {
+    const routeMapPath = join(materialized.dir, 'route-map.json');
+    const capturedPagesDir = join(materialized.dir, 'captured-pages');
+    const routeMap = existsSync(routeMapPath) ? JSON.parse(readFileSync(routeMapPath, 'utf8')) : null;
+    if (routeMap && existsSync(capturedPagesDir)) {
+      for (const [route, filename] of Object.entries(routeMap)) {
+        if (!filename || String(filename).includes('..')) continue;
+        const srcPath = join(capturedPagesDir, String(filename));
+        if (!existsSync(srcPath)) continue;
+        const destPath = join(siteDir, routeToStaticPath(route));
+        if (!isInsideOutputDir(destPath)) continue;
+        mkdirSync(dirname(destPath), { recursive: true });
+        copyFileSync(srcPath, destPath);
+      }
+    } else if (existsSync(capturedPagesDir)) {
+      for (const file of readdirSync(capturedPagesDir)) {
+        if (!file.endsWith('.html') || file.includes('..')) continue;
+        const destName = file === '__root__.html' ? 'index.html' : file;
+        copyFileSync(join(capturedPagesDir, file), join(siteDir, destName));
+      }
+    }
+    copyDirRecursive(join(materialized.dir, 'public', '_assets'), join(siteDir, '_assets'));
+    if (!existsSync(join(siteDir, 'index.html'))) {
+      const firstHtml = readdirSync(siteDir, { recursive: true }).find(name => String(name).endsWith('.html'));
+      if (firstHtml) copyFileSync(join(siteDir, String(firstHtml)), join(siteDir, 'index.html'));
+    }
+    return {
+      dir: siteDir,
+      cleanup: () => {
+        try { materialized.cleanup(); } catch {}
+        try { rmSync(siteDir, { recursive: true, force: true }); } catch {}
+      },
+    };
+  } catch (err) {
+    try { materialized.cleanup(); } catch {}
+    try { rmSync(siteDir, { recursive: true, force: true }); } catch {}
+    throw err;
+  }
+}
+
 async function buildOutputZip(outDir) {
   if (!isInsideOutputDir(outDir)) throw new Error('Invalid output folder');
-  const materialized = await materializeCloneOutput(outDir);
+  const materialized = await materializeStaticWebsite(outDir);
   const zipName = `${outDir.split(/[\\/]/).pop()}.zip`;
   const zipPath = join(OUTPUT_DIR, zipName);
   try { rmSync(zipPath, { force: true }); } catch {}

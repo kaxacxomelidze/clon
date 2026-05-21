@@ -1,6 +1,6 @@
 import PQueue from 'p-queue';
 import { createHash } from 'crypto';
-import { existsSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { extname, join } from 'path';
 import mime from 'mime-types';
 import { capturePage, extractCssUrls } from './capture.js';
@@ -300,6 +300,7 @@ async function saveStaticAsset(rawUrl: string, pageUrl: string, assetsDir: strin
     const filename = `${hashUrl(absUrl)}${ext}`;
     const localPath = join(assetsDir, filename);
     const webPath = `/_assets/${filename}`;
+    mkdirSync(assetsDir, { recursive: true });
     if (!existsSync(localPath)) writeFileSync(localPath, body);
 
     return { originalUrl: absUrl, localPath: webPath };
@@ -511,7 +512,6 @@ export async function crawl(
       ...launchOptions,
     });
   } catch (err) {
-    if (!IS_SERVERLESS) throw err;
     return crawlStatic(opts, origin, assetsDir, visited, records, onPage, `browser launch failed: ${(err as Error).message.split('\n')[0]}`);
   }
 

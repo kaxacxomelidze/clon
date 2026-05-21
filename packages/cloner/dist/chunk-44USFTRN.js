@@ -187,7 +187,7 @@ var require_eventemitter3 = __commonJS({
 });
 
 // src/runClone.ts
-import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "fs";
+import { mkdirSync as mkdirSync5, writeFileSync as writeFileSync4 } from "fs";
 import { resolve, join as join5 } from "path";
 
 // src/robots.ts
@@ -704,13 +704,13 @@ var PQueue = class extends import_index.default {
 
 // src/crawler.ts
 import { createHash as createHash2 } from "crypto";
-import { existsSync as existsSync2, writeFileSync as writeFileSync2 } from "fs";
+import { existsSync as existsSync2, mkdirSync as mkdirSync3, writeFileSync as writeFileSync2 } from "fs";
 import { extname as extname3, join as join3 } from "path";
 import mime2 from "mime-types";
 
 // src/capture.ts
 import { createHash } from "crypto";
-import { writeFileSync, existsSync } from "fs";
+import { writeFileSync, mkdirSync as mkdirSync2, existsSync } from "fs";
 import { join as join2, extname as extname2 } from "path";
 import mime from "mime-types";
 
@@ -1147,6 +1147,7 @@ async function capturePage(context, pageUrl, assetsDir) {
       const filename = `${hash}${ext}`;
       const localPath = join2(assetsDir, filename);
       const webPath = `/_assets/${filename}`;
+      mkdirSync2(assetsDir, { recursive: true });
       const isCss = forceCss || ext === ".css" || contentType.includes("text/css");
       if (isCss) {
         const cssText = body.toString("utf8");
@@ -1932,6 +1933,7 @@ async function saveStaticAsset(rawUrl, pageUrl, assetsDir) {
     const filename = `${hashUrl2(absUrl)}${ext}`;
     const localPath = join3(assetsDir, filename);
     const webPath = `/_assets/${filename}`;
+    mkdirSync3(assetsDir, { recursive: true });
     if (!existsSync2(localPath)) writeFileSync2(localPath, body);
     return { originalUrl: absUrl, localPath: webPath };
   } catch {
@@ -2098,7 +2100,6 @@ async function crawl(opts, assetsDir, onPage) {
       ...launchOptions
     });
   } catch (err) {
-    if (!IS_SERVERLESS2) throw err;
     return crawlStatic(opts, origin, assetsDir, visited, records, onPage, `browser launch failed: ${err.message.split("\n")[0]}`);
   }
   const enqueue = (url, currentDepth) => {
@@ -10524,7 +10525,7 @@ function tryParseJson(raw, contentType = "") {
 }
 
 // src/generator.ts
-import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3, rmSync, existsSync as existsSync3 } from "fs";
+import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync3, rmSync, existsSync as existsSync3 } from "fs";
 import { join as join4, dirname as dirname2 } from "path";
 import { fileURLToPath } from "url";
 import { createHash as createHash3 } from "crypto";
@@ -10537,7 +10538,7 @@ function tpl(name, data) {
   return Handlebars.compile(src)(data);
 }
 function write(path, content) {
-  mkdirSync3(dirname2(path), { recursive: true });
+  mkdirSync4(dirname2(path), { recursive: true });
   writeFileSync3(path, content, "utf8");
 }
 function prismaModelName(path) {
@@ -10604,9 +10605,9 @@ function routeSegments(path) {
 function generateNextApp(outDir, manifest, apiRoutes) {
   const { pages } = manifest;
   const hostname = new URL(manifest.targetOrigin).hostname;
-  mkdirSync3(join4(outDir, "public", "_assets"), { recursive: true });
+  mkdirSync4(join4(outDir, "public", "_assets"), { recursive: true });
   const pagesDataDir = join4(outDir, "captured-pages");
-  mkdirSync3(pagesDataDir, { recursive: true });
+  mkdirSync4(pagesDataDir, { recursive: true });
   const routeMap = {};
   for (const page of pages) {
     const name = safeName(page.route);
@@ -10631,7 +10632,7 @@ function generateNextApp(outDir, manifest, apiRoutes) {
   }
   writeFileSync3(join4(outDir, "route-map.json"), JSON.stringify(routeMap, null, 2), "utf8");
   const fixturesDir = join4(outDir, "fixtures");
-  mkdirSync3(fixturesDir, { recursive: true });
+  mkdirSync4(fixturesDir, { recursive: true });
   for (const spec of apiRoutes) {
     for (const resp of spec.responses) {
       const fname = `${spec.fixtureKey}.${spec.method}.${resp.status}.json`;
@@ -10737,9 +10738,9 @@ CLONYFY v0.1`);
       logger.info("robots.txt check skipped (--ignore-robots)");
     }
     const assetsDir = join5(opts.out, "public", "_assets");
-    mkdirSync4(assetsDir, { recursive: true });
+    mkdirSync5(assetsDir, { recursive: true });
     const capturedPagesDir = join5(opts.out, "captured-pages");
-    mkdirSync4(capturedPagesDir, { recursive: true });
+    mkdirSync5(capturedPagesDir, { recursive: true });
     const routeMap = {};
     const pageFilename = (route) => `${safeName(route)}.html`;
     logger.info("\nCrawling...");
@@ -10876,4 +10877,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-AVXRIVTM.js.map
+//# sourceMappingURL=chunk-44USFTRN.js.map

@@ -288,6 +288,7 @@ export async function capturePage(
       const filename = `${hash}${ext}`;
       const localPath = join(assetsDir, filename);
       const webPath = `/_assets/${filename}`;
+      mkdirSync(assetsDir, { recursive: true });
 
       const isCss = forceCss || ext === '.css' || contentType.includes('text/css');
 
