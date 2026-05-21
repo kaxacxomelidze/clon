@@ -218,10 +218,6 @@ async function checkRobots(targetUrl) {
   }
 }
 
-// src/crawler.ts
-import { chromium } from "playwright";
-import sparticuzChromium from "@sparticuz/chromium";
-
 // node_modules/eventemitter3/index.mjs
 var import_index = __toESM(require_eventemitter3(), 1);
 
@@ -1737,10 +1733,11 @@ function systemBrowserChannel(playwrightPath, platform = process.platform, serve
   if (platform === "darwin") return "chrome";
   return void 0;
 }
-async function getChromiumLaunchOptions() {
-  const playwrightPath = chromium.executablePath();
+async function getChromiumLaunchOptions(chromium) {
+  const playwrightPath = IS_SERVERLESS2 ? "" : chromium.executablePath();
   const useBundledChromium = shouldUseBundledChromium(playwrightPath);
   const channel = systemBrowserChannel(playwrightPath);
+  const sparticuzChromium = useBundledChromium ? (await import("@sparticuz/chromium")).default : null;
   const executablePath = useBundledChromium ? await sparticuzChromium.executablePath() : void 0;
   if (useBundledChromium) {
     logger.debug(`  [BROWSER] Using bundled Chromium: ${executablePath}`);
@@ -2092,7 +2089,8 @@ async function crawl(opts, assetsDir, onPage) {
   if (STATIC_FIRST_SERVERLESS) {
     return crawlStatic(opts, origin, assetsDir, visited, records, onPage, "serverless static-first mode");
   }
-  const launchOptions = await getChromiumLaunchOptions();
+  const { chromium } = await import("playwright-core");
+  const launchOptions = await getChromiumLaunchOptions(chromium);
   let browser;
   try {
     browser = await chromium.launch({
@@ -10878,4 +10876,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-SAEA2FYH.js.map
+//# sourceMappingURL=chunk-AVXRIVTM.js.map

@@ -485,7 +485,7 @@ async function checkUsageAlert(userId) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const OUTPUT_DIR = process.env.VERCEL ? join('/tmp', 'output') : join(__dirname, 'output');
+const OUTPUT_DIR = resolve(process.env.CLONYFY_OUTPUT_DIR || (process.env.VERCEL ? '/tmp/output' : './output'));
 
 const _fileCache = new Map();
 function serveFile(res, filePath, contentType, cacheSecs = 0) {

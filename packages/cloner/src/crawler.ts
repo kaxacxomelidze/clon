@@ -1,5 +1,3 @@
-import { chromium } from 'playwright';
-import sparticuzChromium from '@sparticuz/chromium';
 import PQueue from 'p-queue';
 import { createHash } from 'crypto';
 import { existsSync, writeFileSync } from 'fs';
@@ -9,6 +7,8 @@ import { capturePage, extractCssUrls } from './capture.js';
 import { logger } from './logger.js';
 import { normalizePageUrl } from './pageUrls.js';
 import type { AssetEntry, ClonerOptions, PageRecord } from './types.js';
+
+type ChromiumLauncher = typeof import('playwright-core').chromium;
 
 export function isServerlessRuntime(
   env: NodeJS.ProcessEnv = process.env,
@@ -62,10 +62,11 @@ export function systemBrowserChannel(
   return undefined;
 }
 
-async function getChromiumLaunchOptions() {
-  const playwrightPath = chromium.executablePath();
+async function getChromiumLaunchOptions(chromium: ChromiumLauncher) {
+  const playwrightPath = IS_SERVERLESS ? '' : chromium.executablePath();
   const useBundledChromium = shouldUseBundledChromium(playwrightPath);
   const channel = systemBrowserChannel(playwrightPath);
+  const sparticuzChromium = useBundledChromium ? (await import('@sparticuz/chromium')).default : null;
   const executablePath = useBundledChromium ? await sparticuzChromium.executablePath() : undefined;
 
   if (useBundledChromium) {
@@ -500,9 +501,10 @@ export async function crawl(
     return crawlStatic(opts, origin, assetsDir, visited, records, onPage, 'serverless static-first mode');
   }
 
-  const launchOptions = await getChromiumLaunchOptions();
+  const { chromium } = await import('playwright-core');
+  const launchOptions = await getChromiumLaunchOptions(chromium);
 
-  let browser: Awaited<ReturnType<typeof chromium.launch>>;
+  let browser: Awaited<ReturnType<ChromiumLauncher['launch']>>;
   try {
     browser = await chromium.launch({
       headless: true,
