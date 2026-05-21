@@ -775,8 +775,40 @@ async function loadRouteMapAsync(outDir) {
   catch { return null; }
 }
 
+function inferredRouteFromPageFilename(filename) {
+  const name = String(filename || '').replace(/\\/g, '/').split('/').pop() || '';
+  if (!name.endsWith('.html')) return null;
+  if (name === '__home__.html' || name === 'index.html') return '/';
+  const base = name.slice(0, -5).replace(/^_+|_+$/g, '').replace(/_+/g, '-');
+  return base ? `/${base}` : null;
+}
+
+async function inferRouteMapFromCapturedPages(outDir) {
+  if (!isInsideOutputDir(outDir)) return null;
+  const map = {};
+  const pagesDir = join(outDir, 'captured-pages');
+  if (existsSync(pagesDir)) {
+    for (const entry of readdirSync(pagesDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.html')) continue;
+      const route = inferredRouteFromPageFilename(entry.name);
+      if (route) map[route] = entry.name;
+    }
+  }
+  if (!Object.keys(map).length) {
+    const files = await readPersistedCloneFileList(outDir).catch(() => []);
+    for (const file of files) {
+      const rel = String(file?.rel || '').replace(/\\/g, '/');
+      if (!rel.startsWith('captured-pages/') || !rel.endsWith('.html')) continue;
+      const filename = rel.slice('captured-pages/'.length);
+      const route = inferredRouteFromPageFilename(filename);
+      if (route) map[route] = filename;
+    }
+  }
+  return Object.keys(map).length ? map : null;
+}
+
 async function verifyCloneReadable(outDir) {
-  const map = await loadRouteMapAsync(outDir);
+  const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
   if (!map || !Object.keys(map).length) return { ok: false, error: 'route-map.json is not readable' };
   for (const filename of Object.values(map)) {
     if (!filename) return { ok: false, error: 'A captured route has no page file' };
@@ -1373,7 +1405,7 @@ async function handleRequest(req, res) {
     if (!await canReadOutDir(pagesUser, outDir) && !await canReadCloneRecord(pagesUser, outDir)) {
       return json(res, { error: pagesUser ? 'Not found' : 'Not authenticated' }, pagesUser ? 404 : 401);
     }
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) return json(res, []);
     return json(res, Object.keys(map));
   }
@@ -1387,7 +1419,7 @@ async function handleRequest(req, res) {
       res.writeHead(404); res.end('Not found'); return;
     }
     const route = url.searchParams.get('route') || '/';
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) { res.writeHead(404); res.end('No clone loaded'); return; }
     const filename = map[route] || map['/'];
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
@@ -1405,7 +1437,7 @@ async function handleRequest(req, res) {
     // 50MB limit — cloned pages with inlined assets can be several MB
     readJsonBody(req, 50_000_000).then(async ({ outDir, route, html }) => {
       if (!await canUseCloneOutput(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const filename = map[route || '/'];
       if (!filename) return json(res, { error: 'Route not found: ' + route }, 404);
@@ -1426,7 +1458,7 @@ async function handleRequest(req, res) {
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
       if (!await canUseCloneOutput(authPageUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const pageKind = kind === 'register' ? 'register' : 'login';
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const route = pageKind === 'register' ? '/register' : '/login';
       const filename = routeFilename(route);
@@ -1730,7 +1762,7 @@ async function handleRequest(req, res) {
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(previewUser, outDir)) return json(res, { error: 'Not found' }, 404);
     if (IS_VERCEL) {
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'Preview pages not found' }, 404);
       return json(res, {
         ok: true,
@@ -1947,7 +1979,7 @@ async function handleRequest(req, res) {
     const { outDir, route, password, expiresInDays } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(shareUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) return json(res, { error: 'No clone found' }, 404);
     const shareId = randomUUID().replace(/-/g, '').slice(0, 14);
     let passwordHash = null, salt = null;

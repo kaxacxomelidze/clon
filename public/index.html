@@ -2995,6 +2995,14 @@ function switchTab(tab) {
   document.getElementById('t-editor').classList.toggle('active', tab === 'editor');
   document.getElementById('t-build').classList.toggle('active', tab === 'build');
   if (tab === 'preview') loadPreviewPages(editorOutDir);
+  if (tab === 'editor') {
+    const job = allJobs.find(j => j.id === activeJobId && j.status === 'done' && j.outDir);
+    const outDir = editorOutDir || job?.outDir || '';
+    if (outDir) {
+      editorOutDir = outDir;
+      loadEditorPages(outDir);
+    }
+  }
   if (tab === 'build') loadTemplates();
 }
 
@@ -3929,13 +3937,18 @@ if (!localStorage.getItem(FOLD_KEY)) {
 }
 
 async function loadEditorPages(outDir, preferredRoute = '') {
+  const list = document.getElementById('edPageList');
+  if (!outDir) {
+    if (list) list.innerHTML = '<div class="ed-no-site">Clone a site first</div>';
+    return;
+  }
+  if (list) list.innerHTML = '<div class="ed-no-site">LOADING...</div>';
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
     const payload = await res.json();
     if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
     if (!Array.isArray(payload)) throw new Error('Invalid pages response');
     const routes = sortRoutes(payload);
-    const list = document.getElementById('edPageList');
     if (!routes.length) { list.innerHTML = '<div class="ed-no-site">No pages found</div>'; return; }
     list.innerHTML = routes.map(r =>
       `<button class="ed-page-btn" onclick="loadEditorPage('${encodeURIComponent(r)}')" title="${r}">${r === '/' ? '/ (home)' : r}</button>`
