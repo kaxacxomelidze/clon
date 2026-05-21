@@ -673,6 +673,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 
 #auth-screen{position:fixed;inset:0;z-index:10000;background:#06061a;display:flex;align-items:stretch;overflow:hidden;animation:authIn .3s ease}
 #auth-screen.hidden{display:none!important;animation:none}
+#auth-screen.auth-resuming{opacity:0;pointer-events:none}
 /* Boot state: show spinner, hide the card until session check resolves */
 .auth-card{transition:opacity .28s ease,transform .28s ease}
 #auth-screen.auth-checking .auth-card{opacity:0;pointer-events:none;transform:translateY(10px)}
@@ -2055,6 +2056,11 @@ function apiFetch(path, init) {
   if (authToken) next.headers['X-Auth-Token'] = authToken;
   return fetch(apiUrl(path), next);
 }
+function deferAppWork(fn, delay = 0) {
+  const run = () => { try { fn(); } catch {} };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1200 });
+  else setTimeout(run, delay);
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 let currentUser = null;
@@ -2186,11 +2192,11 @@ function onAuthSuccess(user) {
   document.getElementById('titlebarUser').style.display = 'flex';
   document.getElementById('userName').textContent = user.name;
   document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
-  requestNotificationPermission();
   syncPlanLimitsToCloneForm();
-  loadHistory();
-  loadAnnouncements();
-  if (!localStorage.getItem('wc_onboarded')) showOnboarding();
+  deferAppWork(() => requestNotificationPermission());
+  deferAppWork(() => loadHistory({ fast: true }));
+  deferAppWork(() => loadAnnouncements(), 150);
+  if (!localStorage.getItem('wc_onboarded')) deferAppWork(() => showOnboarding(), 250);
 }
 
 
@@ -2894,6 +2900,7 @@ function updateFontPickerFromSelection() {
 async function checkExistingSession() {
   const authScreen = document.getElementById('auth-screen');
   const revealForm = () => {
+    authScreen.classList.remove('auth-resuming');
     authScreen.classList.remove('auth-checking');
     // Small delay so the CSS transition has a starting frame to transition from
     setTimeout(() => document.getElementById('auth-login-email')?.focus(), 300);
@@ -2916,9 +2923,16 @@ async function checkExistingSession() {
 
   const token = oauthToken || localStorage.getItem('wc_auth_token');
   if (!token) { revealForm(); return false; }
+  authScreen.classList.add('auth-resuming');
   try {
-    const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token } });
-    if (!res.ok) { localStorage.removeItem('wc_auth_token'); revealForm(); return false; }
+    const signal = AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined;
+    const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token }, signal });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) localStorage.removeItem('wc_auth_token');
+      revealForm();
+      if (res.status !== 401 && res.status !== 403) showAuthError('Could not verify your session. Please refresh or try again.');
+      return false;
+    }
     const data = await res.json();
     if (data.user) { onAuthSuccess(data.user); return true; }
   } catch {}
@@ -3065,12 +3079,12 @@ function toast(msg, type) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', async () => {
+window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') startClone(); });
   try { renderProfileSelect(); } catch {}
   try { initFontPicker(); } catch {}
   // Load payment settings and session check in parallel — they are independent
-  await Promise.all([
+  Promise.all([
     fetch('/api/payments/settings').then(r => r.json()).then(s => {
       paySettings = s;
       if (s.google_oauth_enabled) {
@@ -3081,11 +3095,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   ]);
 });
 
-async function loadHistory() {
+async function loadHistory(options = {}) {
   try {
+    const outputsPath = options.fast ? '/api/outputs?fast=1' : '/api/outputs';
     const [jobs, outputs] = await Promise.all([
       apiFetch('/api/jobs').then(r => r.json()),
-      apiFetch('/api/outputs').then(r => r.json()).catch(() => []),
+      apiFetch(outputsPath).then(r => r.json()).catch(() => []),
     ]);
     const seen = new Set((jobs || []).map(j => j.outDir).filter(Boolean));
     const outputJobs = (outputs || [])
@@ -3112,7 +3127,11 @@ async function loadHistory() {
     renderSidebar();
     updateUsageMeter();
     if (allJobs.length > 0) showJob(allJobs[0]);
-  } catch {}
+  } catch {
+    renderSidebar();
+    updateUsageMeter();
+    toast('Could not load clone history yet.', 'warn');
+  }
 }
 
 const _PLAN_CLONE_LIMITS = { free: 3, starter: 15, popular: 50, growth: 100, unlimited: null };
@@ -3276,7 +3295,7 @@ function showJob(job) {
   document.getElementById('statApi').textContent = '—';
   document.getElementById('statAssets').textContent = '—';
   updateJobView(job);
-  if (job.status === 'running') startPolling(job.id);
+  if (job.status === 'running' || job.status === 'saving') startPolling(job.id);
   else clearPolling();
   renderSidebar();
 }
@@ -3308,8 +3327,11 @@ function updateJobView(job) {
     pb.style.background = job.status === 'done' ? 'var(--green)' : 'var(--red)';
   }
   const logEl = document.getElementById('logBody');
-  const newLines = job.logs.slice(lastLogLen);
-  lastLogLen = job.logs.length;
+  const logs = Array.isArray(job.logs) ? job.logs : [];
+  const logOffset = Number.isFinite(job.logOffset) ? job.logOffset : 0;
+  if (logOffset > lastLogLen) lastLogLen = logOffset;
+  const newLines = logs.slice(Math.max(0, lastLogLen - logOffset));
+  lastLogLen = logOffset + logs.length;
   const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 60;
   for (const line of newLines) {
     const div = document.createElement('div');
@@ -3331,8 +3353,8 @@ function updateJobView(job) {
     renderHealth(job);
     clearTimer();
     editorOutDir = job.outDir;
-    loadEditorPages(job.outDir);
-    loadPreviewPages(job.outDir);
+    if (currentTab === 'editor') loadEditorPages(job.outDir);
+    if (currentTab === 'preview') loadPreviewPages(job.outDir);
   } else if (job.status === 'error') {
     if (errorCard) errorCard.className = 'error-card show';
     document.getElementById('doneCard').className = 'done-card';
@@ -3351,17 +3373,24 @@ function updateJobView(job) {
 
 function startPolling(jobId) {
   clearPolling();
-  pollInterval = setInterval(async () => {
+  const poll = async () => {
     if (activeJobId !== jobId) { clearPolling(); return; }
+    let delay = 1000;
     try {
-      const res = await apiFetch(`/api/status?id=${jobId}`);
+      const res = await apiFetch(`/api/status?id=${jobId}&logsFrom=${lastLogLen}`);
       const job = await res.json();
       if (!res.ok || job.error || !job.id) throw new Error(job.error || 'Status unavailable');
       updateJobView(job);
-    } catch {}
-  }, 1000);
+      if (job.status === 'saving') delay = 1500;
+      else if (job.status !== 'running') return;
+    } catch {
+      delay = 2500;
+    }
+    pollInterval = setTimeout(poll, delay);
+  };
+  pollInterval = setTimeout(poll, 800);
 }
-function clearPolling() { if (pollInterval) { clearInterval(pollInterval); pollInterval = null; } }
+function clearPolling() { if (pollInterval) { clearTimeout(pollInterval); pollInterval = null; } }
 function startTimer() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   timerInterval = setInterval(() => {

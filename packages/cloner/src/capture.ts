@@ -154,7 +154,9 @@ function shouldReportPageError(message: string): boolean {
   // Several source sites ship noisy third-party/template scripts that throw this
   // while the rendered DOM is still usable. Keep it in debug logs, but don't
   // count it as a clone script issue.
-  return !/^Invalid or unexpected token$/i.test(message.trim());
+  const clean = message.trim();
+  return !/^Invalid or unexpected token$/i.test(clean)
+    && !/^__name is not defined$/i.test(clean);
 }
 
 function isImageLikeRequest(url: string, resourceType: string): boolean {
@@ -218,6 +220,10 @@ export async function capturePage(
 ): Promise<{ record: PageRecord; links: string[] }> {
   const page = await context.newPage();
   await page.setExtraHTTPHeaders({ 'User-Agent': USER_AGENT });
+  await page.addInitScript(() => {
+    const win = window as Window & { __name?: <T>(value: T) => T };
+    win.__name ||= (value) => value;
+  });
 
   const networkLog: NetworkEntry[] = [];
   const assetMap = new Map<string, string>(); // original URL -> /_assets/filename
@@ -545,7 +551,9 @@ export async function capturePage(
     window.scrollTo(0, document.body.scrollHeight);
     await delay(fast ? 40 : 120);
     window.scrollTo(0, 0);
-  }, IS_SERVERLESS);
+  }, IS_SERVERLESS).catch((err) => {
+    logger.debug(`  [SCROLL WARN] ${(err as Error).message}`);
+  });
 
   // Wait for lazy images to finish loading
   try {
@@ -600,6 +608,9 @@ export async function capturePage(
     document.querySelectorAll('script[src]').forEach((el) => push(el.getAttribute('src')));
 
     return [...new Set(urls)];
+  }).catch((err) => {
+    logger.debug(`  [DOM ASSETS WARN] ${(err as Error).message}`);
+    return [] as string[];
   });
 
   if (domAssetUrls.length > 0) {
@@ -652,6 +663,9 @@ export async function capturePage(
       for (const m of matches) urls.push(m[1]);
     });
     return urls;
+  }).catch((err) => {
+    logger.debug(`  [INLINE CSS WARN] ${(err as Error).message}`);
+    return [] as string[];
   });
 
   if (inlineStyleUrls.length > 0) {
@@ -818,7 +832,10 @@ export async function capturePage(
     spaNavs.forEach(push);
 
     return [...found];
-  }, origin);
+  }, origin).catch((err) => {
+    logger.debug(`  [LINKS WARN] ${(err as Error).message}`);
+    return [] as string[];
+  });
   const links = rawLinks
     .map((link) => normalizePageUrl(link, pageUrl))
     .filter((link): link is string => !!link && new URL(link).origin === origin);

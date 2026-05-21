@@ -796,7 +796,9 @@ async function checkSecurity() {
   try {
     const s = await adminFetch('GET', '/api/admin/security');
     const warnings = [];
-    if (!s.adminPasswordSet) warnings.push('⚠️ <code>ADMIN_PASSWORD</code> env var is not set — admin login is disabled. Add it to your <code>.env</code> file and restart the server.');
+    if (!s.adminPasswordSet) {
+      warnings.push('Admin login is disabled because <code>ADMIN_PASSWORD</code> is not set on this server. For local dev, add it to <code>.env</code> and restart. For Vercel/hosting, add it in Project Settings > Environment Variables and redeploy.');
+    }
     if (!s.appUrlConfigured) warnings.push('⚠️ App URL not configured — share links will point to localhost.');
     if (!s.smtpConfigured) warnings.push('⚠️ SMTP not configured — emails (verify, reset, receipts) won\'t send.');
     if (!s.stripeConfigured) warnings.push(`Stripe not configured - ${esc(s.stripeError || 'payments are disabled.')}`);
@@ -835,7 +837,10 @@ async function doLogin() {
     sessionStorage.setItem('wc_admin_token', adminToken);
     await tryLoadApp();
   } catch(e) {
-    err.textContent = e.message || 'Wrong password';
+    const message = e.message || 'Wrong password';
+    err.innerHTML = message.includes('ADMIN_PASSWORD')
+      ? 'Admin login is disabled because <code>ADMIN_PASSWORD</code> is missing on this server. Add it in your hosting environment variables, then redeploy/restart.'
+      : esc(message);
     err.classList.add('show');
     document.getElementById('login-pw').select();
   } finally {

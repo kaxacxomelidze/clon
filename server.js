@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSy
 import { request as httpsRequest } from 'https';
 import { createRequire } from 'module';
 import 'dotenv/config';
+import { runClone } from './packages/cloner/dist/runClone.js';
 import {
   getUserById, getUserByEmail, getAllUsers, getUsersPage, getClonesByUserIds, insertUser, updateUser, deleteUser,
   getUserByVerifyToken, getUserByResetToken,
@@ -36,6 +37,8 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 const DEFAULT_APP_URL = (process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || `http://localhost:${PORT}`).replace(/\/$/, '');
 
 const jobs = new Map();
+const ACTIVE_JOB_STATUSES = new Set(['running', 'saving']);
+const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job?.status);
 
 // ── Security constants ────────────────────────────────────────────────────────
 // Set PASSWORD_PEPPER and SHARE_PASSWORD_PEPPER in your .env file.
@@ -110,7 +113,7 @@ setInterval(async () => { try { await cleanExpiredSessions(Date.now()); } catch 
 setInterval(() => {
   const cutoff = Date.now() - 4 * 60 * 60 * 1000;
   for (const [id, job] of jobs) {
-    if (job.status !== 'running' && job.status !== 'saving' && new Date(job.startedAt).getTime() < cutoff) {
+    if (!isActiveJob(job) && new Date(job.startedAt).getTime() < cutoff) {
       jobs.delete(id);
     }
   }
@@ -129,6 +132,8 @@ const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
 const LEGACY_PAID_PLAN_KEYS = Object.keys(PLAN_ALIASES);
 const ALL_PAID_PLAN_KEYS = [...PAID_PLAN_KEYS, ...LEGACY_PAID_PLAN_KEYS];
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+const USE_INLINE_CLONE = IS_VERCEL || process.env.CLONYFY_INLINE_CLONE === '1';
+const SERVERLESS_MAX_PAGES = Math.max(1, parseInt(process.env.CLONYFY_SERVERLESS_MAX_PAGES || '20', 10) || 20);
 const PLAN_PRICES = {
   starter:    { monthly: 9.99,  annual: 95.88  },
   popular:    { monthly: 19.99, annual: 191.88 },
@@ -155,6 +160,13 @@ function isPaidPlan(plan) {
 }
 function getPlanLimits(plan) {
   return PLAN_LIMITS[normalizePlan(plan)] || PLAN_LIMITS.free;
+}
+function getEffectivePlanLimits(plan) {
+  const limits = getPlanLimits(plan);
+  return {
+    ...limits,
+    maxPages: IS_VERCEL ? Math.min(limits.maxPages, SERVERLESS_MAX_PAGES) : limits.maxPages,
+  };
 }
 function getPlanPrices(plan) {
   return PLAN_PRICES[normalizePlan(plan)] || { monthly: 0, annual: 0 };
@@ -456,7 +468,7 @@ async function checkUsageAlert(userId) {
     const user = await getUserById(userId);
     if (!user || !isPaidPlan(user.plan) || user.usage_alert_sent) return;
     const plan = normalizePlan(user.plan);
-    const limits = getPlanLimits(plan);
+    const limits = getEffectivePlanLimits(plan);
     if (limits.clonesPerMonth === Infinity) return;
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const used = await getCloneCountThisMonth(userId, monthStart.toISOString());
@@ -514,6 +526,10 @@ function cloneStoragePath(outDir, relPath) {
 
 function cloneFileListStoragePath(outDir) {
   return cloneStoragePath(outDir, '__files.json');
+}
+
+function cloneAssetToken(outDir) {
+  return createHash('sha256').update(`${String(outDir || '')}:${PASSWORD_PEPPER}`).digest('hex').slice(0, 32);
 }
 
 function contentTypeForPath(filePath) {
@@ -676,7 +692,7 @@ async function readPersistedJob(id) {
     const job = JSON.parse(raw);
     // If the job was persisted as running but has no live process, the server
     // restarted mid-job. Mark it as errored so the UI doesn't spin forever.
-    if (job.status === 'running' && !jobs.has(id)) {
+    if (isActiveJob(job) && !jobs.has(id)) {
       job.status = 'error';
       job.logs = [...(job.logs || []), '[ERROR] Clone was interrupted — server restarted while this job was running.'];
     }
@@ -771,7 +787,7 @@ async function verifyCloneReadable(outDir) {
 }
 
 function rewritePreviewAssetUrls(html, outDir) {
-  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&path=`;
+  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   return String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
 }
 
@@ -896,7 +912,7 @@ function sharePasswordFormHtml(shareId, error) {
 
 function userPublic(u) {
   const plan = normalizePlan(u.plan);
-  const limits = getPlanLimits(plan);
+  const limits = getEffectivePlanLimits(plan);
   return {
     id: u.id, name: u.name, email: u.email,
     plan,
@@ -1192,8 +1208,9 @@ async function handleRequest(req, res) {
     const assetUser = await getSessionUser(req);
     const outDir = url.searchParams.get('outDir') || '';
     const relPath = String(url.searchParams.get('path') || '').replace(/^\/+/, '');
+    const assetToken = String(url.searchParams.get('assetToken') || '');
     if (!isInsideOutputDir(outDir) || !relPath.startsWith('_assets/')) return json(res, { error: 'Invalid asset' }, 400);
-    const readable = await canReadOutDir(assetUser, outDir) || !!(await getCloneByOutDir(outDir).catch(() => null));
+    const readable = await canReadOutDir(assetUser, outDir) || assetToken === cloneAssetToken(outDir);
     if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
     const data = await readCloneFile(outDir, join('public', relPath));
     if (!data) { res.writeHead(404); res.end('Not found'); return; }
@@ -1205,14 +1222,15 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/outputs') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    const fast = url.searchParams.get('fast') === '1';
     const userClones = await getClonesByUser(user.id);
     const labelByDir = Object.fromEntries(userClones.filter(c => c.out_dir && c.label).map(c => [c.out_dir, c.label]));
-    const localByDir = Object.fromEntries(getOutputs().map(o => [o.dir, o]));
+    const localByDir = fast ? {} : Object.fromEntries(getOutputs().map(o => [o.dir, o]));
     const normalized = [];
     for (const c of userClones.filter(c => c.out_dir)) {
       let status = c.status;
       let pages = c.pages;
-      if (status === 'done') {
+      if (status === 'done' && !fast) {
         const readable = await verifyCloneReadable(c.out_dir).catch(err => ({ ok: false, error: err?.message || String(err) }));
         if (!readable.ok) {
           status = 'error';
@@ -1340,7 +1358,7 @@ async function handleRequest(req, res) {
       writeAuthPage(outDir, 'register');
       const now = new Date().toISOString();
       writeFileSync(join(outDir, 'manifest.json'), JSON.stringify({ targetOrigin: `builder:${safeId}`, capturedAt: now, pages: [] }, null, 2), 'utf8');
-      await insertClone({ id, userId: templateUser.id, userName: templateUser.name, url: `builder:${safeId}`, outDir, status: 'completed', pages: 1, assets: 0, apiRoutes: 0, startedAt: now, completedAt: now });
+      await insertClone({ id, userId: templateUser.id, userName: templateUser.name, url: `builder:${safeId}`, outDir, status: 'done', pages: 1, assets: 0, apiRoutes: 0, startedAt: now, completedAt: now });
       try { await persistCloneOutput(outDir); } catch {}
       invalidateOutputsCache();
       json(res, { ok: true, outDir });
@@ -1448,7 +1466,11 @@ async function handleRequest(req, res) {
     const statusUser = await getSessionUser(req);
     const statusUserId = statusUser ? statusUser.id : null;
     if (job.userId !== statusUserId) return json(res, { error: 'not found' }, 404);
-    return json(res, job);
+    const logsFrom = Math.max(0, parseInt(url.searchParams.get('logsFrom') || '0', 10) || 0);
+    if (logsFrom > 0 && Array.isArray(job.logs)) {
+      return json(res, { ...job, logs: job.logs.slice(logsFrom), logOffset: logsFrom });
+    }
+    return json(res, { ...job, logOffset: 0 });
   }
 
   // ── Clone ──────────────────────────────────────────────────────────────────
@@ -1467,10 +1489,11 @@ async function handleRequest(req, res) {
       const targetUrl = target.href;
       const { depth = '3', ignoreRobots = false } = parsed;
       let { maxPages = '20' } = parsed;
+      const requestedMaxPages = parseInt(maxPages, 10) || 20;
 
       if (cloneUser) {
         const plan = normalizePlan(cloneUser.plan);
-        const limits = getPlanLimits(plan);
+        const limits = getEffectivePlanLimits(plan);
         if (limits.clonesPerMonth !== Infinity) {
           const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
           const used = await getCloneCountThisMonth(cloneUser.id, monthStart.toISOString());
@@ -1484,7 +1507,7 @@ async function handleRequest(req, res) {
           return json(res, { error: `Too many clone requests. Please wait before starting another.` }, 429);
         }
         // Cap concurrent running jobs per user
-        const userRunning = [...jobs.values()].filter(j => j.userId === cloneUser.id && j.status === 'running').length;
+        const userRunning = [...jobs.values()].filter(j => j.userId === cloneUser.id && isActiveJob(j)).length;
         if (userRunning >= 2) {
           return json(res, { error: 'You already have 2 clones running. Wait for one to finish before starting another.' }, 429);
         }
@@ -1492,11 +1515,11 @@ async function handleRequest(req, res) {
       } else {
         if (!checkRateLimit(`clone_anon:${ip}`, 2, 86400000)) return json(res, { error: 'Rate limit exceeded. Sign in for more clones.' }, 429);
         // Cap concurrent running jobs per IP for anonymous users
-        const anonRunning = [...jobs.values()].filter(j => j.userId === null && j.status === 'running').length;
+        const anonRunning = [...jobs.values()].filter(j => j.userId === null && isActiveJob(j)).length;
         if (anonRunning >= 1) {
           return json(res, { error: 'An anonymous clone is already running from this server. Sign in for concurrent clones.' }, 429);
         }
-        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, PLAN_LIMITS.free.maxPages));
+        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, getEffectivePlanLimits('free').maxPages));
       }
       maxPages = String(Math.max(1, parseInt(maxPages, 10) || 1));
 
@@ -1513,6 +1536,9 @@ async function handleRequest(req, res) {
         userId: cloneUser ? cloneUser.id : null,
         userName: cloneUser ? cloneUser.name : 'Anonymous',
       };
+      if (IS_VERCEL && requestedMaxPages > job.maxPages) {
+        job.logs.push(`[WARN] Page limit capped to ${job.maxPages} on serverless deployment. Set CLONYFY_SERVERLESS_MAX_PAGES or run a dedicated worker for larger clones.`);
+      }
       jobs.set(id, job);
       persistJob(job);
       try {
@@ -1532,22 +1558,7 @@ async function handleRequest(req, res) {
       const args = ['clone', targetUrl, '--out', outDir, '--max-pages', String(maxPages), '--depth', String(depth), '--concurrency', '1'];
       if (ignoreRobots) args.push('--ignore-robots');
 
-      const proc = spawn(process.execPath, [CLI, ...args], {
-        cwd: __dirname,
-        env: {
-          ...process.env,
-          ...(IS_VERCEL ? { CLONYFY_SERVERLESS: '1' } : {}),
-        },
-      });
-      proc.stdout.on('data', (c) => {
-        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));
-        persistJob(job);
-      });
-      proc.stderr.on('data', (c) => {
-        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`));
-        persistJob(job);
-      });
-      proc.on('close', async (code, signal) => {
+      const finalizeCloneJob = async (code, signal = null) => {
         if (code !== 0) {
           job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
         }
@@ -1577,6 +1588,9 @@ async function handleRequest(req, res) {
           try {
             await persistCloneOutput(job.outDir);
             cloneReadable = await verifyCloneReadable(job.outDir);
+            if ((job.pages ?? 0) <= 0) {
+              cloneReadable = { ok: false, error: 'Clone captured 0 pages' };
+            }
             if (!cloneReadable.ok) {
               job.logs.push(`[ERROR] Clone output is not ready for preview: ${cloneReadable.error}`);
             }
@@ -1595,11 +1609,17 @@ async function handleRequest(req, res) {
           });
           cloneRecordSaved = true;
         } catch (dbErr) {
-          job.logs.push(`[ERROR] Could not save clone record: ${dbErr?.message || dbErr}`);
+          job.logs.push(`[WARN] Could not save clone record: ${dbErr?.message || dbErr}`);
         }
-        if (code === 0) job.status = cloneRecordSaved && cloneReadable?.ok ? 'done' : 'error';
+        const cloneSucceeded = code === 0 && cloneReadable?.ok;
+        if (code === 0) {
+          job.status = cloneSucceeded ? 'done' : 'error';
+          if (!cloneRecordSaved && cloneReadable?.ok) {
+            job.logs.push('[WARN] Clone finished, but history persistence failed. Preview and export may still work from local output.');
+          }
+        }
         persistJob(job);
-        if (code !== 0) {
+        if (!cloneSucceeded) {
           try {
             const errorLines = job.logs.filter(l => l.startsWith('[ERROR]') || l.toLowerCase().includes('error'));
             await insertError({
@@ -1612,8 +1632,8 @@ async function handleRequest(req, res) {
           } catch {}
         }
         if (cloneUser) {
-          audit(cloneUser.id, cloneUser.name, code === 0 ? 'clone_complete' : 'clone_error', `${targetUrl} pages=${job.pages}`, ip);
-          if (code === 0) {
+          audit(cloneUser.id, cloneUser.name, cloneSucceeded ? 'clone_complete' : 'clone_error', `${targetUrl} pages=${job.pages}`, ip);
+          if (cloneSucceeded) {
             checkUsageAlert(cloneUser.id);
             const s = getCachedSettings();
             const appUrl = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
@@ -1628,7 +1648,53 @@ async function handleRequest(req, res) {
             ).catch(() => {});
           }
         }
-      });
+      };
+
+      if (USE_INLINE_CLONE) {
+        try {
+          const result = await runClone({
+            url: targetUrl,
+            out: outDir,
+            maxPages: parseInt(maxPages, 10),
+            depth: parseInt(depth, 10) || 3,
+            concurrency: 1,
+            ignoreRobots: !!ignoreRobots,
+            verbose: false,
+          }, {
+            onLog: (line) => {
+              if (line) job.logs.push(line);
+              persistJob(job);
+            },
+          });
+          job.pages = result.pages;
+          job.assets = result.assets;
+          job.apiRoutes = result.apiRoutes;
+          await finalizeCloneJob(0);
+        } catch (err) {
+          job.logs.push(`[ERROR] ${err?.message || err}`);
+          await finalizeCloneJob(1);
+        }
+      } else {
+        const proc = spawn(process.execPath, [CLI, ...args], {
+          cwd: __dirname,
+          env: process.env,
+        });
+        proc.stdout.on('data', (c) => {
+          c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));
+          persistJob(job);
+        });
+        proc.stderr.on('data', (c) => {
+          c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`));
+          persistJob(job);
+        });
+        proc.on('close', (code, signal) => {
+          finalizeCloneJob(code, signal).catch((err) => {
+            job.status = 'error';
+            job.logs.push(`[ERROR] Could not finalize clone: ${err?.message || err}`);
+            persistJob(job);
+          });
+        });
+      }
 
       return json(res, job);
     });
@@ -1940,7 +2006,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/admin/auth') {
     if (!checkRateLimit(`admin_login:${ip}`, 5, 300000)) return json(res, { error: 'Too many attempts. Try again in 5 minutes.' }, 429);
     const { password } = await readJsonBody(req);
-    if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled — ADMIN_PASSWORD env var is not set on the server.' }, 503);
+    if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled because ADMIN_PASSWORD is missing on this server. Add it in your hosting environment variables, then redeploy/restart.' }, 503);
     if (!password || password !== ADMIN_PASSWORD) return json(res, { error: 'Wrong password' }, 401);
     const token = randomUUID();
     adminSessions.set(token, Date.now() + 8 * 3600 * 1000);
@@ -1957,7 +2023,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/admin/stats') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
     const { totalUsers, blockedUsers, totalClones, totalErrors, pendingPayments, activePaidUsers, totalRevenue, monthRevenue } = await getAdminStats();
-    const activeNow = [...jobs.values()].filter(j => j.status === 'running').length;
+    const activeNow = [...jobs.values()].filter(isActiveJob).length;
     const mrr = activePaidUsers.reduce((s, u) => {
       const p = getPlanPrices(u.plan);
       return s + (u.billing_interval === 'annual' ? p.annual / 12 : p.monthly);
@@ -2060,11 +2126,12 @@ async function handleRequest(req, res) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     const pageSize = 50;
     const running = [...jobs.values()]
-      .filter(j => j.status === 'running')
+      .filter(isActiveJob)
       .map(j => ({ id: j.id, user_id: j.userId, user_name: j.userName || 'Anonymous', url: j.url, status: j.status, pages: j.pages, assets: j.assets, started_at: j.startedAt, completed_at: null }));
+    const runningIds = new Set(running.map(j => j.id));
     const all = [
       ...running,
-      ...clones.map(c => ({ ...c, user_name: c.user_name || 'Deleted' })),
+      ...clones.filter(c => !runningIds.has(c.id)).map(c => ({ ...c, user_name: c.user_name || 'Deleted' })),
     ]
       .filter(c => !userFilter || c.user_id === userFilter)
       .filter(c => !statusFilter || c.status === statusFilter)
@@ -2145,9 +2212,10 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/payments/plans') {
+    const limits = Object.fromEntries(Object.keys(PLAN_LIMITS).map(plan => [plan, getEffectivePlanLimits(plan)]));
     return json(res, {
       plans: PLAN_PRICES,
-      limits: PLAN_LIMITS,
+      limits,
       labels: PLAN_LABELS,
       aliases: PLAN_ALIASES,
     });
@@ -2449,7 +2517,7 @@ async function handleRequest(req, res) {
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const clonesThisMonth = userClones.filter(c => new Date(c.started_at) >= monthStart).length;
     const plan = normalizePlan(user.plan);
-    const limits = getPlanLimits(plan);
+    const limits = getEffectivePlanLimits(plan);
     const totalPages = userClones.reduce((s, c) => s + (c.pages || 0), 0);
     const totalAssets = userClones.reduce((s, c) => s + (c.assets || 0), 0);
     return json(res, {
@@ -3092,15 +3160,25 @@ async function ensureInit() {
   setInterval(runDunning, 3600000);
 }
 
+async function handler(req, res) {
+  try {
+    await ensureInit();
+    return await handleRequest(req, res);
+  } catch (err) {
+    console.error('[REQUEST ERROR]', err?.message || err, err?.stack || '');
+    if (!res.headersSent) {
+      return json(res, { error: 'Internal server error' }, 500);
+    }
+    try { res.end(); } catch {}
+  }
+}
+
 if (!process.env.VERCEL) {
   ensureInit().then(() => {
-    createServer(handleRequest).listen(PORT, () => {
+    createServer(handler).listen(PORT, () => {
       console.log(`\n🌐 CLONYFY running at: http://localhost:${PORT}\n`);
     });
   });
 }
 
-export default async function handler(req, res) {
-  await ensureInit();
-  return handleRequest(req, res);
-}
+export default handler;
