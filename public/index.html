@@ -673,6 +673,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 
 #auth-screen{position:fixed;inset:0;z-index:10000;background:#06061a;display:flex;align-items:stretch;overflow:hidden;animation:authIn .3s ease}
 #auth-screen.hidden{display:none!important;animation:none}
+#auth-screen.auth-resuming{opacity:0;pointer-events:none}
 /* Boot state: show spinner, hide the card until session check resolves */
 .auth-card{transition:opacity .28s ease,transform .28s ease}
 #auth-screen.auth-checking .auth-card{opacity:0;pointer-events:none;transform:translateY(10px)}
@@ -987,9 +988,13 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .mpay-empty-sub{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px}
 .mpay-contact-btn{padding:10px 24px;background:rgba(91,141,239,.1);border:1px solid rgba(91,141,239,.2);border-radius:9px;color:var(--blue);font-size:13px;font-weight:700;transition:all .15s}
 .mpay-contact-btn:hover{background:rgba(91,141,239,.18)}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,13,28,.92);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:#eef2ff;font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#7fb3ff;border-radius:50%;animation:spin .7s linear infinite}
 </style>
 </head>
 <body>
+<div id="slow-loading" class="slow-loading" role="status" aria-live="polite">LOADING...</div>
 
 <!-- Auth screen -->
 <div id="auth-screen" class="auth-checking">
@@ -1055,7 +1060,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   <div class="auth-right">
     <div id="auth-boot-spinner">
       <div class="auth-boot-ring"></div>
-      <div class="auth-boot-txt">Signing you in…</div>
+      <div class="auth-boot-txt">LOADING...</div>
     </div>
     <div class="auth-card">
       <!-- Mobile-only logo -->
@@ -1206,60 +1211,49 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   <div class="pricing-cards">
     <div class="plan-card" id="plan-card-starter">
       <div class="plan-name">Starter</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-starter">9.99</span><span class="plan-period" id="period-starter">/mo</span></div>
-      <div class="plan-desc">For individuals cloning occasional sites.</div>
+      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-starter">19.99</span><span class="plan-period" id="period-starter">/mo</span></div>
+      <div class="plan-desc">For solo builders cloning and editing live sites.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>15 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>30 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Asset capture and CSS rewriting</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>10 website clones</strong> per month</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
         <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Next.js export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>6 days/week support</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Cancel anytime</span></div>
       </div>
       <button class="plan-btn soft" id="plan-btn-starter" onclick="handleBuy('starter')">Get Starter</button>
     </div>
-    <div class="plan-card featured" id="plan-card-popular">
+    <div class="plan-card featured" id="plan-card-growth">
       <div class="plan-badge">Most Popular</div>
-      <div class="plan-name">Most Popular</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-popular">19.99</span><span class="plan-period" id="period-popular">/mo</span></div>
-      <div class="plan-desc">For builders who clone and edit every week.</div>
-      <div class="plan-divider"></div>
-      <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>50 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>100 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Starter features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Priority processing</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Email support</span></div>
-      </div>
-      <button class="plan-btn grad" id="plan-btn-popular" onclick="handleBuy('popular')">Get Most Popular</button>
-    </div>
-    <div class="plan-card" id="plan-card-growth">
       <div class="plan-name">Growth</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-growth">34.99</span><span class="plan-period" id="period-growth">/mo</span></div>
-      <div class="plan-desc">For agencies and power users shipping client work.</div>
+      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-growth">29.99</span><span class="plan-period" id="period-growth">/mo</span></div>
+      <div class="plan-desc">For builders and agencies that need more output.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>100 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>200 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Most Popular features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>API route detection + fixtures</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Docker + compose export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>25 website clones</strong> per month</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Figma export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor and templates</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>API access</span></div>
       </div>
-      <button class="plan-btn soft" id="plan-btn-growth" onclick="handleBuy('growth')">Get Growth</button>
+      <button class="plan-btn grad" id="plan-btn-growth" onclick="handleBuy('growth')">Get Growth</button>
     </div>
     <div class="plan-card" id="plan-card-unlimited">
-      <div class="plan-name">Unlimited</div>
+      <div class="plan-name">Scale</div>
       <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-unlimited">59.99</span><span class="plan-period" id="period-unlimited">/mo</span></div>
       <div class="plan-desc">For teams that need maximum scale.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited clones</strong></span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>500 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Growth features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Dedicated support</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Custom crawl rules</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited website clones</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Figma export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor, templates, and API access</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>7 days/week priority support</span></div>
       </div>
-      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Unlimited</button>
+      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Scale</button>
     </div>
   </div>
 </div>
@@ -1431,7 +1425,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <div class="profile-section" style="border-bottom:none">
         <div class="profile-section-title">Clone History</div>
         <div id="profileHistBody">
-          <div class="hist-empty">Loading…</div>
+          <div class="hist-empty">LOADING...</div>
         </div>
       </div>
     </div>
@@ -2021,7 +2015,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
     </div>
     <div class="build-body" id="buildBody" style="display:flex;flex-direction:column;overflow-y:auto">
       <div id="buildTemplatePane">
-        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px">Loading templates…</div>
+        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px">LOADING...</div>
       </div>
       <div id="buildSectionsPane" style="display:none"></div>
     </div>
@@ -2047,13 +2041,49 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 const isElectron = typeof window.electronAPI !== 'undefined';
 const API_TOKEN = window.__CLONYFY_TOKEN || '';
 function apiUrl(path) { return path; }
+let slowLoadingCount = 0;
+let slowLoadingTimer = null;
+function beginSlowLoading(delay = 900) {
+  slowLoadingCount++;
+  const el = document.getElementById('slow-loading');
+  if (!el) return () => {};
+  if (!slowLoadingTimer && !el.classList.contains('show')) {
+    slowLoadingTimer = setTimeout(() => {
+      slowLoadingTimer = null;
+      if (slowLoadingCount > 0) el.classList.add('show');
+    }, delay);
+  }
+  return () => {
+    slowLoadingCount = Math.max(0, slowLoadingCount - 1);
+    if (slowLoadingCount === 0) {
+      if (slowLoadingTimer) { clearTimeout(slowLoadingTimer); slowLoadingTimer = null; }
+      el.classList.remove('show');
+    }
+  };
+}
 function apiFetch(path, init) {
   const next = Object.assign({}, init || {});
+  const showLoading = next.silentLoading !== true;
+  const timeoutMs = next.timeoutMs || 30000;
+  delete next.silentLoading;
+  delete next.timeoutMs;
   next.headers = Object.assign({}, next.headers || {});
   if (API_TOKEN) next.headers['X-CLONYFY-Token'] = API_TOKEN;
   const authToken = localStorage.getItem('wc_auth_token');
   if (authToken) next.headers['X-Auth-Token'] = authToken;
-  return fetch(apiUrl(path), next);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  next.signal = next.signal || controller.signal;
+  const doneLoading = showLoading ? beginSlowLoading() : () => {};
+  return fetch(apiUrl(path), next).finally(() => {
+    clearTimeout(timeout);
+    doneLoading();
+  });
+}
+function deferAppWork(fn, delay = 0) {
+  const run = () => { try { fn(); } catch {} };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1200 });
+  else setTimeout(run, delay);
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -2128,7 +2158,7 @@ function showAuthError(msg) {
 function setAuthLoading(btnId, loading) {
   const btn = document.getElementById(btnId);
   btn.disabled = loading;
-  btn.textContent = loading ? 'Please wait…' : (btnId === 'auth-login-btn' ? 'Sign In' : 'Create Account');
+  btn.textContent = loading ? 'LOADING...' : (btnId === 'auth-login-btn' ? 'Sign In' : 'Create Account');
 }
 
 async function submitLogin(e) {
@@ -2186,11 +2216,11 @@ function onAuthSuccess(user) {
   document.getElementById('titlebarUser').style.display = 'flex';
   document.getElementById('userName').textContent = user.name;
   document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
-  requestNotificationPermission();
   syncPlanLimitsToCloneForm();
-  loadHistory();
-  loadAnnouncements();
-  if (!localStorage.getItem('wc_onboarded')) showOnboarding();
+  deferAppWork(() => requestNotificationPermission());
+  deferAppWork(() => loadHistory({ fast: true }));
+  deferAppWork(() => loadAnnouncements(), 150);
+  if (!localStorage.getItem('wc_onboarded')) deferAppWork(() => showOnboarding(), 250);
 }
 
 
@@ -2331,15 +2361,14 @@ function closePricing() {
 // Pricing state
 let pricingInterval = 'monthly';
 let paySettings = {};
-const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+const PLAN_ALIASES = { popular: 'growth', pro: 'growth', scale: 'unlimited', enterprise: 'unlimited' };
 function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
 function planLabel(plan) {
-  return ({ free:'Free', starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[normalizePlan(plan)] || 'Free';
+  return ({ free:'Free', starter:'Starter', growth:'Growth', unlimited:'Scale' })[normalizePlan(plan)] || 'Free';
 }
 const PLAN_PRICES = {
-  starter:   { monthly: 9.99,  annualMonthly: 7.99,  annual: 95.88  },
-  popular:   { monthly: 19.99, annualMonthly: 15.99, annual: 191.88 },
-  growth:    { monthly: 34.99, annualMonthly: 27.99, annual: 335.88 },
+  starter:   { monthly: 19.99, annualMonthly: 15.99, annual: 191.88 },
+  growth:    { monthly: 29.99, annualMonthly: 23.99, annual: 287.88 },
   unlimited: { monthly: 59.99, annualMonthly: 47.99, annual: 575.88 },
 };
 
@@ -2366,16 +2395,17 @@ function setPricingInterval(iv) {
 
 function updatePricingButtons() {
   const userPlan = currentUser?.plan || 'free';
-  for (const plan of ['starter', 'popular', 'growth', 'unlimited']) {
+  const normalizedUserPlan = normalizePlan(userPlan);
+  for (const plan of ['starter', 'growth', 'unlimited']) {
     const btn = document.getElementById('plan-btn-' + plan);
     if (!btn) continue;
-    if (userPlan === plan) {
+    if (normalizedUserPlan === plan) {
       btn.textContent = 'Current plan';
       btn.disabled = true;
       btn.style.opacity = '0.5';
       btn.style.cursor = 'default';
     } else {
-      btn.textContent = ({ starter:'Get Starter', popular:'Get Most Popular', growth:'Get Growth', unlimited:'Get Unlimited' })[plan] || `Get ${planLabel(plan)}`;
+      btn.textContent = ({ starter:'Get Starter', growth:'Get Growth', unlimited:'Get Scale' })[plan] || `Get ${planLabel(plan)}`;
       btn.disabled = false;
       btn.style.opacity = '';
       btn.style.cursor = '';
@@ -2446,7 +2476,7 @@ function openManualPaymentModal(plan) {
   const prices = PLAN_PRICES[plan] || PLAN_PRICES.starter;
   const price = pricingInterval === 'annual' ? prices.annual : prices.monthly;
   const period = pricingInterval === 'annual' ? '/yr' : '/mo';
-  const planLabel = ({ starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[plan] || plan;
+  const planLabel = ({ starter:'Starter', growth:'Growth', unlimited:'Scale' })[normalizePlan(plan)] || plan;
   const availableMethods = MPAY_METHODS.filter(m => paySettings[m.settingKey]);
 
   _mpayState = { plan, price, period, planLabel, step: 1, selectedMethod: availableMethods[0] || null };
@@ -2695,10 +2725,10 @@ async function openProfile() {
     upgradeBtn.style.display = plan === 'free' ? '' : 'none';
   }
 
-  document.getElementById('profileHistBody').innerHTML = '<div class="hist-empty">Loading…</div>';
+  document.getElementById('profileHistBody').innerHTML = '<div class="hist-empty">LOADING...</div>';
 
   try {
-    const res = await apiFetch('/api/outputs');
+    const res = await apiFetch('/api/outputs?fast=1&limit=50', { silentLoading: true });
     const outputs = await res.json();
     const total = outputs.length;
     const totalPages = outputs.reduce((s, o) => s + (o.pages || 0), 0);
@@ -2894,6 +2924,7 @@ function updateFontPickerFromSelection() {
 async function checkExistingSession() {
   const authScreen = document.getElementById('auth-screen');
   const revealForm = () => {
+    authScreen.classList.remove('auth-resuming');
     authScreen.classList.remove('auth-checking');
     // Small delay so the CSS transition has a starting frame to transition from
     setTimeout(() => document.getElementById('auth-login-email')?.focus(), 300);
@@ -2916,9 +2947,16 @@ async function checkExistingSession() {
 
   const token = oauthToken || localStorage.getItem('wc_auth_token');
   if (!token) { revealForm(); return false; }
+  authScreen.classList.add('auth-resuming');
   try {
-    const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token } });
-    if (!res.ok) { localStorage.removeItem('wc_auth_token'); revealForm(); return false; }
+    const signal = AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined;
+    const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token }, signal });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) localStorage.removeItem('wc_auth_token');
+      revealForm();
+      if (res.status !== 401 && res.status !== 403) showAuthError('Could not verify your session. Please refresh or try again.');
+      return false;
+    }
     const data = await res.json();
     if (data.user) { onAuthSuccess(data.user); return true; }
   } catch {}
@@ -2954,6 +2992,14 @@ function switchTab(tab) {
   document.getElementById('t-editor').classList.toggle('active', tab === 'editor');
   document.getElementById('t-build').classList.toggle('active', tab === 'build');
   if (tab === 'preview') loadPreviewPages(editorOutDir);
+  if (tab === 'editor') {
+    const job = allJobs.find(j => j.id === activeJobId && j.status === 'done' && j.outDir);
+    const outDir = editorOutDir || job?.outDir || '';
+    if (outDir) {
+      editorOutDir = outDir;
+      loadEditorPages(outDir);
+    }
+  }
   if (tab === 'build') loadTemplates();
 }
 
@@ -3042,7 +3088,7 @@ async function createFromTemplate(id, btn) {
     });
     const data = await res.json();
     if (data.error) { toast('Error: ' + data.error, 'err'); return; }
-    await loadHistory();
+    await loadHistory({ fast: true });
     // Re-set after loadHistory() since showJob() inside it can overwrite editorOutDir
     editorOutDir = data.outDir;
     switchTab('editor');
@@ -3065,12 +3111,12 @@ function toast(msg, type) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', async () => {
+window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') startClone(); });
   try { renderProfileSelect(); } catch {}
   try { initFontPicker(); } catch {}
   // Load payment settings and session check in parallel — they are independent
-  await Promise.all([
+  Promise.all([
     fetch('/api/payments/settings').then(r => r.json()).then(s => {
       paySettings = s;
       if (s.google_oauth_enabled) {
@@ -3081,11 +3127,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   ]);
 });
 
-async function loadHistory() {
+async function loadHistory(options = {}) {
   try {
+    const outputsPath = options.fast ? '/api/outputs?fast=1' : '/api/outputs';
     const [jobs, outputs] = await Promise.all([
-      apiFetch('/api/jobs').then(r => r.json()),
-      apiFetch('/api/outputs').then(r => r.json()).catch(() => []),
+      apiFetch('/api/jobs', { silentLoading: true }).then(r => r.json()),
+      apiFetch(outputsPath, { silentLoading: true }).then(r => r.json()).catch(() => []),
     ]);
     const seen = new Set((jobs || []).map(j => j.outDir).filter(Boolean));
     const outputJobs = (outputs || [])
@@ -3112,11 +3159,15 @@ async function loadHistory() {
     renderSidebar();
     updateUsageMeter();
     if (allJobs.length > 0) showJob(allJobs[0]);
-  } catch {}
+  } catch {
+    renderSidebar();
+    updateUsageMeter();
+    toast('Could not load clone history yet.', 'warn');
+  }
 }
 
-const _PLAN_CLONE_LIMITS = { free: 3, starter: 15, popular: 50, growth: 100, unlimited: null };
-const _PLAN_PAGE_LIMITS = { free: 20, starter: 30, popular: 100, growth: 200, unlimited: 500 };
+const _PLAN_CLONE_LIMITS = { free: 3, starter: 10, growth: 25, unlimited: null };
+const _PLAN_PAGE_LIMITS = { free: 20, starter: 500, growth: 500, unlimited: 500 };
 
 function currentPlanLimits() {
   const plan = normalizePlan(currentUser?.plan || 'free');
@@ -3276,7 +3327,7 @@ function showJob(job) {
   document.getElementById('statApi').textContent = '—';
   document.getElementById('statAssets').textContent = '—';
   updateJobView(job);
-  if (job.status === 'running') startPolling(job.id);
+  if (job.status === 'running' || job.status === 'saving') startPolling(job.id);
   else clearPolling();
   renderSidebar();
 }
@@ -3308,8 +3359,11 @@ function updateJobView(job) {
     pb.style.background = job.status === 'done' ? 'var(--green)' : 'var(--red)';
   }
   const logEl = document.getElementById('logBody');
-  const newLines = job.logs.slice(lastLogLen);
-  lastLogLen = job.logs.length;
+  const logs = Array.isArray(job.logs) ? job.logs : [];
+  const logOffset = Number.isFinite(job.logOffset) ? job.logOffset : 0;
+  if (logOffset > lastLogLen) lastLogLen = logOffset;
+  const newLines = logs.slice(Math.max(0, lastLogLen - logOffset));
+  lastLogLen = logOffset + logs.length;
   const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 60;
   for (const line of newLines) {
     const div = document.createElement('div');
@@ -3331,8 +3385,8 @@ function updateJobView(job) {
     renderHealth(job);
     clearTimer();
     editorOutDir = job.outDir;
-    loadEditorPages(job.outDir);
-    loadPreviewPages(job.outDir);
+    if (currentTab === 'editor') loadEditorPages(job.outDir);
+    if (currentTab === 'preview') loadPreviewPages(job.outDir);
   } else if (job.status === 'error') {
     if (errorCard) errorCard.className = 'error-card show';
     document.getElementById('doneCard').className = 'done-card';
@@ -3351,17 +3405,24 @@ function updateJobView(job) {
 
 function startPolling(jobId) {
   clearPolling();
-  pollInterval = setInterval(async () => {
+  const poll = async () => {
     if (activeJobId !== jobId) { clearPolling(); return; }
+    let delay = 1000;
     try {
-      const res = await apiFetch(`/api/status?id=${jobId}`);
+      const res = await apiFetch(`/api/status?id=${jobId}&logsFrom=${lastLogLen}`, { silentLoading: true, timeoutMs: 12000 });
       const job = await res.json();
       if (!res.ok || job.error || !job.id) throw new Error(job.error || 'Status unavailable');
       updateJobView(job);
-    } catch {}
-  }, 1000);
+      if (job.status === 'saving') delay = 1500;
+      else if (job.status !== 'running') return;
+    } catch {
+      delay = 2500;
+    }
+    pollInterval = setTimeout(poll, delay);
+  };
+  pollInterval = setTimeout(poll, 800);
 }
-function clearPolling() { if (pollInterval) { clearInterval(pollInterval); pollInterval = null; } }
+function clearPolling() { if (pollInterval) { clearTimeout(pollInterval); pollInterval = null; } }
 function startTimer() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   timerInterval = setInterval(() => {
@@ -3873,13 +3934,18 @@ if (!localStorage.getItem(FOLD_KEY)) {
 }
 
 async function loadEditorPages(outDir, preferredRoute = '') {
+  const list = document.getElementById('edPageList');
+  if (!outDir) {
+    if (list) list.innerHTML = '<div class="ed-no-site">Clone a site first</div>';
+    return;
+  }
+  if (list) list.innerHTML = '<div class="ed-no-site">LOADING...</div>';
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
     const payload = await res.json();
     if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
     if (!Array.isArray(payload)) throw new Error('Invalid pages response');
     const routes = sortRoutes(payload);
-    const list = document.getElementById('edPageList');
     if (!routes.length) { list.innerHTML = '<div class="ed-no-site">No pages found</div>'; return; }
     list.innerHTML = routes.map(r =>
       `<button class="ed-page-btn" onclick="loadEditorPage('${encodeURIComponent(r)}')" title="${r}">${r === '/' ? '/ (home)' : r}</button>`
@@ -5597,37 +5663,37 @@ const SECTIONS_LIBRARY = [
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:0 auto;text-align:left">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Starter</div>
-      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$9<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">Perfect for individuals and side projects.</p>
+      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$19<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For solo builders cloning live websites.</p>
       <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get Starter</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:#374151">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 15 clones/month</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Export &amp; download</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 10 website clones/month</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Code &amp; ZIP export</li>
         <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Visual editor</li>
       </ul>
     </div>
     <div style="background:#1e40af;border-radius:16px;padding:32px;color:#fff;position:relative">
       <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#3b82f6,#6366f1);padding:4px 16px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">Most Popular</div>
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#93c5fd;margin-bottom:16px">Pro</div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#93c5fd;margin-bottom:16px">Growth</div>
       <div style="font-size:48px;font-weight:900;letter-spacing:-2px;line-height:1;margin-bottom:8px">$29<span style="font-size:16px;color:rgba(255,255,255,.5);font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:rgba(255,255,255,.65);margin:0 0 24px;line-height:1.55">For growing teams that need more power and flexibility.</p>
-      <a href="#" style="display:block;text-align:center;padding:12px;background:#fff;color:#1e40af;border-radius:9px;font-weight:800;font-size:14px;text-decoration:none;margin-bottom:24px">Get Pro</a>
+      <p style="font-size:14px;color:rgba(255,255,255,.65);margin:0 0 24px;line-height:1.55">For builders and agencies that need more output.</p>
+      <a href="#" style="display:block;text-align:center;padding:12px;background:#fff;color:#1e40af;border-radius:9px;font-weight:800;font-size:14px;text-decoration:none;margin-bottom:24px">Get Growth</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:rgba(255,255,255,.8)">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Unlimited projects</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> 100GB storage</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Priority support</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Advanced analytics</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> 25 website clones/month</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Unlimited screens</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Figma export</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> API access</li>
       </ul>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Enterprise</div>
-      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$99<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For large teams with custom needs and dedicated support.</p>
-      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Contact sales</a>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Scale</div>
+      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$59<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For teams that need maximum scale.</p>
+      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get Scale</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:#374151">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Custom limits</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> SSO &amp; SAML</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Dedicated account manager</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Unlimited website clones</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Unlimited screens</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Priority support</li>
         <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> SLA guarantee</li>
       </ul>
     </div>

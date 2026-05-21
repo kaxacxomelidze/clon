@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSy
 import { request as httpsRequest } from 'https';
 import { createRequire } from 'module';
 import 'dotenv/config';
+import { runClone } from './packages/cloner/dist/runClone.js';
 import {
   getUserById, getUserByEmail, getAllUsers, getUsersPage, getClonesByUserIds, insertUser, updateUser, deleteUser,
   getUserByVerifyToken, getUserByResetToken,
@@ -36,6 +37,8 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 const DEFAULT_APP_URL = (process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || `http://localhost:${PORT}`).replace(/\/$/, '');
 
 const jobs = new Map();
+const ACTIVE_JOB_STATUSES = new Set(['running', 'saving']);
+const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job?.status);
 
 // ── Security constants ────────────────────────────────────────────────────────
 // Set PASSWORD_PEPPER and SHARE_PASSWORD_PEPPER in your .env file.
@@ -110,7 +113,7 @@ setInterval(async () => { try { await cleanExpiredSessions(Date.now()); } catch 
 setInterval(() => {
   const cutoff = Date.now() - 4 * 60 * 60 * 1000;
   for (const [id, job] of jobs) {
-    if (job.status !== 'running' && job.status !== 'saving' && new Date(job.startedAt).getTime() < cutoff) {
+    if (!isActiveJob(job) && new Date(job.startedAt).getTime() < cutoff) {
       jobs.delete(id);
     }
   }
@@ -119,28 +122,27 @@ setInterval(() => {
 // ── Plan limits ────────────────────────────────────────────────────────────────
 const PLAN_LIMITS = {
   free:       { clonesPerMonth: 3,        maxPages: 20  },
-  starter:    { clonesPerMonth: 15,       maxPages: 30  },
-  popular:    { clonesPerMonth: 50,       maxPages: 100 },
-  growth:     { clonesPerMonth: 100,      maxPages: 200 },
+  starter:    { clonesPerMonth: 10,       maxPages: 500 },
+  growth:     { clonesPerMonth: 25,       maxPages: 500 },
   unlimited:  { clonesPerMonth: Infinity, maxPages: 500 },
 };
-const PAID_PLAN_KEYS = ['starter', 'popular', 'growth', 'unlimited'];
-const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+const PAID_PLAN_KEYS = ['starter', 'growth', 'unlimited'];
+const PLAN_ALIASES = { popular: 'growth', pro: 'growth', scale: 'unlimited', enterprise: 'unlimited' };
 const LEGACY_PAID_PLAN_KEYS = Object.keys(PLAN_ALIASES);
 const ALL_PAID_PLAN_KEYS = [...PAID_PLAN_KEYS, ...LEGACY_PAID_PLAN_KEYS];
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+const USE_INLINE_CLONE = IS_VERCEL || process.env.CLONYFY_INLINE_CLONE === '1';
+const SERVERLESS_MAX_PAGES = Math.max(1, parseInt(process.env.CLONYFY_SERVERLESS_MAX_PAGES || '500', 10) || 500);
 const PLAN_PRICES = {
-  starter:    { monthly: 9.99,  annual: 95.88  },
-  popular:    { monthly: 19.99, annual: 191.88 },
-  growth:     { monthly: 34.99, annual: 335.88 },
+  starter:    { monthly: 19.99, annual: 191.88 },
+  growth:     { monthly: 29.99, annual: 287.88 },
   unlimited:  { monthly: 59.99, annual: 575.88 },
 };
 const PLAN_LABELS = {
   free: 'Free',
   starter: 'Starter',
-  popular: 'Most Popular',
   growth: 'Growth',
-  unlimited: 'Unlimited',
+  unlimited: 'Scale',
 };
 function legacyAliasesForPlan(plan) {
   const normalized = normalizePlan(plan);
@@ -156,11 +158,55 @@ function isPaidPlan(plan) {
 function getPlanLimits(plan) {
   return PLAN_LIMITS[normalizePlan(plan)] || PLAN_LIMITS.free;
 }
+function getEffectivePlanLimits(plan) {
+  const limits = getPlanLimits(plan);
+  return {
+    ...limits,
+    maxPages: IS_VERCEL ? Math.min(limits.maxPages, SERVERLESS_MAX_PAGES) : limits.maxPages,
+  };
+}
 function getPlanPrices(plan) {
   return PLAN_PRICES[normalizePlan(plan)] || { monthly: 0, annual: 0 };
 }
 function getPlanLabel(plan) {
   return PLAN_LABELS[normalizePlan(plan)] || 'Free';
+}
+function planFromStripePriceId(priceId) {
+  if (!priceId) return 'free';
+  const s = getStripeSettings();
+  for (const plan of ALL_PAID_PLAN_KEYS) {
+    const normalized = normalizePlan(plan);
+    for (const interval of ['monthly', 'annual']) {
+      if (s[STRIPE_PRICE_KEY(plan, interval)] === priceId) return normalized;
+    }
+  }
+  return 'free';
+}
+async function activatePaidPlanForUser(userId, { plan, interval = 'monthly', renewsAt = null, stripeSubscriptionId = null, cancelAtPeriodEnd = 0 } = {}) {
+  const confirmedPlan = normalizePlan(plan);
+  if (!isPaidPlan(confirmedPlan)) return null;
+  const fields = {
+    plan: confirmedPlan,
+    billing_interval: interval === 'annual' ? 'annual' : 'monthly',
+    renewal_reminder_sent: 0,
+    usage_alert_sent: 0,
+    cancel_at_period_end: cancelAtPeriodEnd ? 1 : 0,
+  };
+  if (renewsAt) fields.plan_renews_at = renewsAt instanceof Date ? renewsAt.toISOString() : String(renewsAt);
+  if (stripeSubscriptionId) fields.stripe_subscription_id = stripeSubscriptionId;
+  await updateUser(userId, fields);
+  _invalidateUserSessions(userId);
+  return confirmedPlan;
+}
+function stripeSubscriptionPlan(sub, fallbackPlan = 'free') {
+  const metaPlan = normalizePlan(sub?.metadata?.plan || fallbackPlan);
+  if (isPaidPlan(metaPlan)) return metaPlan;
+  for (const item of sub?.items?.data || []) {
+    const price = item?.price;
+    const pricePlan = normalizePlan(price?.metadata?.plan || planFromStripePriceId(price?.id));
+    if (isPaidPlan(pricePlan)) return pricePlan;
+  }
+  return 'free';
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -456,7 +502,7 @@ async function checkUsageAlert(userId) {
     const user = await getUserById(userId);
     if (!user || !isPaidPlan(user.plan) || user.usage_alert_sent) return;
     const plan = normalizePlan(user.plan);
-    const limits = getPlanLimits(plan);
+    const limits = getEffectivePlanLimits(plan);
     if (limits.clonesPerMonth === Infinity) return;
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const used = await getCloneCountThisMonth(userId, monthStart.toISOString());
@@ -473,7 +519,7 @@ async function checkUsageAlert(userId) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const OUTPUT_DIR = process.env.VERCEL ? join('/tmp', 'output') : join(__dirname, 'output');
+const OUTPUT_DIR = resolve(process.env.CLONYFY_OUTPUT_DIR || (process.env.VERCEL ? '/tmp/output' : './output'));
 
 const _fileCache = new Map();
 function serveFile(res, filePath, contentType, cacheSecs = 0) {
@@ -514,6 +560,10 @@ function cloneStoragePath(outDir, relPath) {
 
 function cloneFileListStoragePath(outDir) {
   return cloneStoragePath(outDir, '__files.json');
+}
+
+function cloneAssetToken(outDir) {
+  return createHash('sha256').update(`${String(outDir || '')}:${PASSWORD_PEPPER}`).digest('hex').slice(0, 32);
 }
 
 function contentTypeForPath(filePath) {
@@ -676,7 +726,7 @@ async function readPersistedJob(id) {
     const job = JSON.parse(raw);
     // If the job was persisted as running but has no live process, the server
     // restarted mid-job. Mark it as errored so the UI doesn't spin forever.
-    if (job.status === 'running' && !jobs.has(id)) {
+    if (isActiveJob(job) && !jobs.has(id)) {
       job.status = 'error';
       job.logs = [...(job.logs || []), '[ERROR] Clone was interrupted — server restarted while this job was running.'];
     }
@@ -759,8 +809,40 @@ async function loadRouteMapAsync(outDir) {
   catch { return null; }
 }
 
+function inferredRouteFromPageFilename(filename) {
+  const name = String(filename || '').replace(/\\/g, '/').split('/').pop() || '';
+  if (!name.endsWith('.html')) return null;
+  if (name === '__home__.html' || name === 'index.html') return '/';
+  const base = name.slice(0, -5).replace(/^_+|_+$/g, '').replace(/_+/g, '-');
+  return base ? `/${base}` : null;
+}
+
+async function inferRouteMapFromCapturedPages(outDir) {
+  if (!isInsideOutputDir(outDir)) return null;
+  const map = {};
+  const pagesDir = join(outDir, 'captured-pages');
+  if (existsSync(pagesDir)) {
+    for (const entry of readdirSync(pagesDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.html')) continue;
+      const route = inferredRouteFromPageFilename(entry.name);
+      if (route) map[route] = entry.name;
+    }
+  }
+  if (!Object.keys(map).length) {
+    const files = await readPersistedCloneFileList(outDir).catch(() => []);
+    for (const file of files) {
+      const rel = String(file?.rel || '').replace(/\\/g, '/');
+      if (!rel.startsWith('captured-pages/') || !rel.endsWith('.html')) continue;
+      const filename = rel.slice('captured-pages/'.length);
+      const route = inferredRouteFromPageFilename(filename);
+      if (route) map[route] = filename;
+    }
+  }
+  return Object.keys(map).length ? map : null;
+}
+
 async function verifyCloneReadable(outDir) {
-  const map = await loadRouteMapAsync(outDir);
+  const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
   if (!map || !Object.keys(map).length) return { ok: false, error: 'route-map.json is not readable' };
   for (const filename of Object.values(map)) {
     if (!filename) return { ok: false, error: 'A captured route has no page file' };
@@ -771,7 +853,7 @@ async function verifyCloneReadable(outDir) {
 }
 
 function rewritePreviewAssetUrls(html, outDir) {
-  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&path=`;
+  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   return String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
 }
 
@@ -896,7 +978,7 @@ function sharePasswordFormHtml(shareId, error) {
 
 function userPublic(u) {
   const plan = normalizePlan(u.plan);
-  const limits = getPlanLimits(plan);
+  const limits = getEffectivePlanLimits(plan);
   return {
     id: u.id, name: u.name, email: u.email,
     plan,
@@ -986,9 +1068,78 @@ function runProcess(file, args, opts = {}) {
   });
 }
 
+function routeToStaticPath(route) {
+  const cleanRoute = String(route || '/').split('?')[0].split('#')[0];
+  if (cleanRoute === '/' || !cleanRoute.replace(/\//g, '')) return 'index.html';
+  const parts = cleanRoute
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => part.replace(/[<>:"\\|?*\x00-\x1F]/g, '-'));
+  const last = parts[parts.length - 1] || '';
+  if (/\.[a-z0-9]{1,8}$/i.test(last)) return join(...parts);
+  return join(...parts, 'index.html');
+}
+
+function copyDirRecursive(src, dest) {
+  if (!existsSync(src)) return;
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
+    else if (entry.isFile()) copyFileSync(srcPath, destPath);
+  }
+}
+
+async function materializeStaticWebsite(outDir) {
+  const materialized = await materializeCloneOutput(outDir);
+  const siteDir = join(OUTPUT_DIR, `__static_${randomUUID().slice(0, 8)}`);
+  mkdirSync(siteDir, { recursive: true });
+  try {
+    const routeMapPath = join(materialized.dir, 'route-map.json');
+    const capturedPagesDir = join(materialized.dir, 'captured-pages');
+    const routeMap = existsSync(routeMapPath) ? JSON.parse(readFileSync(routeMapPath, 'utf8')) : null;
+    if (routeMap && existsSync(capturedPagesDir)) {
+      for (const [route, filename] of Object.entries(routeMap)) {
+        if (!filename || String(filename).includes('..')) continue;
+        const srcPath = join(capturedPagesDir, String(filename));
+        if (!existsSync(srcPath)) continue;
+        const destPath = join(siteDir, routeToStaticPath(route));
+        if (!isInsideOutputDir(destPath)) continue;
+        mkdirSync(dirname(destPath), { recursive: true });
+        copyFileSync(srcPath, destPath);
+      }
+    } else if (existsSync(capturedPagesDir)) {
+      for (const file of readdirSync(capturedPagesDir)) {
+        if (!file.endsWith('.html') || file.includes('..')) continue;
+        const destName = file === '__root__.html' ? 'index.html' : file;
+        copyFileSync(join(capturedPagesDir, file), join(siteDir, destName));
+      }
+    }
+    copyDirRecursive(join(materialized.dir, 'public', '_assets'), join(siteDir, '_assets'));
+    if (!existsSync(join(siteDir, 'index.html'))) {
+      const firstHtml = readdirSync(siteDir, { recursive: true }).find(name => String(name).endsWith('.html'));
+      if (firstHtml) copyFileSync(join(siteDir, String(firstHtml)), join(siteDir, 'index.html'));
+    }
+    return {
+      dir: siteDir,
+      cleanup: () => {
+        try { materialized.cleanup(); } catch {}
+        try { rmSync(siteDir, { recursive: true, force: true }); } catch {}
+      },
+    };
+  } catch (err) {
+    try { materialized.cleanup(); } catch {}
+    try { rmSync(siteDir, { recursive: true, force: true }); } catch {}
+    throw err;
+  }
+}
+
 async function buildOutputZip(outDir) {
   if (!isInsideOutputDir(outDir)) throw new Error('Invalid output folder');
-  const materialized = await materializeCloneOutput(outDir);
+  const materialized = await materializeStaticWebsite(outDir);
   const zipName = `${outDir.split(/[\\/]/).pop()}.zip`;
   const zipPath = join(OUTPUT_DIR, zipName);
   try { rmSync(zipPath, { force: true }); } catch {}
@@ -1192,8 +1343,9 @@ async function handleRequest(req, res) {
     const assetUser = await getSessionUser(req);
     const outDir = url.searchParams.get('outDir') || '';
     const relPath = String(url.searchParams.get('path') || '').replace(/^\/+/, '');
+    const assetToken = String(url.searchParams.get('assetToken') || '');
     if (!isInsideOutputDir(outDir) || !relPath.startsWith('_assets/')) return json(res, { error: 'Invalid asset' }, 400);
-    const readable = await canReadOutDir(assetUser, outDir) || !!(await getCloneByOutDir(outDir).catch(() => null));
+    const readable = await canReadOutDir(assetUser, outDir) || assetToken === cloneAssetToken(outDir);
     if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
     const data = await readCloneFile(outDir, join('public', relPath));
     if (!data) { res.writeHead(404); res.end('Not found'); return; }
@@ -1205,14 +1357,16 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/outputs') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
-    const userClones = await getClonesByUser(user.id);
+    const fast = url.searchParams.get('fast') === '1';
+    const limit = Math.max(1, Math.min(500, parseInt(url.searchParams.get('limit') || (fast ? '100' : '500'), 10) || (fast ? 100 : 500)));
+    const userClones = await getClonesByUser(user.id, limit);
     const labelByDir = Object.fromEntries(userClones.filter(c => c.out_dir && c.label).map(c => [c.out_dir, c.label]));
-    const localByDir = Object.fromEntries(getOutputs().map(o => [o.dir, o]));
+    const localByDir = fast ? {} : Object.fromEntries(getOutputs().map(o => [o.dir, o]));
     const normalized = [];
     for (const c of userClones.filter(c => c.out_dir)) {
       let status = c.status;
       let pages = c.pages;
-      if (status === 'done') {
+      if (status === 'done' && !fast) {
         const readable = await verifyCloneReadable(c.out_dir).catch(err => ({ ok: false, error: err?.message || String(err) }));
         if (!readable.ok) {
           status = 'error';
@@ -1340,7 +1494,7 @@ async function handleRequest(req, res) {
       writeAuthPage(outDir, 'register');
       const now = new Date().toISOString();
       writeFileSync(join(outDir, 'manifest.json'), JSON.stringify({ targetOrigin: `builder:${safeId}`, capturedAt: now, pages: [] }, null, 2), 'utf8');
-      await insertClone({ id, userId: templateUser.id, userName: templateUser.name, url: `builder:${safeId}`, outDir, status: 'completed', pages: 1, assets: 0, apiRoutes: 0, startedAt: now, completedAt: now });
+      await insertClone({ id, userId: templateUser.id, userName: templateUser.name, url: `builder:${safeId}`, outDir, status: 'done', pages: 1, assets: 0, apiRoutes: 0, startedAt: now, completedAt: now });
       try { await persistCloneOutput(outDir); } catch {}
       invalidateOutputsCache();
       json(res, { ok: true, outDir });
@@ -1355,7 +1509,7 @@ async function handleRequest(req, res) {
     if (!await canReadOutDir(pagesUser, outDir) && !await canReadCloneRecord(pagesUser, outDir)) {
       return json(res, { error: pagesUser ? 'Not found' : 'Not authenticated' }, pagesUser ? 404 : 401);
     }
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) return json(res, []);
     return json(res, Object.keys(map));
   }
@@ -1369,7 +1523,7 @@ async function handleRequest(req, res) {
       res.writeHead(404); res.end('Not found'); return;
     }
     const route = url.searchParams.get('route') || '/';
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) { res.writeHead(404); res.end('No clone loaded'); return; }
     const filename = map[route] || map['/'];
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
@@ -1387,7 +1541,7 @@ async function handleRequest(req, res) {
     // 50MB limit — cloned pages with inlined assets can be several MB
     readJsonBody(req, 50_000_000).then(async ({ outDir, route, html }) => {
       if (!await canUseCloneOutput(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const filename = map[route || '/'];
       if (!filename) return json(res, { error: 'Route not found: ' + route }, 404);
@@ -1408,7 +1562,7 @@ async function handleRequest(req, res) {
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
       if (!await canUseCloneOutput(authPageUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const pageKind = kind === 'register' ? 'register' : 'login';
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const route = pageKind === 'register' ? '/register' : '/login';
       const filename = routeFilename(route);
@@ -1448,7 +1602,11 @@ async function handleRequest(req, res) {
     const statusUser = await getSessionUser(req);
     const statusUserId = statusUser ? statusUser.id : null;
     if (job.userId !== statusUserId) return json(res, { error: 'not found' }, 404);
-    return json(res, job);
+    const logsFrom = Math.max(0, parseInt(url.searchParams.get('logsFrom') || '0', 10) || 0);
+    if (logsFrom > 0 && Array.isArray(job.logs)) {
+      return json(res, { ...job, logs: job.logs.slice(logsFrom), logOffset: logsFrom });
+    }
+    return json(res, { ...job, logOffset: 0 });
   }
 
   // ── Clone ──────────────────────────────────────────────────────────────────
@@ -1467,10 +1625,11 @@ async function handleRequest(req, res) {
       const targetUrl = target.href;
       const { depth = '3', ignoreRobots = false } = parsed;
       let { maxPages = '20' } = parsed;
+      const requestedMaxPages = parseInt(maxPages, 10) || 20;
 
       if (cloneUser) {
         const plan = normalizePlan(cloneUser.plan);
-        const limits = getPlanLimits(plan);
+        const limits = getEffectivePlanLimits(plan);
         if (limits.clonesPerMonth !== Infinity) {
           const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
           const used = await getCloneCountThisMonth(cloneUser.id, monthStart.toISOString());
@@ -1484,7 +1643,7 @@ async function handleRequest(req, res) {
           return json(res, { error: `Too many clone requests. Please wait before starting another.` }, 429);
         }
         // Cap concurrent running jobs per user
-        const userRunning = [...jobs.values()].filter(j => j.userId === cloneUser.id && j.status === 'running').length;
+        const userRunning = [...jobs.values()].filter(j => j.userId === cloneUser.id && isActiveJob(j)).length;
         if (userRunning >= 2) {
           return json(res, { error: 'You already have 2 clones running. Wait for one to finish before starting another.' }, 429);
         }
@@ -1492,11 +1651,11 @@ async function handleRequest(req, res) {
       } else {
         if (!checkRateLimit(`clone_anon:${ip}`, 2, 86400000)) return json(res, { error: 'Rate limit exceeded. Sign in for more clones.' }, 429);
         // Cap concurrent running jobs per IP for anonymous users
-        const anonRunning = [...jobs.values()].filter(j => j.userId === null && j.status === 'running').length;
+        const anonRunning = [...jobs.values()].filter(j => j.userId === null && isActiveJob(j)).length;
         if (anonRunning >= 1) {
           return json(res, { error: 'An anonymous clone is already running from this server. Sign in for concurrent clones.' }, 429);
         }
-        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, PLAN_LIMITS.free.maxPages));
+        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, getEffectivePlanLimits('free').maxPages));
       }
       maxPages = String(Math.max(1, parseInt(maxPages, 10) || 1));
 
@@ -1513,6 +1672,9 @@ async function handleRequest(req, res) {
         userId: cloneUser ? cloneUser.id : null,
         userName: cloneUser ? cloneUser.name : 'Anonymous',
       };
+      if (IS_VERCEL && requestedMaxPages > job.maxPages) {
+        job.logs.push(`[WARN] Page limit capped to ${job.maxPages} on serverless deployment. Set CLONYFY_SERVERLESS_MAX_PAGES or run a dedicated worker for larger clones.`);
+      }
       jobs.set(id, job);
       persistJob(job);
       try {
@@ -1532,22 +1694,7 @@ async function handleRequest(req, res) {
       const args = ['clone', targetUrl, '--out', outDir, '--max-pages', String(maxPages), '--depth', String(depth), '--concurrency', '1'];
       if (ignoreRobots) args.push('--ignore-robots');
 
-      const proc = spawn(process.execPath, [CLI, ...args], {
-        cwd: __dirname,
-        env: {
-          ...process.env,
-          ...(IS_VERCEL ? { CLONYFY_SERVERLESS: '1' } : {}),
-        },
-      });
-      proc.stdout.on('data', (c) => {
-        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));
-        persistJob(job);
-      });
-      proc.stderr.on('data', (c) => {
-        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`));
-        persistJob(job);
-      });
-      proc.on('close', async (code, signal) => {
+      const finalizeCloneJob = async (code, signal = null) => {
         if (code !== 0) {
           job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
         }
@@ -1577,6 +1724,9 @@ async function handleRequest(req, res) {
           try {
             await persistCloneOutput(job.outDir);
             cloneReadable = await verifyCloneReadable(job.outDir);
+            if ((job.pages ?? 0) <= 0) {
+              cloneReadable = { ok: false, error: 'Clone captured 0 pages' };
+            }
             if (!cloneReadable.ok) {
               job.logs.push(`[ERROR] Clone output is not ready for preview: ${cloneReadable.error}`);
             }
@@ -1595,11 +1745,17 @@ async function handleRequest(req, res) {
           });
           cloneRecordSaved = true;
         } catch (dbErr) {
-          job.logs.push(`[ERROR] Could not save clone record: ${dbErr?.message || dbErr}`);
+          job.logs.push(`[WARN] Could not save clone record: ${dbErr?.message || dbErr}`);
         }
-        if (code === 0) job.status = cloneRecordSaved && cloneReadable?.ok ? 'done' : 'error';
+        const cloneSucceeded = code === 0 && cloneReadable?.ok;
+        if (code === 0) {
+          job.status = cloneSucceeded ? 'done' : 'error';
+          if (!cloneRecordSaved && cloneReadable?.ok) {
+            job.logs.push('[WARN] Clone finished, but history persistence failed. Preview and export may still work from local output.');
+          }
+        }
         persistJob(job);
-        if (code !== 0) {
+        if (!cloneSucceeded) {
           try {
             const errorLines = job.logs.filter(l => l.startsWith('[ERROR]') || l.toLowerCase().includes('error'));
             await insertError({
@@ -1612,8 +1768,8 @@ async function handleRequest(req, res) {
           } catch {}
         }
         if (cloneUser) {
-          audit(cloneUser.id, cloneUser.name, code === 0 ? 'clone_complete' : 'clone_error', `${targetUrl} pages=${job.pages}`, ip);
-          if (code === 0) {
+          audit(cloneUser.id, cloneUser.name, cloneSucceeded ? 'clone_complete' : 'clone_error', `${targetUrl} pages=${job.pages}`, ip);
+          if (cloneSucceeded) {
             checkUsageAlert(cloneUser.id);
             const s = getCachedSettings();
             const appUrl = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
@@ -1628,7 +1784,53 @@ async function handleRequest(req, res) {
             ).catch(() => {});
           }
         }
-      });
+      };
+
+      if (USE_INLINE_CLONE) {
+        try {
+          const result = await runClone({
+            url: targetUrl,
+            out: outDir,
+            maxPages: parseInt(maxPages, 10),
+            depth: parseInt(depth, 10) || 3,
+            concurrency: 1,
+            ignoreRobots: !!ignoreRobots,
+            verbose: false,
+          }, {
+            onLog: (line) => {
+              if (line) job.logs.push(line);
+              persistJob(job);
+            },
+          });
+          job.pages = result.pages;
+          job.assets = result.assets;
+          job.apiRoutes = result.apiRoutes;
+          await finalizeCloneJob(0);
+        } catch (err) {
+          job.logs.push(`[ERROR] ${err?.message || err}`);
+          await finalizeCloneJob(1);
+        }
+      } else {
+        const proc = spawn(process.execPath, [CLI, ...args], {
+          cwd: __dirname,
+          env: process.env,
+        });
+        proc.stdout.on('data', (c) => {
+          c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));
+          persistJob(job);
+        });
+        proc.stderr.on('data', (c) => {
+          c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`));
+          persistJob(job);
+        });
+        proc.on('close', (code, signal) => {
+          finalizeCloneJob(code, signal).catch((err) => {
+            job.status = 'error';
+            job.logs.push(`[ERROR] Could not finalize clone: ${err?.message || err}`);
+            persistJob(job);
+          });
+        });
+      }
 
       return json(res, job);
     });
@@ -1664,7 +1866,7 @@ async function handleRequest(req, res) {
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(previewUser, outDir)) return json(res, { error: 'Not found' }, 404);
     if (IS_VERCEL) {
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'Preview pages not found' }, 404);
       return json(res, {
         ok: true,
@@ -1881,7 +2083,7 @@ async function handleRequest(req, res) {
     const { outDir, route, password, expiresInDays } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(shareUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) return json(res, { error: 'No clone found' }, 404);
     const shareId = randomUUID().replace(/-/g, '').slice(0, 14);
     let passwordHash = null, salt = null;
@@ -1940,7 +2142,7 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/admin/auth') {
     if (!checkRateLimit(`admin_login:${ip}`, 5, 300000)) return json(res, { error: 'Too many attempts. Try again in 5 minutes.' }, 429);
     const { password } = await readJsonBody(req);
-    if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled — ADMIN_PASSWORD env var is not set on the server.' }, 503);
+    if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled because ADMIN_PASSWORD is missing on this server. Add it in your hosting environment variables, then redeploy/restart.' }, 503);
     if (!password || password !== ADMIN_PASSWORD) return json(res, { error: 'Wrong password' }, 401);
     const token = randomUUID();
     adminSessions.set(token, Date.now() + 8 * 3600 * 1000);
@@ -1957,7 +2159,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/admin/stats') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
     const { totalUsers, blockedUsers, totalClones, totalErrors, pendingPayments, activePaidUsers, totalRevenue, monthRevenue } = await getAdminStats();
-    const activeNow = [...jobs.values()].filter(j => j.status === 'running').length;
+    const activeNow = [...jobs.values()].filter(isActiveJob).length;
     const mrr = activePaidUsers.reduce((s, u) => {
       const p = getPlanPrices(u.plan);
       return s + (u.billing_interval === 'annual' ? p.annual / 12 : p.monthly);
@@ -2021,6 +2223,7 @@ async function handleRequest(req, res) {
     if (body.blocked !== undefined) fields.blocked = body.blocked ? 1 : 0;
     await updateUser(userId, fields);
     if (fields.blocked !== undefined) _invalidateUserSessions(userId);
+    if (fields.plan !== undefined || fields.plan_renews_at !== undefined || fields.billing_interval !== undefined) _invalidateUserSessions(userId);
     audit(null, 'admin', 'admin_update_user', `userId=${userId} ${JSON.stringify(fields)}`, ip);
     return json(res, { ok: true });
   }
@@ -2060,11 +2263,12 @@ async function handleRequest(req, res) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     const pageSize = 50;
     const running = [...jobs.values()]
-      .filter(j => j.status === 'running')
+      .filter(isActiveJob)
       .map(j => ({ id: j.id, user_id: j.userId, user_name: j.userName || 'Anonymous', url: j.url, status: j.status, pages: j.pages, assets: j.assets, started_at: j.startedAt, completed_at: null }));
+    const runningIds = new Set(running.map(j => j.id));
     const all = [
       ...running,
-      ...clones.map(c => ({ ...c, user_name: c.user_name || 'Deleted' })),
+      ...clones.filter(c => !runningIds.has(c.id)).map(c => ({ ...c, user_name: c.user_name || 'Deleted' })),
     ]
       .filter(c => !userFilter || c.user_id === userFilter)
       .filter(c => !statusFilter || c.status === statusFilter)
@@ -2145,9 +2349,10 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/payments/plans') {
+    const limits = Object.fromEntries(Object.keys(PLAN_LIMITS).map(plan => [plan, getEffectivePlanLimits(plan)]));
     return json(res, {
       plans: PLAN_PRICES,
-      limits: PLAN_LIMITS,
+      limits,
       labels: PLAN_LABELS,
       aliases: PLAN_ALIASES,
     });
@@ -2229,8 +2434,7 @@ async function handleRequest(req, res) {
         const renewDate = new Date();
         if (interval === 'annual') renewDate.setFullYear(renewDate.getFullYear() + 1);
         else renewDate.setMonth(renewDate.getMonth() + 1);
-        const confirmedPlan = normalizePlan(payment.plan);
-        await updateUser(payment.user_id, { plan: confirmedPlan, plan_renews_at: renewDate.toISOString(), billing_interval: interval, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+        const confirmedPlan = await activatePaidPlanForUser(payment.user_id, { plan: payment.plan, interval, renewsAt: renewDate });
         const s = getCachedSettings();
         const appUrl = s.app_url || `http://localhost:${PORT}`;
         sendEmail(user.email, `Payment confirmed — ${getPlanLabel(confirmedPlan)} plan activated`,
@@ -2449,7 +2653,7 @@ async function handleRequest(req, res) {
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const clonesThisMonth = userClones.filter(c => new Date(c.started_at) >= monthStart).length;
     const plan = normalizePlan(user.plan);
-    const limits = getPlanLimits(plan);
+    const limits = getEffectivePlanLimits(plan);
     const totalPages = userClones.reduce((s, c) => s + (c.pages || 0), 0);
     const totalAssets = userClones.reduce((s, c) => s + (c.assets || 0), 0);
     return json(res, {
@@ -2757,7 +2961,7 @@ async function handleRequest(req, res) {
         ...(discounts ? { discounts } : {}),
         metadata: { userId: user.id, plan, interval: bi },
         subscription_data: { metadata: { userId: user.id, plan, interval: bi } },
-        success_url: `${appUrl}/dashboard?stripe=success`,
+        success_url: `${appUrl}/dashboard?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/dashboard?stripe=cancelled`,
       });
     } catch (err) {
@@ -2765,6 +2969,53 @@ async function handleRequest(req, res) {
     }
     audit(user.id, user.name, 'stripe_checkout_created', `plan=${plan} interval=${bi}`, ip);
     return json(res, { url: session.url });
+  }
+
+  // POST /api/payments/stripe/sync — immediately unlock paid access after Checkout
+  if (req.method === 'POST' && url.pathname === '/api/payments/stripe/sync') {
+    const user = await getSessionUser(req);
+    if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    const stripe = getStripe();
+    if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe not configured' }, 503);
+    const { sessionId } = await readJsonBody(req).catch(() => ({}));
+    try {
+      let sub = null;
+      let customerId = user.stripe_customer_id || '';
+      if (sessionId) {
+        const session = await stripe.checkout.sessions.retrieve(String(sessionId));
+        if (session.client_reference_id !== user.id && session.metadata?.userId !== user.id) {
+          return json(res, { error: 'Checkout session does not belong to this account.' }, 403);
+        }
+        if (session.customer && session.customer !== user.stripe_customer_id) {
+          customerId = session.customer;
+          await updateUser(user.id, { stripe_customer_id: customerId });
+        }
+        if (session.subscription) sub = await stripe.subscriptions.retrieve(session.subscription);
+      }
+      if (!sub && customerId) {
+        const subs = await stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 5 });
+        sub = subs.data.find(s => s.metadata?.userId === user.id) || subs.data[0] || null;
+      }
+      if (!sub || !['active', 'trialing'].includes(sub.status)) {
+        return json(res, { error: 'No active Stripe subscription found yet. Please wait a moment and refresh.' }, 404);
+      }
+      const plan = stripeSubscriptionPlan(sub, user.plan);
+      if (!isPaidPlan(plan)) return json(res, { error: 'Could not identify the paid plan for this subscription.' }, 409);
+      const periodEnd = stripePeriodEnd(sub);
+      const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
+      const interval = sub.metadata?.interval || user.billing_interval || 'monthly';
+      await activatePaidPlanForUser(user.id, {
+        plan,
+        interval,
+        renewsAt,
+        stripeSubscriptionId: sub.id,
+        cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0,
+      });
+      audit(user.id, user.name, 'stripe_subscription_synced', `plan=${plan} subscription=${sub.id}`, ip);
+      return json(res, { ok: true, user: userPublic(await getUserById(user.id)) });
+    } catch (err) {
+      return json(res, { error: `Stripe sync failed: ${err.message}` }, 502);
+    }
   }
 
   // POST /api/payments/stripe/portal — billing portal for self-service
@@ -2817,7 +3068,7 @@ async function handleRequest(req, res) {
           if (userId && plan) {
             const periodEnd = stripePeriodEnd(sub);
             const renewsAt = periodEnd ? new Date(periodEnd * 1000) : new Date(Date.now() + (bi === 'annual' ? 365 : 31) * 24 * 60 * 60 * 1000);
-            await updateUser(userId, { plan, billing_interval: bi, plan_renews_at: renewsAt.toISOString(), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+            await activatePaidPlanForUser(userId, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
             const u = await getUserById(userId);
             if (u) {
               await insertPayment({ id: randomUUID(), userId, userName: u.name, userEmail: u.email, plan, amount: (session.amount_total || 0) / 100, currency: (session.currency || 'usd').toUpperCase(), method: 'stripe', txId: session.payment_intent || session.id, note: '', promoCode: null, discountPercent: 0, interval: bi, status: 'confirmed', submittedAt: new Date().toISOString() });
@@ -2835,11 +3086,11 @@ async function handleRequest(req, res) {
         const customerUser = sub.customer ? await getUserByStripeCustomerId(sub.customer) : null;
         const userId = sub.metadata?.userId || customerUser?.id;
         if (userId && sub.status === 'active') {
-          const plan = normalizePlan(sub.metadata?.plan || customerUser?.plan);
+          const plan = stripeSubscriptionPlan(sub, customerUser?.plan);
           const bi = sub.metadata?.interval || customerUser?.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
-          if (plan) await updateUser(userId, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+          if (isPaidPlan(plan)) await activatePaidPlanForUser(userId, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
         }
       }
 
@@ -2850,11 +3101,11 @@ async function handleRequest(req, res) {
         const subscriptionId = inv.subscription || inv.parent?.subscription_details?.subscription || null;
         if (u && subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
-          const plan = normalizePlan(sub.metadata?.plan || u.plan);
+          const plan = stripeSubscriptionPlan(sub, u.plan);
           const bi = sub.metadata?.interval || u.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
-          await updateUser(u.id, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+          await activatePaidPlanForUser(u.id, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
         }
       }
 
@@ -2864,6 +3115,7 @@ async function handleRequest(req, res) {
         const userId = sub.metadata?.userId || customerUser?.id;
         if (userId) {
           await updateUser(userId, { plan: 'free', plan_renews_at: null, stripe_subscription_id: null, cancel_at_period_end: 0, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+          _invalidateUserSessions(userId);
           const u = await getUserById(userId);
           if (u) {
             sendEmail(u.email, 'Your account has been downgraded to Free',
@@ -3092,15 +3344,25 @@ async function ensureInit() {
   setInterval(runDunning, 3600000);
 }
 
+async function handler(req, res) {
+  try {
+    await ensureInit();
+    return await handleRequest(req, res);
+  } catch (err) {
+    console.error('[REQUEST ERROR]', err?.message || err, err?.stack || '');
+    if (!res.headersSent) {
+      return json(res, { error: 'Internal server error' }, 500);
+    }
+    try { res.end(); } catch {}
+  }
+}
+
 if (!process.env.VERCEL) {
   ensureInit().then(() => {
-    createServer(handleRequest).listen(PORT, () => {
+    createServer(handler).listen(PORT, () => {
       console.log(`\n🌐 CLONYFY running at: http://localhost:${PORT}\n`);
     });
   });
 }
 
-export default async function handler(req, res) {
-  await ensureInit();
-  return handleRequest(req, res);
-}
+export default handler;

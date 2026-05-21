@@ -187,7 +187,7 @@ var require_eventemitter3 = __commonJS({
 });
 
 // src/runClone.ts
-import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "fs";
+import { mkdirSync as mkdirSync5, writeFileSync as writeFileSync4 } from "fs";
 import { resolve, join as join5 } from "path";
 
 // src/robots.ts
@@ -217,10 +217,6 @@ async function checkRobots(targetUrl) {
     return { allowed: true, reason: "robots.txt unreachable, proceeding" };
   }
 }
-
-// src/crawler.ts
-import { chromium } from "playwright";
-import sparticuzChromium from "@sparticuz/chromium";
 
 // node_modules/eventemitter3/index.mjs
 var import_index = __toESM(require_eventemitter3(), 1);
@@ -708,13 +704,13 @@ var PQueue = class extends import_index.default {
 
 // src/crawler.ts
 import { createHash as createHash2 } from "crypto";
-import { existsSync as existsSync2, writeFileSync as writeFileSync2 } from "fs";
+import { existsSync as existsSync2, mkdirSync as mkdirSync3, writeFileSync as writeFileSync2 } from "fs";
 import { extname as extname3, join as join3 } from "path";
 import mime2 from "mime-types";
 
 // src/capture.ts
 import { createHash } from "crypto";
-import { writeFileSync, existsSync } from "fs";
+import { writeFileSync, mkdirSync as mkdirSync2, existsSync } from "fs";
 import { join as join2, extname as extname2 } from "path";
 import mime from "mime-types";
 
@@ -749,7 +745,7 @@ var logger = {
   warn: (msg) => {
     writeToFile("WARN", msg);
     const line = `[WARN] ${msg}`;
-    console.warn(line);
+    console.log(line);
     logSink?.(line, "WARN");
   },
   error: (msg, err) => {
@@ -1042,7 +1038,8 @@ function shouldReportConsoleError(text) {
   return !/^Failed to load resource:/i.test(text);
 }
 function shouldReportPageError(message) {
-  return !/^Invalid or unexpected token$/i.test(message.trim());
+  const clean = message.trim();
+  return !/^Invalid or unexpected token$/i.test(clean) && !/^__name is not defined$/i.test(clean);
 }
 function isImageLikeRequest(url, resourceType) {
   if (resourceType === "image") return true;
@@ -1093,6 +1090,10 @@ function rewriteCssUrls(css, assetMap, baseUrl) {
 async function capturePage(context, pageUrl, assetsDir) {
   const page = await context.newPage();
   await page.setExtraHTTPHeaders({ "User-Agent": USER_AGENT2 });
+  await page.addInitScript(() => {
+    const win = window;
+    win.__name ||= (value) => value;
+  });
   const networkLog = [];
   const assetMap = /* @__PURE__ */ new Map();
   const pendingAssets = [];
@@ -1146,6 +1147,7 @@ async function capturePage(context, pageUrl, assetsDir) {
       const filename = `${hash}${ext}`;
       const localPath = join2(assetsDir, filename);
       const webPath = `/_assets/${filename}`;
+      mkdirSync2(assetsDir, { recursive: true });
       const isCss = forceCss || ext === ".css" || contentType.includes("text/css");
       if (isCss) {
         const cssText = body.toString("utf8");
@@ -1366,7 +1368,9 @@ async function capturePage(context, pageUrl, assetsDir) {
       window.scrollTo(0, document.body.scrollHeight);
       await delay(fast ? 40 : 120);
       window.scrollTo(0, 0);
-    }, IS_SERVERLESS);
+    }, IS_SERVERLESS).catch((err) => {
+      logger.debug(`  [SCROLL WARN] ${err.message}`);
+    });
     try {
       await page.waitForFunction(() => {
         const imgs = Array.from(document.querySelectorAll('img[loading="lazy"], img[data-src]'));
@@ -1410,6 +1414,9 @@ async function capturePage(context, pageUrl, assetsDir) {
       });
       document.querySelectorAll("script[src]").forEach((el) => push(el.getAttribute("src")));
       return [...new Set(urls)];
+    }).catch((err) => {
+      logger.debug(`  [DOM ASSETS WARN] ${err.message}`);
+      return [];
     });
     if (domAssetUrls.length > 0) {
       logger.debug(`  [DOM ASSETS] ${domAssetUrls.length} lazy/data asset refs found`);
@@ -1461,6 +1468,9 @@ async function capturePage(context, pageUrl, assetsDir) {
         for (const m of matches) urls.push(m[1]);
       });
       return urls;
+    }).catch((err) => {
+      logger.debug(`  [INLINE CSS WARN] ${err.message}`);
+      return [];
     });
     if (inlineStyleUrls.length > 0) {
       logger.debug(`  [INLINE CSS] ${inlineStyleUrls.length} url() refs in inline styles`);
@@ -1607,7 +1617,10 @@ async function capturePage(context, pageUrl, assetsDir) {
       const spaNavs = window.__clonyfyNavs ?? [];
       spaNavs.forEach(push);
       return [...found];
-    }, origin);
+    }, origin).catch((err) => {
+      logger.debug(`  [LINKS WARN] ${err.message}`);
+      return [];
+    });
     const links = rawLinks.map((link) => normalizePageUrl(link, pageUrl)).filter((link) => !!link && new URL(link).origin === origin);
     const seenPaths = /* @__PURE__ */ new Set();
     const assets = Array.from(assetMap.entries()).filter(([, localPath]) => {
@@ -1703,11 +1716,15 @@ var NON_PAGE_EXTS2 = /* @__PURE__ */ new Set([
   ".zip"
 ]);
 var NAV_DELAY_MS = IS_SERVERLESS2 ? 50 : 250;
-var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 18e3 : 18e4;
-var USER_AGENT3 = "CLONYFY/0.1 (+local archival)";
+var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 35e3 : 18e4;
+var USER_AGENT3 = "Mozilla/5.0 (compatible; CLONYFY/0.1; +local archival)";
 var STATIC_ASSET_LIMIT = IS_SERVERLESS2 ? 80 : 250;
 var STATIC_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 1e4;
+var STATIC_PAGE_TIMEOUT = IS_SERVERLESS2 ? 12e3 : 15e3;
 var STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS2 ? 8 : 50) * 1024 * 1024;
+var STATIC_ASSET_CONCURRENCY = IS_SERVERLESS2 ? 6 : 12;
+var STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 6e4;
+var STATIC_FIRST_SERVERLESS = IS_SERVERLESS2 && process.env.CLONYFY_BROWSER_FIRST !== "1";
 function shouldUseBundledChromium(playwrightPath, platform = process.platform, serverless = IS_SERVERLESS2) {
   return serverless || platform === "linux" && !existsSync2(playwrightPath);
 }
@@ -1717,10 +1734,11 @@ function systemBrowserChannel(playwrightPath, platform = process.platform, serve
   if (platform === "darwin") return "chrome";
   return void 0;
 }
-async function getChromiumLaunchOptions() {
-  const playwrightPath = chromium.executablePath();
+async function getChromiumLaunchOptions(chromium) {
+  const playwrightPath = IS_SERVERLESS2 ? "" : chromium.executablePath();
   const useBundledChromium = shouldUseBundledChromium(playwrightPath);
   const channel = systemBrowserChannel(playwrightPath);
+  const sparticuzChromium = useBundledChromium ? (await import("@sparticuz/chromium")).default : null;
   const executablePath = useBundledChromium ? await sparticuzChromium.executablePath() : void 0;
   if (useBundledChromium) {
     logger.debug(`  [BROWSER] Using bundled Chromium: ${executablePath}`);
@@ -1813,17 +1831,57 @@ function routeForUrl(url) {
     return "/";
   }
 }
+function looksLikePageHref(value) {
+  const clean = value.trim();
+  if (!clean || clean.startsWith("#")) return false;
+  if (/^(https?:)?\/\//i.test(clean)) return true;
+  if (clean.startsWith("/")) return true;
+  if (/^[a-z0-9._~/-]+(?:[?#][^\s]*)?$/i.test(clean)) return true;
+  return false;
+}
+function shouldSkipPageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname;
+    const ext = extname3(pathname).toLowerCase();
+    if (ext && NON_PAGE_EXTS2.has(ext)) return true;
+    if (/^\/cdn-cgi\//i.test(pathname)) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+function visitedPageVariants(url) {
+  try {
+    const parsed = new URL(url);
+    const base = `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}`;
+    return base.endsWith(".html") ? [url, base.replace(/\.html$/i, "")] : [url, `${base}.html`];
+  } catch {
+    return [url];
+  }
+}
 function extractLinksFromHtml(html, pageUrl, origin) {
   const found = /* @__PURE__ */ new Set();
   const attrRe = /\b(?:href|to|routerlink|data-href|data-url|data-link|data-route|data-page)=["']([^"']+)["']/gi;
   let match;
   while ((match = attrRe.exec(html)) !== null) {
+    if (!looksLikePageHref(match[1])) continue;
     const href = normalizePageUrl(match[1], pageUrl);
     if (href && new URL(href).origin === origin) found.add(href);
   }
-  const metaRe = /<(?:link|meta)\b[^>]*(?:href|content)=["']([^"']+)["'][^>]*>/gi;
-  while ((match = metaRe.exec(html)) !== null) {
+  const linkRe = /<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi;
+  while ((match = linkRe.exec(html)) !== null) {
+    if (!looksLikePageHref(match[1])) continue;
     const href = normalizePageUrl(match[1], pageUrl);
+    if (href && new URL(href).origin === origin) found.add(href);
+  }
+  const metaRe = /<meta\b[^>]*>/gi;
+  while ((match = metaRe.exec(html)) !== null) {
+    const tag = match[0];
+    if (!/\b(?:property|name)=["'](?:og:url|twitter:url|canonical)["']/i.test(tag)) continue;
+    const content = tag.match(/\bcontent=["']([^"']+)["']/i)?.[1];
+    if (!content || !looksLikePageHref(content)) continue;
+    const href = normalizePageUrl(content, pageUrl);
     if (href && new URL(href).origin === origin) found.add(href);
   }
   return [...found];
@@ -1875,31 +1933,43 @@ async function saveStaticAsset(rawUrl, pageUrl, assetsDir) {
     const filename = `${hashUrl2(absUrl)}${ext}`;
     const localPath = join3(assetsDir, filename);
     const webPath = `/_assets/${filename}`;
+    mkdirSync3(assetsDir, { recursive: true });
     if (!existsSync2(localPath)) writeFileSync2(localPath, body);
     return { originalUrl: absUrl, localPath: webPath };
   } catch {
     return null;
   }
 }
-async function fetchStaticPage(url, origin, assetsDir) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT3, "Accept": "text/html,application/xhtml+xml" },
-    signal: AbortSignal.timeout(IS_SERVERLESS2 ? 5e3 : 15e3)
+async function runLimited(items, concurrency, task) {
+  let index = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const item = items[index++];
+      await task(item);
+    }
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType && !/(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
-    throw new Error(`Not an HTML page (${contentType})`);
-  }
-  const html = await res.text();
-  const links = extractLinksFromHtml(html, url, origin);
+  await Promise.allSettled(workers);
+}
+async function collectStaticAssets(html, url, assetsDir, maxAssets = STATIC_ASSET_LIMIT, maxDurationMs = STATIC_PAGE_ASSET_TIMEOUT) {
   const assets = /* @__PURE__ */ new Map();
-  let assetUrls = extractStaticAssetUrls(html).slice(0, STATIC_ASSET_LIMIT);
-  for (const rawAssetUrl of assetUrls) {
-    const saved = await saveStaticAsset(rawAssetUrl, url, assetsDir);
-    if (!saved) continue;
+  const startedAt = Date.now();
+  const seenAssetUrls = /* @__PURE__ */ new Set();
+  const cssAssetUrls = [];
+  const hasTime = () => Date.now() - startedAt < maxDurationMs;
+  const remainingSlots = () => Math.max(0, maxAssets - seenAssetUrls.size);
+  const saveAndTrack = async (rawAssetUrl, baseUrl) => {
+    if (!hasTime() || remainingSlots() <= 0) return;
+    let key = rawAssetUrl;
+    try {
+      key = new URL(rawAssetUrl, baseUrl).href;
+    } catch {
+    }
+    if (seenAssetUrls.has(key)) return;
+    seenAssetUrls.add(key);
+    const saved = await saveStaticAsset(rawAssetUrl, baseUrl, assetsDir);
+    if (!saved) return;
     assets.set(saved.originalUrl, saved);
-    if (/\.css(?:$|[?#])/i.test(saved.originalUrl)) {
+    if (/\.css(?:$|[?#])/i.test(saved.originalUrl) && hasTime() && remainingSlots() > 0) {
       try {
         const cssRes = await fetch(saved.originalUrl, {
           headers: { "User-Agent": USER_AGENT3 },
@@ -1907,39 +1977,131 @@ async function fetchStaticPage(url, origin, assetsDir) {
         });
         if (cssRes.ok) {
           const cssText = await cssRes.text();
-          const cssAssets = extractCssUrls(cssText).slice(0, STATIC_ASSET_LIMIT);
-          assetUrls = assetUrls.concat(cssAssets);
-          for (const cssAsset of cssAssets) {
-            const cssSaved = await saveStaticAsset(cssAsset, saved.originalUrl, assetsDir);
-            if (cssSaved) assets.set(cssSaved.originalUrl, cssSaved);
-          }
+          cssAssetUrls.push(...extractCssUrls(cssText).map((rawUrl) => ({ rawUrl, baseUrl: saved.originalUrl })));
         }
       } catch {
       }
     }
+  };
+  const assetUrls = extractStaticAssetUrls(html).slice(0, maxAssets);
+  await runLimited(assetUrls, STATIC_ASSET_CONCURRENCY, (rawAssetUrl) => saveAndTrack(rawAssetUrl, url));
+  if (hasTime() && cssAssetUrls.length > 0 && remainingSlots() > 0) {
+    await runLimited(
+      cssAssetUrls.slice(0, remainingSlots()),
+      STATIC_ASSET_CONCURRENCY,
+      (cssAssetUrl) => saveAndTrack(cssAssetUrl.rawUrl, cssAssetUrl.baseUrl)
+    );
   }
+  if (!hasTime()) {
+    logger.info(`  [FALLBACK] Asset capture hit ${(maxDurationMs / 1e3).toFixed(0)}s budget; continuing with ${assets.size} asset(s)`);
+  }
+  return [...assets.values()];
+}
+async function fetchStaticPage(url, origin, assetsDir, options = {}) {
+  let res = null;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= (IS_SERVERLESS2 ? 3 : 1); attempt++) {
+    try {
+      res = await fetch(url, {
+        headers: {
+          "User-Agent": USER_AGENT3,
+          "Accept": "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9"
+        },
+        signal: AbortSignal.timeout(STATIC_PAGE_TIMEOUT)
+      });
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < (IS_SERVERLESS2 ? 3 : 1)) {
+        await new Promise((resolve2) => setTimeout(resolve2, 350 * attempt));
+      }
+    }
+  }
+  if (!res) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr || "Static page fetch failed"));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType && !/(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
+    throw new Error(`Not an HTML page (${contentType})`);
+  }
+  const html = await res.text();
+  const links = extractLinksFromHtml(html, url, origin);
+  const assets = options.captureAssets === false ? [] : await collectStaticAssets(html, url, assetsDir, options.maxAssets, options.maxAssetDurationMs);
   return {
     record: {
       url,
       route: routeForUrl(url),
       html,
-      assets: [...assets.values()],
+      assets,
       network: [],
       failedAssets: []
     },
     links
   };
 }
+async function crawlStatic(opts, origin, assetsDir, visited, records, onPage, reason) {
+  logger.warn(`  [FALLBACK] Using static HTML crawler (${reason})`);
+  const staticQueue = [];
+  const enqueueStatic = (url, currentDepth) => {
+    const clean = normalizePageUrl(url);
+    if (!clean) return;
+    try {
+      if (new URL(clean).origin !== origin) return;
+    } catch {
+      return;
+    }
+    if (shouldSkipPageUrl(clean)) return;
+    if (visitedPageVariants(clean).some((variant) => visited.has(variant))) return;
+    if (visited.size >= opts.maxPages) return;
+    visited.add(clean);
+    staticQueue.push({ url: clean, depth: currentDepth });
+  };
+  enqueueStatic(opts.url, 0);
+  logger.info("  Checking sitemap...");
+  const sitemapUrls = await fetchSitemap(origin);
+  for (const url of sitemapUrls) enqueueStatic(url, 1);
+  for (let index = 0; index < staticQueue.length && records.length < opts.maxPages; index++) {
+    const item = staticQueue[index];
+    logger.info(`  [${records.length + 1}/${opts.maxPages}] ${item.url}`);
+    try {
+      logger.info(`  [FALLBACK] Static HTML fetch for ${item.url}`);
+      const { record, links } = await fetchStaticPage(item.url, origin, assetsDir, { captureAssets: false });
+      records.push(record);
+      if (item.depth < opts.depth) {
+        for (const link of links) enqueueStatic(link, item.depth + 1);
+      }
+    } catch (fallbackErr) {
+      logger.warn(`  [SKIP] ${item.url}: ${fallbackErr.message}`);
+    }
+  }
+  if (records.length > 0) {
+    logger.info(`  [FALLBACK] Capturing assets for ${records.length} static page(s)...`);
+    await runLimited(records, Math.min(4, STATIC_ASSET_CONCURRENCY), async (record) => {
+      record.assets = await collectStaticAssets(record.html, record.url, assetsDir, STATIC_ASSET_LIMIT, STATIC_PAGE_ASSET_TIMEOUT);
+      onPage(record);
+    });
+  }
+  return records;
+}
 async function crawl(opts, assetsDir, onPage) {
   const origin = new URL(opts.url).origin;
   const visited = /* @__PURE__ */ new Set();
   const queue = new PQueue({ concurrency: opts.concurrency });
   const records = [];
-  const launchOptions = await getChromiumLaunchOptions();
-  const browser = await chromium.launch({
-    headless: true,
-    ...launchOptions
-  });
+  if (STATIC_FIRST_SERVERLESS) {
+    return crawlStatic(opts, origin, assetsDir, visited, records, onPage, "serverless static-first mode");
+  }
+  const { chromium } = await import("playwright-core");
+  const launchOptions = await getChromiumLaunchOptions(chromium);
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      ...launchOptions
+    });
+  } catch (err) {
+    return crawlStatic(opts, origin, assetsDir, visited, records, onPage, `browser launch failed: ${err.message.split("\n")[0]}`);
+  }
   const enqueue = (url, currentDepth) => {
     const clean = normalizePageUrl(url);
     if (!clean) return;
@@ -1948,7 +2110,8 @@ async function crawl(opts, assetsDir, onPage) {
     } catch {
       return;
     }
-    if (visited.has(clean)) return;
+    if (shouldSkipPageUrl(clean)) return;
+    if (visitedPageVariants(clean).some((variant) => visited.has(variant))) return;
     if (visited.size >= opts.maxPages) return;
     visited.add(clean);
     queue.add(async () => {
@@ -10362,7 +10525,7 @@ function tryParseJson(raw, contentType = "") {
 }
 
 // src/generator.ts
-import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3, rmSync, existsSync as existsSync3 } from "fs";
+import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync3, rmSync, existsSync as existsSync3 } from "fs";
 import { join as join4, dirname as dirname2 } from "path";
 import { fileURLToPath } from "url";
 import { createHash as createHash3 } from "crypto";
@@ -10375,7 +10538,7 @@ function tpl(name, data) {
   return Handlebars.compile(src)(data);
 }
 function write(path, content) {
-  mkdirSync3(dirname2(path), { recursive: true });
+  mkdirSync4(dirname2(path), { recursive: true });
   writeFileSync3(path, content, "utf8");
 }
 function prismaModelName(path) {
@@ -10442,9 +10605,9 @@ function routeSegments(path) {
 function generateNextApp(outDir, manifest, apiRoutes) {
   const { pages } = manifest;
   const hostname = new URL(manifest.targetOrigin).hostname;
-  mkdirSync3(join4(outDir, "public", "_assets"), { recursive: true });
+  mkdirSync4(join4(outDir, "public", "_assets"), { recursive: true });
   const pagesDataDir = join4(outDir, "captured-pages");
-  mkdirSync3(pagesDataDir, { recursive: true });
+  mkdirSync4(pagesDataDir, { recursive: true });
   const routeMap = {};
   for (const page of pages) {
     const name = safeName(page.route);
@@ -10469,7 +10632,7 @@ function generateNextApp(outDir, manifest, apiRoutes) {
   }
   writeFileSync3(join4(outDir, "route-map.json"), JSON.stringify(routeMap, null, 2), "utf8");
   const fixturesDir = join4(outDir, "fixtures");
-  mkdirSync3(fixturesDir, { recursive: true });
+  mkdirSync4(fixturesDir, { recursive: true });
   for (const spec of apiRoutes) {
     for (const resp of spec.responses) {
       const fname = `${spec.fixtureKey}.${spec.method}.${resp.status}.json`;
@@ -10575,9 +10738,9 @@ CLONYFY v0.1`);
       logger.info("robots.txt check skipped (--ignore-robots)");
     }
     const assetsDir = join5(opts.out, "public", "_assets");
-    mkdirSync4(assetsDir, { recursive: true });
+    mkdirSync5(assetsDir, { recursive: true });
     const capturedPagesDir = join5(opts.out, "captured-pages");
-    mkdirSync4(capturedPagesDir, { recursive: true });
+    mkdirSync5(capturedPagesDir, { recursive: true });
     const routeMap = {};
     const pageFilename = (route) => `${safeName(route)}.html`;
     logger.info("\nCrawling...");
@@ -10608,6 +10771,9 @@ CLONYFY v0.1`);
     });
     logger.info(`
 Captured ${records.length} page(s).`);
+    if (records.length === 0) {
+      throw new Error("Clone captured 0 pages. The target did not return any readable HTML before the timeout.");
+    }
     logger.info("\n--- Page Summary ---");
     for (const s of rewriteStats) {
       logger.info(`  ${s.url}`);
@@ -10711,4 +10877,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-HFUGJ6PC.js.map
+//# sourceMappingURL=chunk-44USFTRN.js.map

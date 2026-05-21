@@ -47,6 +47,9 @@ input,select{font:inherit}
 .login-btn:disabled{opacity:.4;cursor:not-allowed}
 .login-err{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,96,.2);border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:14px;display:none}
 .login-err.show{display:block}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,10,10,.94);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:var(--text);font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
 
 /* ── App layout ──────────────────────────────── */
 #app{display:flex;flex-direction:column;height:100vh}
@@ -364,9 +367,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <option value="">All Plans</option>
             <option value="free">Free</option>
             <option value="starter">Starter</option>
-            <option value="popular">Most Popular</option>
             <option value="growth">Growth</option>
-            <option value="unlimited">Unlimited</option>
+            <option value="unlimited">Scale</option>
           </select>
           <select class="filter-sel" id="users-status-filter" onchange="filterUsers()">
             <option value="">All Status</option>
@@ -504,11 +506,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-stripe-p-starter-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Most Popular Monthly</div>
+            <div class="settings-label">Price: Legacy Popular Monthly</div>
             <input class="settings-input" id="s-stripe-p-popular-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Most Popular Annual</div>
+            <div class="settings-label">Price: Legacy Popular Annual</div>
             <input class="settings-input" id="s-stripe-p-popular-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
@@ -520,11 +522,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-stripe-p-growth-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Unlimited Monthly</div>
+            <div class="settings-label">Price: Scale Monthly</div>
             <input class="settings-input" id="s-stripe-p-unlimited-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Unlimited Annual</div>
+            <div class="settings-label">Price: Scale Annual</div>
             <input class="settings-input" id="s-stripe-p-unlimited-annual" placeholder="price_...">
           </div>
 
@@ -586,9 +588,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
                     <option value="paid">Paid Users Only</option>
                     <option value="free">Free Users Only</option>
                     <option value="starter">Starter Plan</option>
-                    <option value="popular">Most Popular Plan</option>
                     <option value="growth">Growth Plan</option>
-                    <option value="unlimited">Unlimited Plan</option>
+                    <option value="unlimited">Scale Plan</option>
                   </select>
                 </div>
                 <button onclick="sendAnnouncement()" style="margin-top:18px;padding:9px 22px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Send Announcement</button>
@@ -714,9 +715,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
         <label style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Apply to plans (blank = all)</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-starter" value="starter"> Starter</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-popular" value="popular"> Most Popular</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-growth" value="growth"> Growth</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-unlimited" value="unlimited"> Unlimited</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-unlimited" value="unlimited"> Scale</label>
         </div>
       </div>
     </div>
@@ -752,6 +752,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 </div>
 
 <div id="toasts"></div>
+<div id="slow-loading" class="slow-loading" role="status" aria-live="polite">LOADING...</div>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -770,6 +771,26 @@ let paymentsMethodFilter = '';
 let errorsPage = 1;
 let errorsSearch = '';
 let activeTab = 'users';
+let slowLoadingCount = 0;
+let slowLoadingTimer = null;
+function beginSlowLoading(delay = 900) {
+  slowLoadingCount++;
+  const el = document.getElementById('slow-loading');
+  if (!el) return () => {};
+  if (!slowLoadingTimer && !el.classList.contains('show')) {
+    slowLoadingTimer = setTimeout(() => {
+      slowLoadingTimer = null;
+      if (slowLoadingCount > 0) el.classList.add('show');
+    }, delay);
+  }
+  return () => {
+    slowLoadingCount = Math.max(0, slowLoadingCount - 1);
+    if (slowLoadingCount === 0) {
+      if (slowLoadingTimer) { clearTimeout(slowLoadingTimer); slowLoadingTimer = null; }
+      el.classList.remove('show');
+    }
+  };
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
@@ -796,7 +817,9 @@ async function checkSecurity() {
   try {
     const s = await adminFetch('GET', '/api/admin/security');
     const warnings = [];
-    if (!s.adminPasswordSet) warnings.push('⚠️ <code>ADMIN_PASSWORD</code> env var is not set — admin login is disabled. Add it to your <code>.env</code> file and restart the server.');
+    if (!s.adminPasswordSet) {
+      warnings.push('Admin login is disabled because <code>ADMIN_PASSWORD</code> is not set on this server. For local dev, add it to <code>.env</code> and restart. For Vercel/hosting, add it in Project Settings > Environment Variables and redeploy.');
+    }
     if (!s.appUrlConfigured) warnings.push('⚠️ App URL not configured — share links will point to localhost.');
     if (!s.smtpConfigured) warnings.push('⚠️ SMTP not configured — emails (verify, reset, receipts) won\'t send.');
     if (!s.stripeConfigured) warnings.push(`Stripe not configured - ${esc(s.stripeError || 'payments are disabled.')}`);
@@ -835,7 +858,10 @@ async function doLogin() {
     sessionStorage.setItem('wc_admin_token', adminToken);
     await tryLoadApp();
   } catch(e) {
-    err.textContent = e.message || 'Wrong password';
+    const message = e.message || 'Wrong password';
+    err.innerHTML = message.includes('ADMIN_PASSWORD')
+      ? 'Admin login is disabled because <code>ADMIN_PASSWORD</code> is missing on this server. Add it in your hosting environment variables, then redeploy/restart.'
+      : esc(message);
     err.classList.add('show');
     document.getElementById('login-pw').select();
   } finally {
@@ -854,20 +880,30 @@ async function doLogout() {
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+  const doneLoading = beginSlowLoading();
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res.json();
+  } finally {
+    doneLoading();
+  }
 }
 async function adminFetch(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+  const doneLoading = beginSlowLoading();
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res.json();
+  } finally {
+    doneLoading();
+  }
 }
 
 // ── Refresh ───────────────────────────────────────────────────────────────────
@@ -982,9 +1018,8 @@ function renderUsers(users) {
         <select class="plan-sel" onchange="updatePlan('${u.id}', this.value)" title="Change plan">
           <option value="free" ${u.plan==='free'?'selected':''}>Free</option>
           <option value="starter" ${u.plan==='starter'?'selected':''}>Starter</option>
-          <option value="popular" ${u.plan==='popular'?'selected':''}>Most Popular</option>
-          <option value="growth" ${u.plan==='growth'||u.rawPlan==='pro'?'selected':''}>Growth</option>
-          <option value="unlimited" ${u.plan==='unlimited'||u.rawPlan==='enterprise'?'selected':''}>Unlimited</option>
+          <option value="growth" ${u.plan==='growth'||u.rawPlan==='popular'||u.rawPlan==='pro'?'selected':''}>Growth</option>
+          <option value="unlimited" ${u.plan==='unlimited'||u.rawPlan==='scale'||u.rawPlan==='enterprise'?'selected':''}>Scale</option>
         </select>
       </td>
       <td><span class="num-cell">${u.cloneCount}<small>clones</small></span></td>
@@ -1474,7 +1509,6 @@ function openCreatePromo() {
   document.getElementById('pm-expiry').value = '';
   document.getElementById('pm-desc').value = '';
   document.getElementById('pm-starter').checked = false;
-  document.getElementById('pm-popular').checked = false;
   document.getElementById('pm-growth').checked = false;
   document.getElementById('pm-unlimited').checked = false;
   document.getElementById('promo-modal-overlay').classList.remove('hidden');
@@ -1485,7 +1519,7 @@ async function createPromoCode() {
   const code = document.getElementById('pm-code').value.trim().toUpperCase();
   const discountPercent = parseInt(document.getElementById('pm-discount').value, 10);
   if (!code || !discountPercent) { toast('Code and discount are required', 'err'); return; }
-  const plans = ['starter','popular','growth','unlimited'].filter(p => document.getElementById(`pm-${p}`).checked);
+  const plans = ['starter','growth','unlimited'].filter(p => document.getElementById(`pm-${p}`).checked);
   try {
     const r = await adminFetch('POST', '/api/admin/promo-codes', {
       code, discountPercent,

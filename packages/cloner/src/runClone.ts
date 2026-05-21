@@ -94,6 +94,9 @@ export async function runClone(options: ClonerOptions, events: CloneRunEvents = 
     });
 
     logger.info(`\nCaptured ${records.length} page(s).`);
+    if (records.length === 0) {
+      throw new Error('Clone captured 0 pages. The target did not return any readable HTML before the timeout.');
+    }
 
     logger.info('\n--- Page Summary ---');
     for (const s of rewriteStats) {
