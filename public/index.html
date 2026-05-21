@@ -2064,13 +2064,21 @@ function beginSlowLoading(delay = 900) {
 function apiFetch(path, init) {
   const next = Object.assign({}, init || {});
   const showLoading = next.silentLoading !== true;
+  const timeoutMs = next.timeoutMs || 30000;
   delete next.silentLoading;
+  delete next.timeoutMs;
   next.headers = Object.assign({}, next.headers || {});
   if (API_TOKEN) next.headers['X-CLONYFY-Token'] = API_TOKEN;
   const authToken = localStorage.getItem('wc_auth_token');
   if (authToken) next.headers['X-Auth-Token'] = authToken;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  next.signal = next.signal || controller.signal;
   const doneLoading = showLoading ? beginSlowLoading() : () => {};
-  return fetch(apiUrl(path), next).finally(doneLoading);
+  return fetch(apiUrl(path), next).finally(() => {
+    clearTimeout(timeout);
+    doneLoading();
+  });
 }
 function deferAppWork(fn, delay = 0) {
   const run = () => { try { fn(); } catch {} };
@@ -2720,7 +2728,7 @@ async function openProfile() {
   document.getElementById('profileHistBody').innerHTML = '<div class="hist-empty">LOADING...</div>';
 
   try {
-    const res = await apiFetch('/api/outputs');
+    const res = await apiFetch('/api/outputs?fast=1&limit=50', { silentLoading: true });
     const outputs = await res.json();
     const total = outputs.length;
     const totalPages = outputs.reduce((s, o) => s + (o.pages || 0), 0);
@@ -3080,7 +3088,7 @@ async function createFromTemplate(id, btn) {
     });
     const data = await res.json();
     if (data.error) { toast('Error: ' + data.error, 'err'); return; }
-    await loadHistory();
+    await loadHistory({ fast: true });
     // Re-set after loadHistory() since showJob() inside it can overwrite editorOutDir
     editorOutDir = data.outDir;
     switchTab('editor');
@@ -3123,8 +3131,8 @@ async function loadHistory(options = {}) {
   try {
     const outputsPath = options.fast ? '/api/outputs?fast=1' : '/api/outputs';
     const [jobs, outputs] = await Promise.all([
-      apiFetch('/api/jobs').then(r => r.json()),
-      apiFetch(outputsPath).then(r => r.json()).catch(() => []),
+      apiFetch('/api/jobs', { silentLoading: true }).then(r => r.json()),
+      apiFetch(outputsPath, { silentLoading: true }).then(r => r.json()).catch(() => []),
     ]);
     const seen = new Set((jobs || []).map(j => j.outDir).filter(Boolean));
     const outputJobs = (outputs || [])
@@ -3401,7 +3409,7 @@ function startPolling(jobId) {
     if (activeJobId !== jobId) { clearPolling(); return; }
     let delay = 1000;
     try {
-      const res = await apiFetch(`/api/status?id=${jobId}&logsFrom=${lastLogLen}`);
+      const res = await apiFetch(`/api/status?id=${jobId}&logsFrom=${lastLogLen}`, { silentLoading: true, timeoutMs: 12000 });
       const job = await res.json();
       if (!res.ok || job.error || !job.id) throw new Error(job.error || 'Status unavailable');
       updateJobView(job);

@@ -1358,7 +1358,8 @@ async function handleRequest(req, res) {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
     const fast = url.searchParams.get('fast') === '1';
-    const userClones = await getClonesByUser(user.id);
+    const limit = Math.max(1, Math.min(500, parseInt(url.searchParams.get('limit') || (fast ? '100' : '500'), 10) || (fast ? 100 : 500)));
+    const userClones = await getClonesByUser(user.id, limit);
     const labelByDir = Object.fromEntries(userClones.filter(c => c.out_dir && c.label).map(c => [c.out_dir, c.label]));
     const localByDir = fast ? {} : Object.fromEntries(getOutputs().map(o => [o.dir, o]));
     const normalized = [];

@@ -451,17 +451,21 @@ function beginSlowLoading(delay = 900) {
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
-async function apiFetch(method, path, body) {
+async function apiFetch(method, path, body, options = {}) {
   const token = localStorage.getItem('wc_auth_token') || '';
-  const doneLoading = beginSlowLoading();
+  const doneLoading = options.silentLoading ? () => {} : beginSlowLoading();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
   try {
     const res = await fetch(path, {
       method,
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
       body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
     return res.json();
   } finally {
+    clearTimeout(timeout);
     doneLoading();
   }
 }
@@ -497,6 +501,8 @@ async function init() {
         toast(e.message || 'Payment is still processing. Refresh in a moment.', 'warn');
       }
     }
+    const settingsPromise = apiFetch('GET', '/api/payments/settings', null, { silentLoading: true });
+    const billingPromise = apiFetch('GET', '/api/user/billing', null, { silentLoading: true });
     dashData = await apiFetch('GET', '/api/user/dashboard');
     if (dashData.error) { location.href = '/'; return; }
 
@@ -509,8 +515,8 @@ async function init() {
 
     renderDashboard(dashData);
 
-    dashPaySettings = await apiFetch('GET', '/api/payments/settings');
-    const billing = await apiFetch('GET', '/api/user/billing');
+    const [settings, billing] = await Promise.all([settingsPromise, billingPromise]);
+    dashPaySettings = settings || dashPaySettings;
     renderBilling(billing.payments || []);
 
     document.getElementById('field-name').value = dashData.user.name || '';

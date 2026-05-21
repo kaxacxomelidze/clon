@@ -170,8 +170,11 @@ export const updateCloneStatus = async ({ id, status, pages, assets, apiRoutes, 
   if (error) throw new Error(error.message);
 };
 
-export const getClonesByUser = (userId) =>
-  all(supabase.from('clones').select('*').eq('user_id', userId).order('started_at', { ascending: false }));
+export const getClonesByUser = (userId, limit = null) => {
+  let query = supabase.from('clones').select('*').eq('user_id', userId).order('started_at', { ascending: false });
+  if (limit) query = query.limit(limit);
+  return all(query);
+};
 
 export const getAllClones = () =>
   all(supabase.from('clones').select('*').order('started_at', { ascending: false }));
