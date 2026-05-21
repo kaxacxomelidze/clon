@@ -132,7 +132,7 @@ const LEGACY_PAID_PLAN_KEYS = Object.keys(PLAN_ALIASES);
 const ALL_PAID_PLAN_KEYS = [...PAID_PLAN_KEYS, ...LEGACY_PAID_PLAN_KEYS];
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
 const USE_INLINE_CLONE = IS_VERCEL || process.env.CLONYFY_INLINE_CLONE === '1';
-const SERVERLESS_MAX_PAGES = Math.max(1, parseInt(process.env.CLONYFY_SERVERLESS_MAX_PAGES || '20', 10) || 20);
+const SERVERLESS_MAX_PAGES = Math.max(1, parseInt(process.env.CLONYFY_SERVERLESS_MAX_PAGES || '500', 10) || 500);
 const PLAN_PRICES = {
   starter:    { monthly: 19.99, annual: 191.88 },
   growth:     { monthly: 29.99, annual: 287.88 },
@@ -170,6 +170,43 @@ function getPlanPrices(plan) {
 }
 function getPlanLabel(plan) {
   return PLAN_LABELS[normalizePlan(plan)] || 'Free';
+}
+function planFromStripePriceId(priceId) {
+  if (!priceId) return 'free';
+  const s = getStripeSettings();
+  for (const plan of ALL_PAID_PLAN_KEYS) {
+    const normalized = normalizePlan(plan);
+    for (const interval of ['monthly', 'annual']) {
+      if (s[STRIPE_PRICE_KEY(plan, interval)] === priceId) return normalized;
+    }
+  }
+  return 'free';
+}
+async function activatePaidPlanForUser(userId, { plan, interval = 'monthly', renewsAt = null, stripeSubscriptionId = null, cancelAtPeriodEnd = 0 } = {}) {
+  const confirmedPlan = normalizePlan(plan);
+  if (!isPaidPlan(confirmedPlan)) return null;
+  const fields = {
+    plan: confirmedPlan,
+    billing_interval: interval === 'annual' ? 'annual' : 'monthly',
+    renewal_reminder_sent: 0,
+    usage_alert_sent: 0,
+    cancel_at_period_end: cancelAtPeriodEnd ? 1 : 0,
+  };
+  if (renewsAt) fields.plan_renews_at = renewsAt instanceof Date ? renewsAt.toISOString() : String(renewsAt);
+  if (stripeSubscriptionId) fields.stripe_subscription_id = stripeSubscriptionId;
+  await updateUser(userId, fields);
+  _invalidateUserSessions(userId);
+  return confirmedPlan;
+}
+function stripeSubscriptionPlan(sub, fallbackPlan = 'free') {
+  const metaPlan = normalizePlan(sub?.metadata?.plan || fallbackPlan);
+  if (isPaidPlan(metaPlan)) return metaPlan;
+  for (const item of sub?.items?.data || []) {
+    const price = item?.price;
+    const pricePlan = normalizePlan(price?.metadata?.plan || planFromStripePriceId(price?.id));
+    if (isPaidPlan(pricePlan)) return pricePlan;
+  }
+  return 'free';
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -2116,6 +2153,7 @@ async function handleRequest(req, res) {
     if (body.blocked !== undefined) fields.blocked = body.blocked ? 1 : 0;
     await updateUser(userId, fields);
     if (fields.blocked !== undefined) _invalidateUserSessions(userId);
+    if (fields.plan !== undefined || fields.plan_renews_at !== undefined || fields.billing_interval !== undefined) _invalidateUserSessions(userId);
     audit(null, 'admin', 'admin_update_user', `userId=${userId} ${JSON.stringify(fields)}`, ip);
     return json(res, { ok: true });
   }
@@ -2326,8 +2364,7 @@ async function handleRequest(req, res) {
         const renewDate = new Date();
         if (interval === 'annual') renewDate.setFullYear(renewDate.getFullYear() + 1);
         else renewDate.setMonth(renewDate.getMonth() + 1);
-        const confirmedPlan = normalizePlan(payment.plan);
-        await updateUser(payment.user_id, { plan: confirmedPlan, plan_renews_at: renewDate.toISOString(), billing_interval: interval, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+        const confirmedPlan = await activatePaidPlanForUser(payment.user_id, { plan: payment.plan, interval, renewsAt: renewDate });
         const s = getCachedSettings();
         const appUrl = s.app_url || `http://localhost:${PORT}`;
         sendEmail(user.email, `Payment confirmed — ${getPlanLabel(confirmedPlan)} plan activated`,
@@ -2854,7 +2891,7 @@ async function handleRequest(req, res) {
         ...(discounts ? { discounts } : {}),
         metadata: { userId: user.id, plan, interval: bi },
         subscription_data: { metadata: { userId: user.id, plan, interval: bi } },
-        success_url: `${appUrl}/dashboard?stripe=success`,
+        success_url: `${appUrl}/dashboard?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/dashboard?stripe=cancelled`,
       });
     } catch (err) {
@@ -2862,6 +2899,53 @@ async function handleRequest(req, res) {
     }
     audit(user.id, user.name, 'stripe_checkout_created', `plan=${plan} interval=${bi}`, ip);
     return json(res, { url: session.url });
+  }
+
+  // POST /api/payments/stripe/sync — immediately unlock paid access after Checkout
+  if (req.method === 'POST' && url.pathname === '/api/payments/stripe/sync') {
+    const user = await getSessionUser(req);
+    if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    const stripe = getStripe();
+    if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe not configured' }, 503);
+    const { sessionId } = await readJsonBody(req).catch(() => ({}));
+    try {
+      let sub = null;
+      let customerId = user.stripe_customer_id || '';
+      if (sessionId) {
+        const session = await stripe.checkout.sessions.retrieve(String(sessionId));
+        if (session.client_reference_id !== user.id && session.metadata?.userId !== user.id) {
+          return json(res, { error: 'Checkout session does not belong to this account.' }, 403);
+        }
+        if (session.customer && session.customer !== user.stripe_customer_id) {
+          customerId = session.customer;
+          await updateUser(user.id, { stripe_customer_id: customerId });
+        }
+        if (session.subscription) sub = await stripe.subscriptions.retrieve(session.subscription);
+      }
+      if (!sub && customerId) {
+        const subs = await stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 5 });
+        sub = subs.data.find(s => s.metadata?.userId === user.id) || subs.data[0] || null;
+      }
+      if (!sub || !['active', 'trialing'].includes(sub.status)) {
+        return json(res, { error: 'No active Stripe subscription found yet. Please wait a moment and refresh.' }, 404);
+      }
+      const plan = stripeSubscriptionPlan(sub, user.plan);
+      if (!isPaidPlan(plan)) return json(res, { error: 'Could not identify the paid plan for this subscription.' }, 409);
+      const periodEnd = stripePeriodEnd(sub);
+      const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
+      const interval = sub.metadata?.interval || user.billing_interval || 'monthly';
+      await activatePaidPlanForUser(user.id, {
+        plan,
+        interval,
+        renewsAt,
+        stripeSubscriptionId: sub.id,
+        cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0,
+      });
+      audit(user.id, user.name, 'stripe_subscription_synced', `plan=${plan} subscription=${sub.id}`, ip);
+      return json(res, { ok: true, user: userPublic(await getUserById(user.id)) });
+    } catch (err) {
+      return json(res, { error: `Stripe sync failed: ${err.message}` }, 502);
+    }
   }
 
   // POST /api/payments/stripe/portal — billing portal for self-service
@@ -2914,7 +2998,7 @@ async function handleRequest(req, res) {
           if (userId && plan) {
             const periodEnd = stripePeriodEnd(sub);
             const renewsAt = periodEnd ? new Date(periodEnd * 1000) : new Date(Date.now() + (bi === 'annual' ? 365 : 31) * 24 * 60 * 60 * 1000);
-            await updateUser(userId, { plan, billing_interval: bi, plan_renews_at: renewsAt.toISOString(), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+            await activatePaidPlanForUser(userId, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
             const u = await getUserById(userId);
             if (u) {
               await insertPayment({ id: randomUUID(), userId, userName: u.name, userEmail: u.email, plan, amount: (session.amount_total || 0) / 100, currency: (session.currency || 'usd').toUpperCase(), method: 'stripe', txId: session.payment_intent || session.id, note: '', promoCode: null, discountPercent: 0, interval: bi, status: 'confirmed', submittedAt: new Date().toISOString() });
@@ -2932,11 +3016,11 @@ async function handleRequest(req, res) {
         const customerUser = sub.customer ? await getUserByStripeCustomerId(sub.customer) : null;
         const userId = sub.metadata?.userId || customerUser?.id;
         if (userId && sub.status === 'active') {
-          const plan = normalizePlan(sub.metadata?.plan || customerUser?.plan);
+          const plan = stripeSubscriptionPlan(sub, customerUser?.plan);
           const bi = sub.metadata?.interval || customerUser?.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
-          if (plan) await updateUser(userId, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+          if (isPaidPlan(plan)) await activatePaidPlanForUser(userId, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
         }
       }
 
@@ -2947,11 +3031,11 @@ async function handleRequest(req, res) {
         const subscriptionId = inv.subscription || inv.parent?.subscription_details?.subscription || null;
         if (u && subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
-          const plan = normalizePlan(sub.metadata?.plan || u.plan);
+          const plan = stripeSubscriptionPlan(sub, u.plan);
           const bi = sub.metadata?.interval || u.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
-          await updateUser(u.id, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+          await activatePaidPlanForUser(u.id, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
         }
       }
 
@@ -2961,6 +3045,7 @@ async function handleRequest(req, res) {
         const userId = sub.metadata?.userId || customerUser?.id;
         if (userId) {
           await updateUser(userId, { plan: 'free', plan_renews_at: null, stripe_subscription_id: null, cancel_at_period_end: 0, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+          _invalidateUserSessions(userId);
           const u = await getUserById(userId);
           if (u) {
             sendEmail(u.email, 'Your account has been downgraded to Free',

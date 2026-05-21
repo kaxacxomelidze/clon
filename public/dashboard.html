@@ -465,6 +465,12 @@ async function apiFetch(method, path, body) {
     doneLoading();
   }
 }
+async function syncStripeAfterCheckout(sessionId) {
+  if (!sessionId) return false;
+  const r = await apiFetch('POST', '/api/payments/stripe/sync', { sessionId });
+  if (r.error) throw new Error(r.error);
+  return true;
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
@@ -477,12 +483,20 @@ async function init() {
   }
 
   const stripeResult = urlParams.get('stripe');
+  const stripeSessionId = urlParams.get('session_id');
   if (stripeResult) history.replaceState(null, '', '/dashboard');
 
   const token = localStorage.getItem('wc_auth_token');
   if (!token) { location.href = '/'; return; }
 
   try {
+    if (stripeResult === 'success' && stripeSessionId) {
+      try {
+        await syncStripeAfterCheckout(stripeSessionId);
+      } catch (e) {
+        toast(e.message || 'Payment is still processing. Refresh in a moment.', 'warn');
+      }
+    }
     dashData = await apiFetch('GET', '/api/user/dashboard');
     if (dashData.error) { location.href = '/'; return; }
 
