@@ -988,9 +988,13 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .mpay-empty-sub{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px}
 .mpay-contact-btn{padding:10px 24px;background:rgba(91,141,239,.1);border:1px solid rgba(91,141,239,.2);border-radius:9px;color:var(--blue);font-size:13px;font-weight:700;transition:all .15s}
 .mpay-contact-btn:hover{background:rgba(91,141,239,.18)}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,13,28,.92);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:#eef2ff;font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#7fb3ff;border-radius:50%;animation:spin .7s linear infinite}
 </style>
 </head>
 <body>
+<div id="slow-loading" class="slow-loading" role="status" aria-live="polite">LOADING...</div>
 
 <!-- Auth screen -->
 <div id="auth-screen" class="auth-checking">
@@ -1056,7 +1060,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   <div class="auth-right">
     <div id="auth-boot-spinner">
       <div class="auth-boot-ring"></div>
-      <div class="auth-boot-txt">Signing you in…</div>
+      <div class="auth-boot-txt">LOADING...</div>
     </div>
     <div class="auth-card">
       <!-- Mobile-only logo -->
@@ -1432,7 +1436,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <div class="profile-section" style="border-bottom:none">
         <div class="profile-section-title">Clone History</div>
         <div id="profileHistBody">
-          <div class="hist-empty">Loading…</div>
+          <div class="hist-empty">LOADING...</div>
         </div>
       </div>
     </div>
@@ -2022,7 +2026,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
     </div>
     <div class="build-body" id="buildBody" style="display:flex;flex-direction:column;overflow-y:auto">
       <div id="buildTemplatePane">
-        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px">Loading templates…</div>
+        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px">LOADING...</div>
       </div>
       <div id="buildSectionsPane" style="display:none"></div>
     </div>
@@ -2048,13 +2052,36 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 const isElectron = typeof window.electronAPI !== 'undefined';
 const API_TOKEN = window.__CLONYFY_TOKEN || '';
 function apiUrl(path) { return path; }
+let slowLoadingCount = 0;
+let slowLoadingTimer = null;
+function beginSlowLoading(delay = 900) {
+  slowLoadingCount++;
+  const el = document.getElementById('slow-loading');
+  if (!el) return () => {};
+  if (!slowLoadingTimer && !el.classList.contains('show')) {
+    slowLoadingTimer = setTimeout(() => {
+      slowLoadingTimer = null;
+      if (slowLoadingCount > 0) el.classList.add('show');
+    }, delay);
+  }
+  return () => {
+    slowLoadingCount = Math.max(0, slowLoadingCount - 1);
+    if (slowLoadingCount === 0) {
+      if (slowLoadingTimer) { clearTimeout(slowLoadingTimer); slowLoadingTimer = null; }
+      el.classList.remove('show');
+    }
+  };
+}
 function apiFetch(path, init) {
   const next = Object.assign({}, init || {});
+  const showLoading = next.silentLoading !== true;
+  delete next.silentLoading;
   next.headers = Object.assign({}, next.headers || {});
   if (API_TOKEN) next.headers['X-CLONYFY-Token'] = API_TOKEN;
   const authToken = localStorage.getItem('wc_auth_token');
   if (authToken) next.headers['X-Auth-Token'] = authToken;
-  return fetch(apiUrl(path), next);
+  const doneLoading = showLoading ? beginSlowLoading() : () => {};
+  return fetch(apiUrl(path), next).finally(doneLoading);
 }
 function deferAppWork(fn, delay = 0) {
   const run = () => { try { fn(); } catch {} };
@@ -2134,7 +2161,7 @@ function showAuthError(msg) {
 function setAuthLoading(btnId, loading) {
   const btn = document.getElementById(btnId);
   btn.disabled = loading;
-  btn.textContent = loading ? 'Please wait…' : (btnId === 'auth-login-btn' ? 'Sign In' : 'Create Account');
+  btn.textContent = loading ? 'LOADING...' : (btnId === 'auth-login-btn' ? 'Sign In' : 'Create Account');
 }
 
 async function submitLogin(e) {
@@ -2701,7 +2728,7 @@ async function openProfile() {
     upgradeBtn.style.display = plan === 'free' ? '' : 'none';
   }
 
-  document.getElementById('profileHistBody').innerHTML = '<div class="hist-empty">Loading…</div>';
+  document.getElementById('profileHistBody').innerHTML = '<div class="hist-empty">LOADING...</div>';
 
   try {
     const res = await apiFetch('/api/outputs');

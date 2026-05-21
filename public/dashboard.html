@@ -127,6 +127,9 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 .toast.ok{background:#0d2218;color:#86efac;border:1px solid #166534}
 .toast.err{background:#1a0d0d;color:#fca5a5;border:1px solid #991b1b}
 .toast.inf{background:#0d2035;color:#93c5fd;border:1px solid #1d4ed8}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,10,10,.94);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:var(--text);font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
 
 /* ── Confirm modal ── */
 #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -241,7 +244,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     </div>
     <div class="plan-hero-info">
       <div class="plan-hero-name" id="plan-name">—</div>
-      <div class="plan-hero-meta" id="plan-meta">Loading…</div>
+      <div class="plan-hero-meta" id="plan-meta">LOADING...</div>
     </div>
     <div class="plan-hero-actions" id="plan-actions"></div>
   </div>
@@ -281,7 +284,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     <div style="overflow-x:auto">
       <table>
         <thead><tr><th>URL</th><th>Pages</th><th>Assets</th><th>Date</th><th>Status</th></tr></thead>
-        <tbody id="clones-tbody"><tr><td colspan="5" class="empty-row">Loading…</td></tr></tbody>
+        <tbody id="clones-tbody"><tr><td colspan="5" class="empty-row">LOADING...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -294,7 +297,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     <div style="overflow-x:auto">
       <table>
         <thead><tr><th>Plan</th><th>Amount</th><th>Interval</th><th>Date</th><th>Status</th></tr></thead>
-        <tbody id="billing-tbody"><tr><td colspan="5" class="empty-row">Loading…</td></tr></tbody>
+        <tbody id="billing-tbody"><tr><td colspan="5" class="empty-row">LOADING...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -393,6 +396,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 </div>
 
 <div id="toasts"></div>
+<div id="slow-loading" class="slow-loading" role="status" aria-live="polite">LOADING...</div>
 
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -430,16 +434,41 @@ let dashPaySettings = { stripe_ready: false, stripe_error: 'Payment system is no
 let currentBillingInterval = 'monthly';
 let currentPlan = 'free';
 let checkoutInProgress = false;
+let slowLoadingCount = 0;
+let slowLoadingTimer = null;
+function beginSlowLoading(delay = 900) {
+  slowLoadingCount++;
+  const el = document.getElementById('slow-loading');
+  if (!el) return () => {};
+  if (!slowLoadingTimer && !el.classList.contains('show')) {
+    slowLoadingTimer = setTimeout(() => {
+      slowLoadingTimer = null;
+      if (slowLoadingCount > 0) el.classList.add('show');
+    }, delay);
+  }
+  return () => {
+    slowLoadingCount = Math.max(0, slowLoadingCount - 1);
+    if (slowLoadingCount === 0) {
+      if (slowLoadingTimer) { clearTimeout(slowLoadingTimer); slowLoadingTimer = null; }
+      el.classList.remove('show');
+    }
+  };
+}
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body) {
   const token = localStorage.getItem('wc_auth_token') || '';
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+  const doneLoading = beginSlowLoading();
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res.json();
+  } finally {
+    doneLoading();
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
