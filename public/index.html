@@ -3581,8 +3581,8 @@ async function loadPreviewPages(outDir) {
       frame.removeAttribute('srcdoc');
       return;
     }
-    select.innerHTML = routes.map(r => `<option value="${encodeURIComponent(r)}">${r === '/' ? '/ (home)' : r}</option>`).join('');
-    await loadPreviewRoute(encodeURIComponent(routes[0]));
+    select.innerHTML = routes.map(r => `<option value="${encodedRouteValue(r)}">${escHtml(routeLabel(r))}</option>`).join('');
+    await loadPreviewRoute(encodedRouteValue(routes[0]));
   } catch (e) {
     select.innerHTML = '';
     empty.textContent = 'Preview could not load pages: ' + (e.message || 'unknown error');
@@ -3863,6 +3863,7 @@ let edUndoIdx = -1;
 let edMode = 'select';
 let dragState = null;
 let layerSeq = 1;
+let editorLoadSeq = 0;
 
 const VP = { desktop: null, tablet: '768px', mobile: '390px' };
 
@@ -3873,6 +3874,14 @@ function sortRoutes(routes) {
     const weight = r => r === '/login' ? 1 : r === '/register' ? 2 : 3;
     return weight(a) - weight(b) || a.localeCompare(b);
   });
+}
+
+function encodedRouteValue(route) {
+  return encodeURIComponent(String(route || '/'));
+}
+
+function routeLabel(route) {
+  return route === '/' ? '/ (home)' : String(route || '/');
 }
 
 function setEditorRail(which, collapsed) {
@@ -3981,6 +3990,7 @@ async function loadEditorPages(outDir, preferredRoute = '') {
     if (list) list.innerHTML = '<div class="ed-no-site">Clone a site first</div>';
     return;
   }
+  editorOutDir = outDir;
   if (list) list.innerHTML = '<div class="ed-no-site">LOADING...</div>';
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
@@ -3990,12 +4000,13 @@ async function loadEditorPages(outDir, preferredRoute = '') {
     const routes = sortRoutes(payload);
     if (!routes.length) { list.innerHTML = '<div class="ed-no-site">No pages found</div>'; return; }
     list.innerHTML = routes.map(r =>
-      `<button class="ed-page-btn" onclick="loadEditorPage('${encodeURIComponent(r)}')" title="${r}">${r === '/' ? '/ (home)' : r}</button>`
+      `<button class="ed-page-btn" data-route="${encodedRouteValue(r)}" onclick="loadEditorPage(this.dataset.route)" title="${escHtml(r)}">${escHtml(routeLabel(r))}</button>`
     ).join('');
     const nextRoute = routes.includes(preferredRoute) ? preferredRoute : (routes.includes(editorRoute) ? editorRoute : routes[0]);
-    loadEditorPage(encodeURIComponent(nextRoute));
+    loadEditorPage(encodedRouteValue(nextRoute));
   } catch(e) {
-    document.getElementById('edPageList').innerHTML = '<div class="ed-no-site">Error loading pages</div>';
+    document.getElementById('edPageList').innerHTML = `<div class="ed-no-site">Error loading pages<br><small>${escHtml(e.message || 'unknown error')}</small></div>`;
+    toast('Editor pages failed: ' + (e.message || 'unknown error'), 'err');
   }
 }
 
@@ -4022,9 +4033,10 @@ document.getElementById('addRegisterPageBtn').addEventListener('click', () => cr
 
 async function loadEditorPage(encodedRoute) {
   const route = decodeURIComponent(encodedRoute);
+  const loadSeq = ++editorLoadSeq;
   editorRoute = route;
   edSelEl = null; edHovEl = null;
-  document.querySelectorAll('.ed-page-btn').forEach(b => b.classList.toggle('on', b.title === route));
+  document.querySelectorAll('.ed-page-btn').forEach(b => b.classList.toggle('on', b.dataset.route === encodedRouteValue(route)));
   document.getElementById('edCurrentPage').textContent = route;
   document.getElementById('edBuilderRoute').textContent = route === '/' ? 'Home page' : route;
   document.getElementById('edEmptyPreview').style.display = 'none';
@@ -4033,34 +4045,60 @@ async function loadEditorPage(encodedRoute) {
   const frame = document.getElementById('ed-frame');
   document.getElementById('edSaveBtn').disabled = true;
   document.getElementById('figmaExportBtn').disabled = true;
+  document.getElementById('deployBtn').disabled = true;
+  document.getElementById('githubBtn').disabled = true;
   deselect();
   edUndo = []; edUndoIdx = -1;
   try {
     const res = await apiFetch('/api/page?outDir=' + encodeURIComponent(editorOutDir) + '&route=' + encodeURIComponent(route));
-    if (!res.ok) throw new Error('Editor request failed');
+    if (!res.ok) {
+      const details = await res.text().catch(() => '');
+      throw new Error(details || 'Editor request failed');
+    }
+    const finishLoad = () => {
+      if (loadSeq !== editorLoadSeq) return;
+      const doc = frame.contentDocument;
+      if (!doc?.documentElement || doc.readyState === 'loading') {
+        setTimeout(finishLoad, 80);
+        return;
+      }
+      frame.onload = null;
+      injectEditorCSS();
+      applyVp();
+      renderLayers();
+      updateCanvasZoomLabel();
+      document.getElementById('edSaveBtn').disabled = false;
+      document.getElementById('figmaExportBtn').disabled = false;
+      document.getElementById('deployBtn').disabled = false;
+      document.getElementById('githubBtn').disabled = false;
+    };
+    frame.onload = finishLoad;
     frame.removeAttribute('src');
     frame.srcdoc = prepareEditorHtml(await res.text());
-    document.getElementById('edSaveBtn').disabled = false;
-    document.getElementById('figmaExportBtn').disabled = false;
-    document.getElementById('deployBtn').disabled = false;
-    document.getElementById('githubBtn').disabled = false;
-    setTimeout(renderLayers, 80);
-  } catch {
+    setTimeout(finishLoad, 350);
+  } catch(e) {
+    if (loadSeq !== editorLoadSeq) return;
+    frame.onload = null;
     frame.removeAttribute('srcdoc');
     document.getElementById('edEmptyPreview').style.display = 'flex';
-    document.getElementById('edEmptyPreview').textContent = 'Editor could not load this page';
+    document.getElementById('edEmptyPreview').textContent = 'Editor could not load this page: ' + (e.message || 'unknown error');
   }
 }
 
-function prepareEditorHtml(html) {
-  const parsed = new DOMParser().parseFromString(html, 'text/html');
-  parsed.querySelectorAll('script').forEach(script => {
+function disableEditorScripts(root) {
+  root.querySelectorAll('script').forEach(script => {
+    if (script.hasAttribute('data-clonyfy-disabled-script')) return;
     script.setAttribute('data-clonyfy-disabled-script', 'true');
     if (script.hasAttribute('type')) {
       script.setAttribute('data-clonyfy-original-type', script.getAttribute('type'));
     }
     script.setAttribute('type', 'text/plain');
   });
+}
+
+function prepareEditorHtml(html) {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  disableEditorScripts(parsed);
   return '<!doctype html>\n' + parsed.documentElement.outerHTML;
 }
 
@@ -6142,6 +6180,7 @@ async function savePage() {
   const removedEditorAttrs = stripEditorOnlyAttrs(doc);
   const html = doc.documentElement.outerHTML;
   restoreEditorOnlyAttrs(removedEditorAttrs);
+  disableEditorScripts(doc);
   injectEditorCSS();
   const btn = document.getElementById('edSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
