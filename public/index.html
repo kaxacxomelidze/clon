@@ -1582,7 +1582,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <button class="done-action-btn secondary" onclick="runPreview()">Open in Browser</button>
     </div>
     <div class="preview-empty" id="previewEmpty">Clone a site first</div>
-    <iframe class="preview-frame" id="previewFrame" sandbox="allow-same-origin allow-forms" style="display:none"></iframe>
+    <iframe class="preview-frame" id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" style="display:none"></iframe>
   </div>
 
   <!-- Editor tab -->
@@ -3566,7 +3566,7 @@ async function loadPreviewRoute(encodedRoute) {
     const res = await apiFetch('/api/page?outDir=' + encodeURIComponent(editorOutDir) + '&route=' + encodeURIComponent(route));
     if (!res.ok) throw new Error('Preview request failed');
     frame.removeAttribute('src');
-    frame.srcdoc = prepareEditorHtml(await res.text());
+    frame.srcdoc = preparePreviewHtml(await res.text());
   } catch {
     frame.style.display = 'none';
     empty.textContent = 'Preview could not load this page';
@@ -4020,6 +4020,10 @@ function prepareEditorHtml(html) {
     script.setAttribute('type', 'text/plain');
   });
   return '<!doctype html>\n' + parsed.documentElement.outerHTML;
+}
+
+function preparePreviewHtml(html) {
+  return html;
 }
 
 function restoreEditorScripts(doc) {
