@@ -991,6 +991,53 @@ function htmlEsc(value) {
   }[ch]));
 }
 
+function shareRouteFromPath(pathname, shareId) {
+  let rest = pathname.slice(`/share/${shareId}`.length) || '/';
+  try { rest = decodeURIComponent(rest); } catch {}
+  rest = rest.replace(/\/+/g, '/');
+  return rest.startsWith('/') ? rest : `/${rest}`;
+}
+
+function shareRouteCandidates(route) {
+  const clean = route.split('#')[0].split('?')[0] || '/';
+  const noSlash = clean.replace(/\/$/, '') || '/';
+  const candidates = [clean, noSlash];
+  if (clean.endsWith('.html')) candidates.push(clean.slice(0, -5) || '/');
+  else candidates.push(`${noSlash}.html`);
+  candidates.push(`${noSlash}/index`, `${noSlash}/index.html`);
+  return [...new Set(candidates)];
+}
+
+function resolveSharedRoute(map, requestedRoute, defaultRoute = '/') {
+  for (const candidate of shareRouteCandidates(requestedRoute)) {
+    if (map[candidate]) return { route: candidate, filename: map[candidate] };
+  }
+  if (map[defaultRoute]) return { route: defaultRoute, filename: map[defaultRoute] };
+  if (map['/']) return { route: '/', filename: map['/'] };
+  return { route: requestedRoute, filename: null };
+}
+
+function rewriteSharedNavigationUrls(html, shareId) {
+  const shareBase = `/share/${shareId}`;
+  const rewrite = (raw) => {
+    if (!raw) return raw;
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(raw)) return raw;
+    if (raw.startsWith('/api/') || raw.startsWith('/_assets/') || raw.startsWith('/share/')) return raw;
+
+    if (raw === '/') return `${shareBase}/`;
+    if (raw.startsWith('/#')) return `${shareBase}/${raw.slice(1)}`;
+    if (raw.startsWith('/')) return `${shareBase}${raw}`;
+    return `${shareBase}/${raw.replace(/^\.?\//, '')}`;
+  };
+  return String(html).replace(/\b(href|action)=("([^"]*)"|'([^']*)')/gi, (match, attr, quoted, dbl, sgl) => {
+    const value = dbl ?? sgl ?? '';
+    const next = rewrite(value);
+    if (next === value) return match;
+    const quote = quoted.startsWith("'") ? "'" : '"';
+    return `${attr}=${quote}${next}${quote}`;
+  });
+}
+
 function routeFilename(route) {
   if (route === '/') return '__home__.html';
   return `${route.replace(/^\/+/, '').replace(/[^a-z0-9]+/gi, '_') || 'page'}.html`;
@@ -2270,12 +2317,16 @@ async function handleRequest(req, res) {
     }
     const map = await loadRouteMapAsync(share.out_dir);
     if (!map) { res.writeHead(404); res.end('Clone no longer exists'); return; }
-    const filename = map[share.route] || map['/'];
+    const requestedRoute = shareRouteFromPath(url.pathname, shareId);
+    const defaultRoute = share.route || '/';
+    const resolved = resolveSharedRoute(map, requestedRoute, defaultRoute);
+    const filename = resolved.filename;
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
     const data = await readCloneFile(share.out_dir, join('captured-pages', filename));
     if (!data) { res.writeHead(404); res.end('Page file missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(await rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir));
+    const previewHtml = await rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir);
+    res.end(rewriteSharedNavigationUrls(previewHtml, shareId));
     return;
   }
 
