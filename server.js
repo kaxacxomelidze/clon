@@ -858,12 +858,13 @@ async function verifyCloneReadable(outDir) {
   return { ok: true, pages: Object.keys(map).length };
 }
 
-async function buildPreviewAssetMap(outDir) {
+async function buildPreviewAssetContext(outDir) {
   const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   const map = {};
   const add = (from, to) => { if (from && to && from !== '/') map[from] = to; };
   const manifestData = await readCloneFile(outDir, 'manifest.json').catch(() => null);
   const manifest = manifestData ? safeJsonParse(manifestData.toString('utf8'), null) : null;
+  const targetOrigin = String(manifest?.targetOrigin || '').replace(/\/$/, '');
   for (const page of manifest?.pages || []) {
     for (const asset of page.assets || []) {
       const original = String(asset.originalUrl || '');
@@ -881,20 +882,28 @@ async function buildPreviewAssetMap(outDir) {
       } catch {}
     }
   }
-  return map;
+  return { map, targetOrigin };
 }
 
-function previewReplayPatch(assetMap) {
+function previewReplayPatch(assetMap, targetOrigin = '') {
   return `<script data-clonyfy-preview-replay>
 (() => {
   const assetMap = ${JSON.stringify(assetMap)};
+  const targetOrigin = ${JSON.stringify(targetOrigin)};
   const localize = (value) => {
     if (!value) return value;
     const s = String(value);
     if (assetMap[s]) return assetMap[s];
     try {
       const url = new URL(s, window.location.href);
-      return assetMap[url.href] || assetMap[url.pathname + url.search + url.hash] || assetMap[url.pathname + url.search] || assetMap[url.pathname] || s;
+      const mapped = assetMap[url.href] || assetMap[url.pathname + url.search + url.hash] || assetMap[url.pathname + url.search] || assetMap[url.pathname];
+      if (mapped) return mapped;
+      if (targetOrigin && url.pathname.startsWith('/media/')) {
+        const nextMediaPath = '/_next/static' + url.pathname;
+        return assetMap[nextMediaPath + url.search] || assetMap[nextMediaPath] || (targetOrigin + nextMediaPath + url.search + url.hash);
+      }
+      if (targetOrigin && url.pathname === '/_next/image') return targetOrigin + url.pathname + url.search + url.hash;
+      return s;
     } catch {}
     return s;
   };
@@ -924,6 +933,7 @@ function previewReplayPatch(assetMap) {
   patchUrlProperty(HTMLScriptElement.prototype, 'src');
   patchUrlProperty(HTMLLinkElement.prototype, 'href');
   patchUrlProperty(HTMLImageElement.prototype, 'src');
+  patchUrlProperty(HTMLImageElement.prototype, 'srcset');
 })();
 </script>`;
 }
@@ -932,7 +942,13 @@ async function rewritePreviewAssetUrls(html, outDir) {
   const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   let out = String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
   if (!out.includes('data-clonyfy-preview-replay')) {
-    const patch = previewReplayPatch(await buildPreviewAssetMap(outDir));
+    const { map, targetOrigin } = await buildPreviewAssetContext(outDir);
+    if (targetOrigin) {
+      out = out
+        .replace(/([("'=\s,])\/_next\/image\?/g, `$1${targetOrigin}/_next/image?`)
+        .replace(/([("'=\s,])\/media\//g, `$1${targetOrigin}/_next/static/media/`);
+    }
+    const patch = previewReplayPatch(map, targetOrigin);
     if (out.includes('<head>')) out = out.replace('<head>', `<head>${patch}`);
     else if (out.includes('<head ')) out = out.replace(/(<head[^>]*>)/, `$1${patch}`);
     else out = patch + out;

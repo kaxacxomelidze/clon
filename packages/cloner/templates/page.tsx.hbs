@@ -50,6 +50,13 @@ const REPLAY_PATCH = `<script data-clonyfy-replay>
       if (assetMap[url.pathname + url.search + url.hash]) return assetMap[url.pathname + url.search + url.hash];
       if (assetMap[url.pathname + url.search]) return assetMap[url.pathname + url.search];
       if (assetMap[url.pathname]) return assetMap[url.pathname];
+      if (url.pathname.startsWith('/media/')) {
+        const nextMediaPath = '/_next/static' + url.pathname;
+        if (assetMap[nextMediaPath + url.search]) return assetMap[nextMediaPath + url.search];
+        if (assetMap[nextMediaPath]) return assetMap[nextMediaPath];
+        return targetOrigin + nextMediaPath + url.search + url.hash;
+      }
+      if (url.pathname === '/_next/image') return targetOrigin + url.pathname + url.search + url.hash;
       if (url.origin === targetOrigin) return url.pathname + url.search + url.hash;
     } catch {}
     return s;
@@ -83,6 +90,7 @@ const REPLAY_PATCH = `<script data-clonyfy-replay>
   patchUrlProperty(HTMLScriptElement.prototype, 'src');
   patchUrlProperty(HTMLLinkElement.prototype, 'href');
   patchUrlProperty(HTMLImageElement.prototype, 'src');
+  patchUrlProperty(HTMLImageElement.prototype, 'srcset');
 
   // fetch() — covers JSON API calls and module preloads
   const nativeFetch = window.fetch;
