@@ -688,7 +688,7 @@ async function readCloneFile(outDir, relPath) {
   const storagePath = cloneStoragePath(outDir, relPath);
   const stored = await downloadCloneFile(storagePath);
   if (stored) return stored;
-  if (relPath === 'route-map.json' || String(relPath).replace(/\\/g, '/').startsWith('captured-pages/')) {
+  if (relPath === 'route-map.json' || relPath === 'manifest.json' || String(relPath).replace(/\\/g, '/').startsWith('captured-pages/')) {
     const text = await getCloneTextFile(storagePath);
     if (text != null) return Buffer.from(text, 'utf8');
   }
@@ -871,6 +871,7 @@ async function verifyCloneReadable(outDir) {
 async function buildPreviewAssetContext(outDir) {
   const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   const map = {};
+  const originalByRelPath = {};
   const add = (from, to) => { if (from && to && from !== '/') map[from] = to; };
   const manifestData = await readCloneFile(outDir, 'manifest.json').catch(() => null);
   const manifest = manifestData ? safeJsonParse(manifestData.toString('utf8'), null) : null;
@@ -882,8 +883,11 @@ async function buildPreviewAssetContext(outDir) {
       if (!original || !local) continue;
       const assetRel = local.replace(/^\/+/, '');
       const target = `${prefix}${encodeURIComponent(assetRel)}`;
+      originalByRelPath[assetRel] = original;
       add(original, target);
       add(original.split('?')[0].split('#')[0], target);
+      add(local, target);
+      add(local.replace(/^\/+/, ''), target);
       try {
         const u = new URL(original);
         add(`${u.pathname}${u.search}${u.hash}`, target);
@@ -892,7 +896,40 @@ async function buildPreviewAssetContext(outDir) {
       } catch {}
     }
   }
-  return { map, targetOrigin };
+  return { map, targetOrigin, originalByRelPath };
+}
+
+function rewriteCssUrlsForPreview(css, assetMap, baseUrl) {
+  const mapUrl = (rawUrl) => {
+    const clean = String(rawUrl || '').split('?')[0].split('#')[0];
+    if (assetMap.has(rawUrl)) return assetMap.get(rawUrl);
+    if (assetMap.has(clean)) return assetMap.get(clean);
+    if (baseUrl) {
+      try {
+        const abs = new URL(rawUrl, baseUrl).href;
+        const absClean = abs.split('?')[0].split('#')[0];
+        return assetMap.get(abs) || assetMap.get(absClean) || null;
+      } catch {}
+    }
+    return null;
+  };
+  return String(css)
+    .replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, rawUrl) => {
+      const mapped = mapUrl(rawUrl);
+      return mapped ? `url(${quote}${mapped}${quote})` : match;
+    })
+    .replace(/@import\s+(?:url\(\s*)?(?:(['"])([^'")]+)\1|([^'")\s;]+))\s*\)?/g, (match, _quote, quotedUrl, bareUrl) => {
+      const rawUrl = quotedUrl || bareUrl;
+      const mapped = mapUrl(rawUrl);
+      return mapped ? match.replace(rawUrl, mapped) : match;
+    });
+}
+
+async function rewritePreviewCssAsset(css, outDir, relPath) {
+  const { map, originalByRelPath } = await buildPreviewAssetContext(outDir);
+  const assetMap = new Map(Object.entries(map));
+  const baseUrl = originalByRelPath[relPath] || originalByRelPath[relPath.replace(/^public\//, '')] || undefined;
+  return rewriteCssUrlsForPreview(css, assetMap, baseUrl);
 }
 
 function previewReplayPatch(assetMap, targetOrigin = '') {
@@ -926,8 +963,9 @@ function previewReplayPatch(assetMap, targetOrigin = '') {
   const nativeSetAttribute = Element.prototype.setAttribute;
   Element.prototype.setAttribute = function(name, value) {
     const key = String(name || '').toLowerCase();
-    if (key === 'src' || key === 'href') value = localize(value);
+    if (key === 'src' || key === 'href' || key === 'poster' || key === 'action' || key === 'data') value = localize(value);
     else if (key === 'srcset' || key === 'imagesrcset') value = rewriteSrcset(value);
+    else if (key === 'style') value = rewriteCssText(value);
     return nativeSetAttribute.call(this, name, value);
   };
   const patchUrlProperty = (proto, prop) => {
@@ -944,6 +982,45 @@ function previewReplayPatch(assetMap, targetOrigin = '') {
   patchUrlProperty(HTMLLinkElement.prototype, 'href');
   patchUrlProperty(HTMLImageElement.prototype, 'src');
   patchUrlProperty(HTMLImageElement.prototype, 'srcset');
+  if (window.HTMLSourceElement) {
+    patchUrlProperty(HTMLSourceElement.prototype, 'src');
+    patchUrlProperty(HTMLSourceElement.prototype, 'srcset');
+  }
+  if (window.HTMLMediaElement) patchUrlProperty(HTMLMediaElement.prototype, 'src');
+  if (window.HTMLVideoElement) patchUrlProperty(HTMLVideoElement.prototype, 'poster');
+  if (window.HTMLIFrameElement) patchUrlProperty(HTMLIFrameElement.prototype, 'src');
+  if (window.HTMLObjectElement) patchUrlProperty(HTMLObjectElement.prototype, 'data');
+  if (window.HTMLEmbedElement) patchUrlProperty(HTMLEmbedElement.prototype, 'src');
+  if (window.HTMLFormElement) patchUrlProperty(HTMLFormElement.prototype, 'action');
+
+  function rewriteCssText(value) {
+    return String(value || '').replace(/url\\(\\s*(['"]?)([^'")\\s]+)\\1\\s*\\)/g, (match, quote, url) => {
+      const next = localize(url);
+      return next === url ? match : 'url(' + quote + next + quote + ')';
+    });
+  }
+
+  if (window.CSSStyleDeclaration) {
+    const nativeSetProperty = CSSStyleDeclaration.prototype.setProperty;
+    CSSStyleDeclaration.prototype.setProperty = function(name, value, priority) {
+      return nativeSetProperty.call(this, name, rewriteCssText(value), priority);
+    };
+    const bgDesc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'backgroundImage');
+    if (bgDesc && bgDesc.set && bgDesc.get) {
+      Object.defineProperty(CSSStyleDeclaration.prototype, 'backgroundImage', {
+        configurable: true,
+        enumerable: bgDesc.enumerable,
+        get() { return bgDesc.get.call(this); },
+        set(value) { return bgDesc.set.call(this, rewriteCssText(value)); },
+      });
+    }
+  }
+  if (window.CSSStyleSheet) {
+    const nativeInsertRule = CSSStyleSheet.prototype.insertRule;
+    CSSStyleSheet.prototype.insertRule = function(rule, index) {
+      return nativeInsertRule.call(this, rewriteCssText(rule), index);
+    };
+  }
 })();
 </script>`;
 }
@@ -1540,7 +1617,14 @@ async function handleRequest(req, res) {
     if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
     const data = await readCloneFile(outDir, join('public', relPath));
     if (!data) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': contentTypeForPath(relPath), 'Cache-Control': 'public, max-age=3600' });
+    const contentType = contentTypeForPath(relPath);
+    if (contentType.startsWith('text/css')) {
+      const css = await rewritePreviewCssAsset(data.toString('utf8'), outDir, relPath).catch(() => data.toString('utf8'));
+      res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=3600' });
+      res.end(css);
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=3600' });
     res.end(data);
     return;
   }

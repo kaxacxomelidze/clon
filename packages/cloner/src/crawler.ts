@@ -41,7 +41,16 @@ const STATIC_PAGE_TIMEOUT = IS_SERVERLESS ? 12_000 : 15_000;
 const STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
 const STATIC_ASSET_CONCURRENCY = IS_SERVERLESS ? 6 : 12;
 const STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS ? 4_000 : 60_000;
-const STATIC_FIRST_SERVERLESS = IS_SERVERLESS && process.env.CLONYFY_BROWSER_FIRST !== '1';
+export function shouldUseStaticFirstServerless(
+  env: NodeJS.ProcessEnv = process.env,
+  serverless = IS_SERVERLESS,
+): boolean {
+  if (!serverless) return false;
+  if (env.CLONYFY_BROWSER_FIRST === '1') return false;
+  return env.CLONYFY_STATIC_FIRST === '1';
+}
+
+const STATIC_FIRST_SERVERLESS = shouldUseStaticFirstServerless();
 
 export function shouldUseBundledChromium(
   playwrightPath: string,

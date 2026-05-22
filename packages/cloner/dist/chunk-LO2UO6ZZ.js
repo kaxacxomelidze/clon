@@ -1724,7 +1724,12 @@ var STATIC_PAGE_TIMEOUT = IS_SERVERLESS2 ? 12e3 : 15e3;
 var STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS2 ? 8 : 50) * 1024 * 1024;
 var STATIC_ASSET_CONCURRENCY = IS_SERVERLESS2 ? 6 : 12;
 var STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 6e4;
-var STATIC_FIRST_SERVERLESS = IS_SERVERLESS2 && process.env.CLONYFY_BROWSER_FIRST !== "1";
+function shouldUseStaticFirstServerless(env = process.env, serverless = IS_SERVERLESS2) {
+  if (!serverless) return false;
+  if (env.CLONYFY_BROWSER_FIRST === "1") return false;
+  return env.CLONYFY_STATIC_FIRST === "1";
+}
+var STATIC_FIRST_SERVERLESS = shouldUseStaticFirstServerless();
 function shouldUseBundledChromium(playwrightPath, platform = process.platform, serverless = IS_SERVERLESS2) {
   return serverless || platform === "linux" && !existsSync2(playwrightPath);
 }
@@ -10931,4 +10936,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-HOJLZAQ6.js.map
+//# sourceMappingURL=chunk-LO2UO6ZZ.js.map

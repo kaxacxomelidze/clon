@@ -72,8 +72,9 @@ const REPLAY_PATCH = `<script data-clonyfy-replay>
   const nativeSetAttribute = Element.prototype.setAttribute;
   Element.prototype.setAttribute = function(name, value) {
     const key = String(name || '').toLowerCase();
-    if (key === 'src' || key === 'href') value = localize(value);
+    if (key === 'src' || key === 'href' || key === 'poster' || key === 'action' || key === 'data') value = localize(value);
     else if (key === 'srcset' || key === 'imagesrcset') value = rewriteSrcset(value);
+    else if (key === 'style') value = rewriteCssText(value);
     return nativeSetAttribute.call(this, name, value);
   };
 
@@ -91,6 +92,46 @@ const REPLAY_PATCH = `<script data-clonyfy-replay>
   patchUrlProperty(HTMLLinkElement.prototype, 'href');
   patchUrlProperty(HTMLImageElement.prototype, 'src');
   patchUrlProperty(HTMLImageElement.prototype, 'srcset');
+
+  if (window.HTMLSourceElement) {
+    patchUrlProperty(HTMLSourceElement.prototype, 'src');
+    patchUrlProperty(HTMLSourceElement.prototype, 'srcset');
+  }
+  if (window.HTMLMediaElement) patchUrlProperty(HTMLMediaElement.prototype, 'src');
+  if (window.HTMLVideoElement) patchUrlProperty(HTMLVideoElement.prototype, 'poster');
+  if (window.HTMLIFrameElement) patchUrlProperty(HTMLIFrameElement.prototype, 'src');
+  if (window.HTMLObjectElement) patchUrlProperty(HTMLObjectElement.prototype, 'data');
+  if (window.HTMLEmbedElement) patchUrlProperty(HTMLEmbedElement.prototype, 'src');
+  if (window.HTMLFormElement) patchUrlProperty(HTMLFormElement.prototype, 'action');
+
+  function rewriteCssText(value) {
+    return String(value || '').replace(/url\\(\\s*(['"]?)([^'")\\s]+)\\1\\s*\\)/g, (match, quote, url) => {
+      const next = localize(url);
+      return next === url ? match : 'url(' + quote + next + quote + ')';
+    });
+  }
+
+  if (window.CSSStyleDeclaration) {
+    const nativeSetProperty = CSSStyleDeclaration.prototype.setProperty;
+    CSSStyleDeclaration.prototype.setProperty = function(name, value, priority) {
+      return nativeSetProperty.call(this, name, rewriteCssText(value), priority);
+    };
+    const bgDesc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'backgroundImage');
+    if (bgDesc && bgDesc.set && bgDesc.get) {
+      Object.defineProperty(CSSStyleDeclaration.prototype, 'backgroundImage', {
+        configurable: true,
+        enumerable: bgDesc.enumerable,
+        get() { return bgDesc.get.call(this); },
+        set(value) { return bgDesc.set.call(this, rewriteCssText(value)); },
+      });
+    }
+  }
+  if (window.CSSStyleSheet) {
+    const nativeInsertRule = CSSStyleSheet.prototype.insertRule;
+    CSSStyleSheet.prototype.insertRule = function(rule, index) {
+      return nativeInsertRule.call(this, rewriteCssText(rule), index);
+    };
+  }
 
   // fetch() — covers JSON API calls and module preloads
   const nativeFetch = window.fetch;

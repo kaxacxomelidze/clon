@@ -2220,13 +2220,14 @@ async function submitRegister(e) {
 }
 
 function onAuthSuccess(user) {
-  user.plan = normalizePlan(user.plan);
+  user.plan = normalizePlan(user.plan || user.rawPlan);
   currentUser = user;
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('titlebarUser').style.display = 'flex';
   document.getElementById('userName').textContent = user.name;
   document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
   syncPlanLimitsToCloneForm();
+  syncPaidPlanChrome();
   deferAppWork(() => requestNotificationPermission());
   deferAppWork(() => loadHistory({ fast: true }));
   deferAppWork(() => loadAnnouncements(), 150);
@@ -2348,8 +2349,20 @@ async function logout() {
 }
 
 function isPaidUser() {
-  const plan = (currentUser?.plan || 'free').toLowerCase();
+  const plan = normalizePlan(currentUser?.plan || 'free');
   return plan !== 'free';
+}
+
+function syncPaidPlanChrome() {
+  const paid = isPaidUser();
+  const plan = normalizePlan(currentUser?.plan || 'free');
+  document.querySelectorAll('#titlebarUser button[onclick="openPricing()"]').forEach((btn) => {
+    btn.style.display = paid ? 'none' : '';
+  });
+  const usageUpgrade = document.querySelector('#usageMeter button[onclick="openPricing()"]');
+  if (usageUpgrade) usageUpgrade.style.display = paid ? 'none' : '';
+  const name = document.getElementById('userName');
+  if (name && currentUser) name.title = paid ? `${planLabel(plan)} plan` : 'Free plan';
 }
 
 function requirePaid(featureName) {
@@ -3182,8 +3195,13 @@ const _PLAN_PAGE_LIMITS = { free: 20, starter: 500, growth: 500, unlimited: 500 
 
 function currentPlanLimits() {
   const plan = normalizePlan(currentUser?.plan || 'free');
+  const fallbackClones = _PLAN_CLONE_LIMITS[plan] ?? 3;
+  const serverClones = currentUser?.planLimits?.clonesPerMonth;
+  const clonesPerMonth = plan === 'unlimited'
+    ? null
+    : (plan === 'free' ? (serverClones ?? fallbackClones) : (serverClones && serverClones > fallbackClones ? serverClones : fallbackClones));
   return {
-    clonesPerMonth: currentUser?.planLimits?.clonesPerMonth ?? _PLAN_CLONE_LIMITS[plan] ?? 3,
+    clonesPerMonth,
     maxPages: currentUser?.planLimits?.maxPages ?? _PLAN_PAGE_LIMITS[plan] ?? 20,
   };
 }
@@ -3198,11 +3216,18 @@ function syncPlanLimitsToCloneForm() {
 
 function updateUsageMeter() {
   if (!currentUser) return;
+  syncPaidPlanChrome();
   const { clonesPerMonth: limitThisMonth } = currentPlanLimits();
   const meter = document.getElementById('usageMeter');
   const fill = document.getElementById('usageBarFill');
   const text = document.getElementById('usageText');
-  if (limitThisMonth === null) { meter.style.display = 'none'; return; }
+  if (limitThisMonth === null) {
+    meter.style.display = 'flex';
+    fill.style.width = '100%';
+    fill.style.background = 'var(--logo-grad)';
+    text.textContent = `${planLabel(currentUser.plan)} plan`;
+    return;
+  }
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const clonesThisMonth = allJobs.filter(j => j.startedAt && new Date(j.startedAt) >= monthStart).length;
   meter.style.display = 'flex';

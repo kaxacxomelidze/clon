@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isServerlessRuntime, shouldUseBundledChromium, systemBrowserChannel } from '../crawler.js';
+import { isServerlessRuntime, shouldUseBundledChromium, shouldUseStaticFirstServerless, systemBrowserChannel } from '../crawler.js';
 
 let tempDir = '';
 
@@ -51,6 +51,20 @@ describe('isServerlessRuntime', () => {
   it('detects bundled serverless task paths', () => {
     expect(isServerlessRuntime({}, '/var/task')).toBe(true);
     expect(isServerlessRuntime({}, '/var/task/packages/cloner')).toBe(true);
+  });
+});
+
+describe('shouldUseStaticFirstServerless', () => {
+  it('uses browser-first capture by default in serverless environments', () => {
+    expect(shouldUseStaticFirstServerless({}, true)).toBe(false);
+  });
+
+  it('allows static-first mode through an explicit environment flag', () => {
+    expect(shouldUseStaticFirstServerless({ CLONYFY_STATIC_FIRST: '1' }, true)).toBe(true);
+  });
+
+  it('lets browser-first override static-first when both flags are present', () => {
+    expect(shouldUseStaticFirstServerless({ CLONYFY_STATIC_FIRST: '1', CLONYFY_BROWSER_FIRST: '1' }, true)).toBe(false);
   });
 });
 
