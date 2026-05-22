@@ -948,7 +948,7 @@ async function previewOutDirFromReferer(req) {
       const share = shareId ? await getShare(shareId) : null;
       return share?.out_dir || '';
     }
-    if (ref.pathname === '/api/page') return ref.searchParams.get('outDir') || '';
+    if (ref.pathname === '/api/page' || ref.pathname === '/api/asset') return ref.searchParams.get('outDir') || '';
   } catch {}
   return '';
 }
