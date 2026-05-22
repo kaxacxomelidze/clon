@@ -603,6 +603,7 @@ async function persistCloneOutput(outDir) {
     if (existsSync(abs) && statSync(abs).isFile()) files.push({ rel: rel.replace(/\\/g, '/'), abs });
   };
   addFile('route-map.json');
+  addFile('manifest.json');
   const walk = (baseRel) => {
     const baseAbs = join(outDir, baseRel);
     if (!existsSync(baseAbs)) return;
@@ -629,7 +630,7 @@ async function persistCloneOutput(outDir) {
       uploaded++;
     } catch (err) {
       failures.push(`${file.rel}: ${err?.message || err}`);
-      if (file.rel === 'route-map.json' || file.rel.startsWith('captured-pages/')) {
+      if (file.rel === 'route-map.json' || file.rel === 'manifest.json' || file.rel.startsWith('captured-pages/')) {
         try {
           await saveCloneTextFile(storagePath, data.toString('utf8'));
           fallbackSaved++;
@@ -645,7 +646,7 @@ async function persistCloneOutput(outDir) {
     }
   };
 
-  const criticalFiles = files.filter(file => file.rel === 'route-map.json' || file.rel.startsWith('captured-pages/'));
+  const criticalFiles = files.filter(file => file.rel === 'route-map.json' || file.rel === 'manifest.json' || file.rel.startsWith('captured-pages/'));
   const assetFiles = files.filter(file => !criticalFiles.includes(file));
   await runLimited(criticalFiles, 8);
   try {
@@ -857,9 +858,86 @@ async function verifyCloneReadable(outDir) {
   return { ok: true, pages: Object.keys(map).length };
 }
 
-function rewritePreviewAssetUrls(html, outDir) {
+async function buildPreviewAssetMap(outDir) {
   const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
-  return String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
+  const map = {};
+  const add = (from, to) => { if (from && to && from !== '/') map[from] = to; };
+  const manifestData = await readCloneFile(outDir, 'manifest.json').catch(() => null);
+  const manifest = manifestData ? safeJsonParse(manifestData.toString('utf8'), null) : null;
+  for (const page of manifest?.pages || []) {
+    for (const asset of page.assets || []) {
+      const original = String(asset.originalUrl || '');
+      const local = String(asset.localPath || '');
+      if (!original || !local) continue;
+      const assetRel = local.replace(/^\/+/, '');
+      const target = `${prefix}${encodeURIComponent(assetRel)}`;
+      add(original, target);
+      add(original.split('?')[0].split('#')[0], target);
+      try {
+        const u = new URL(original);
+        add(`${u.pathname}${u.search}${u.hash}`, target);
+        add(`${u.pathname}${u.search}`, target);
+        add(u.pathname, target);
+      } catch {}
+    }
+  }
+  return map;
+}
+
+function previewReplayPatch(assetMap) {
+  return `<script data-clonyfy-preview-replay>
+(() => {
+  const assetMap = ${JSON.stringify(assetMap)};
+  const localize = (value) => {
+    if (!value) return value;
+    const s = String(value);
+    if (assetMap[s]) return assetMap[s];
+    try {
+      const url = new URL(s, window.location.href);
+      return assetMap[url.href] || assetMap[url.pathname + url.search + url.hash] || assetMap[url.pathname + url.search] || assetMap[url.pathname] || s;
+    } catch {}
+    return s;
+  };
+  const rewriteSrcset = (value) => String(value || '').split(',').map((part) => {
+    const trimmed = part.trim();
+    const spaceIdx = trimmed.search(/\\s/);
+    if (spaceIdx === -1) return localize(trimmed);
+    return localize(trimmed.slice(0, spaceIdx)) + trimmed.slice(spaceIdx);
+  }).join(', ');
+  const nativeSetAttribute = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function(name, value) {
+    const key = String(name || '').toLowerCase();
+    if (key === 'src' || key === 'href') value = localize(value);
+    else if (key === 'srcset' || key === 'imagesrcset') value = rewriteSrcset(value);
+    return nativeSetAttribute.call(this, name, value);
+  };
+  const patchUrlProperty = (proto, prop) => {
+    const desc = Object.getOwnPropertyDescriptor(proto, prop);
+    if (!desc || !desc.set || !desc.get) return;
+    Object.defineProperty(proto, prop, {
+      configurable: true,
+      enumerable: desc.enumerable,
+      get() { return desc.get.call(this); },
+      set(value) { return desc.set.call(this, localize(value)); },
+    });
+  };
+  patchUrlProperty(HTMLScriptElement.prototype, 'src');
+  patchUrlProperty(HTMLLinkElement.prototype, 'href');
+  patchUrlProperty(HTMLImageElement.prototype, 'src');
+})();
+</script>`;
+}
+
+async function rewritePreviewAssetUrls(html, outDir) {
+  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
+  let out = String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
+  if (!out.includes('data-clonyfy-preview-replay')) {
+    const patch = previewReplayPatch(await buildPreviewAssetMap(outDir));
+    if (out.includes('<head>')) out = out.replace('<head>', `<head>${patch}`);
+    else if (out.includes('<head ')) out = out.replace(/(<head[^>]*>)/, `$1${patch}`);
+    else out = patch + out;
+  }
+  return out;
 }
 
 function safeJsonParse(str, fallback = []) {
@@ -1537,7 +1615,7 @@ async function handleRequest(req, res) {
     const data = await readCloneFile(outDir, join('captured-pages', filename));
     if (!data) { res.writeHead(404); res.end('File missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(rewritePreviewAssetUrls(data.toString('utf8'), outDir));
+    res.end(await rewritePreviewAssetUrls(data.toString('utf8'), outDir));
     return;
   }
 
@@ -2138,7 +2216,7 @@ async function handleRequest(req, res) {
     const data = await readCloneFile(share.out_dir, join('captured-pages', filename));
     if (!data) { res.writeHead(404); res.end('Page file missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir));
+    res.end(await rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir));
     return;
   }
 
