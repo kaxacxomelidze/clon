@@ -275,13 +275,13 @@ function publicAppUrl(req = null) {
   const configured = String(getCachedSettings().app_url || '').replace(/\/$/, '');
   if (configured && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configured)) return configured;
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`.replace(/\/$/, '');
   const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
   if (host) {
     const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
     const firstHost = String(host).split(',')[0].trim();
     if (firstHost) return `${proto}://${firstHost}`.replace(/\/$/, '');
   }
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`.replace(/\/$/, '');
   return configured || DEFAULT_APP_URL;
 }
 
