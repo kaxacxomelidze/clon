@@ -3864,6 +3864,7 @@ let edMode = 'select';
 let dragState = null;
 let layerSeq = 1;
 let editorLoadSeq = 0;
+let activeInlineEdit = null;
 
 const VP = { desktop: null, tablet: '768px', mobile: '390px' };
 
@@ -3882,6 +3883,11 @@ function encodedRouteValue(route) {
 
 function routeLabel(route) {
   return route === '/' ? '/ (home)' : String(route || '/');
+}
+
+function isEditorVisible() {
+  const tab = document.getElementById('tab-editor');
+  return !!tab && tab.style.display !== 'none';
 }
 
 function setEditorRail(which, collapsed) {
@@ -4412,6 +4418,7 @@ document.querySelectorAll('#sel-box .sel-handle').forEach(handle => {
 });
 
 function setMode(mode) {
+  finishInlineTextEdit();
   edMode = mode;
   // Tool buttons: select / move
   document.getElementById('toolSelect')?.classList.toggle('on', mode === 'select');
@@ -4423,8 +4430,7 @@ function setMode(mode) {
 
 // Keyboard shortcuts for tools (only when editor tab is active)
 document.addEventListener('keydown', e => {
-  const tab = document.getElementById('tab-editor');
-  if (!tab || tab.style.display === 'none') return;
+  if (!isEditorVisible()) return;
   if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.contentEditable === 'true') return;
   const map = { v:'select', h:'move', t:'text', r:'box', o:'circle', s:'section', i:'image' };
   if (map[e.key?.toLowerCase()]) { e.preventDefault(); setMode(map[e.key.toLowerCase()]); }
@@ -4525,16 +4531,43 @@ document.addEventListener('mouseup', () => {
 overlay.addEventListener('dblclick', e => {
   const el = getFrameEl(e);
   if (!el) return;
+  finishInlineTextEdit();
   overlay.classList.remove('on');
+  const oldHtml = el.innerHTML;
+  const oldContentEditable = el.getAttribute('contenteditable');
+  el.setAttribute('data-clonyfy-editing', 'true');
+  activeInlineEdit = { el, oldHtml, oldContentEditable };
   el.contentEditable = 'true';
   el.focus();
   el.addEventListener('blur', function stop() {
-    el.contentEditable = 'inherit';
-    overlay.classList.add('on');
-    if (el === edSelEl) document.getElementById('p-text').value = el.textContent || '';
+    finishInlineTextEdit(el, oldHtml, oldContentEditable);
     el.removeEventListener('blur', stop);
   }, {once:true});
 });
+
+function restoreContentEditable(el, originalValue) {
+  if (!el) return;
+  if (originalValue == null) el.removeAttribute('contenteditable');
+  else el.setAttribute('contenteditable', originalValue);
+  el.removeAttribute('data-clonyfy-editing');
+}
+
+function finishInlineTextEdit(el = activeInlineEdit?.el, oldHtml = activeInlineEdit?.oldHtml, oldContentEditable = activeInlineEdit?.oldContentEditable) {
+  if (!el) return;
+  if (!el.hasAttribute('data-clonyfy-editing') && activeInlineEdit?.el !== el) return;
+  const changed = oldHtml !== undefined && el.innerHTML !== oldHtml;
+  const val = el.innerHTML;
+  restoreContentEditable(el, oldContentEditable);
+  document.getElementById('ed-overlay')?.classList.add('on');
+  if (changed) pushUndo({ type: 'innerHTML', el, old: oldHtml, val });
+  if (el === edSelEl) {
+    document.getElementById('p-text').value = el.textContent || '';
+    syncPanel(el);
+    updateSelBox();
+    renderLayers();
+  }
+  if (activeInlineEdit?.el === el) activeInlineEdit = null;
+}
 
 // Update sel-box when canvas scrolls
 document.querySelector('.frame-area')?.addEventListener('scroll', () => { updateSelBox(); updateHoverBox(null); });
@@ -4560,7 +4593,8 @@ function select(el) {
   document.getElementById('pBody').style.display = 'block';
 }
 function deselect() {
-  if (edSelEl) { edSelEl.classList.remove('__s','__h'); edSelEl.contentEditable = 'inherit'; }
+  finishInlineTextEdit();
+  if (edSelEl) { edSelEl.classList.remove('__s','__h'); }
   if (edHovEl) { edHovEl.classList.remove('__h'); }
   edSelEl = null; edHovEl = null; edTextNode = null;
   const box = document.getElementById('sel-box');
@@ -4758,6 +4792,8 @@ function applyAttr(name, val) {
   if (val == null || val === '') edSelEl.removeAttribute(name);
   else edSelEl.setAttribute(name, val);
   pushUndo({ type: 'attr', el: edSelEl, attr: name, old, val });
+  updateSelBox();
+  renderLayers();
 }
 
 function syncPanel(el) {
@@ -4895,6 +4931,8 @@ function applyStyle(prop, val) {
   const old = inlineStyleState(edSelEl, prop);
   setInlineStyle(edSelEl, prop, val);
   pushUndo({type:'style', el:edSelEl, prop, old, val, priority:'important'});
+  updateSelBox();
+  updateHoverBox(null);
 }
 
 // ── Wire props inputs ─────────────────────────────────────────────────────────
@@ -5324,6 +5362,7 @@ function nudgeSelected(dx, dy) {
 }
 
 document.addEventListener('keydown', e => {
+  if (!isEditorVisible()) return;
   const tag = document.activeElement.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if (e.key === 'Escape') { setMode('select'); deselect(); }
@@ -5366,10 +5405,12 @@ function undoStep() {
     op.el.parentNode?.replaceChild(nextEl, op.el);
     op.el = nextEl;
   }
+  else if (op.type === 'innerHTML') op.el.innerHTML = op.old;
   else if (op.type === 'move' || op.type === 'resize') applyStyleSnapshot(op.el, op.old);
   else if (op.type === 'reorder') op.parent.insertBefore(op.el, op.oldNext);
   else setInlineStyle(op.el, op.prop, op.old.value, op.old.priority);
   if (op.el === edSelEl) syncPanel(op.el);
+  updateSelBox();
   renderLayers();
 }
 function redoStep() {
@@ -5397,10 +5438,12 @@ function redoStep() {
     op.el.parentNode?.replaceChild(nextEl, op.el);
     op.el = nextEl;
   }
+  else if (op.type === 'innerHTML') op.el.innerHTML = op.val;
   else if (op.type === 'move' || op.type === 'resize') applyStyleSnapshot(op.el, op.val);
   else if (op.type === 'reorder') op.parent.insertBefore(op.el, op.newNext);
   else setInlineStyle(op.el, op.prop, op.val, op.priority);
   if (op.el === edSelEl) syncPanel(op.el);
+  updateSelBox();
   renderLayers();
 }
 
@@ -6157,15 +6200,19 @@ createBuilderElement = function(type, point) {
 function stripEditorOnlyAttrs(doc) {
   const removed = [];
   doc.querySelectorAll('[data-clonyfy-layer-id]').forEach(el => {
-    removed.push([el, el.getAttribute('data-clonyfy-layer-id')]);
+    removed.push([el, 'data-clonyfy-layer-id', el.getAttribute('data-clonyfy-layer-id')]);
     el.removeAttribute('data-clonyfy-layer-id');
+  });
+  doc.querySelectorAll('[data-clonyfy-editing]').forEach(el => {
+    removed.push([el, 'data-clonyfy-editing', el.getAttribute('data-clonyfy-editing')]);
+    el.removeAttribute('data-clonyfy-editing');
   });
   return removed;
 }
 
 function restoreEditorOnlyAttrs(removed) {
-  removed.forEach(([el, value]) => {
-    if (el?.isConnected && value) el.setAttribute('data-clonyfy-layer-id', value);
+  removed.forEach(([el, name, value]) => {
+    if (el?.isConnected && value != null) el.setAttribute(name, value);
   });
 }
 
@@ -6173,6 +6220,8 @@ async function savePage() {
   if (!editorOutDir || !editorRoute) return;
   const doc = document.getElementById('ed-frame').contentDocument;
   if (!doc) return;
+  finishInlineTextEdit();
+  const selectedBeforeSave = edSelEl;
   const ce = doc.getElementById('__ce__');
   if (ce) ce.remove();
   doc.querySelectorAll('.__s,.__h').forEach(el => el.classList.remove('__s','__h'));
@@ -6182,6 +6231,8 @@ async function savePage() {
   restoreEditorOnlyAttrs(removedEditorAttrs);
   disableEditorScripts(doc);
   injectEditorCSS();
+  if (selectedBeforeSave?.isConnected) selectedBeforeSave.classList.add('__s');
+  updateSelBox();
   const btn = document.getElementById('edSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
