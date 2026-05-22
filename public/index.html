@@ -2041,6 +2041,16 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 const isElectron = typeof window.electronAPI !== 'undefined';
 const API_TOKEN = window.__CLONYFY_TOKEN || '';
 function apiUrl(path) { return path; }
+function setAuthToken(token) {
+  if (!token) return;
+  localStorage.setItem('wc_auth_token', token);
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `wc_auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secure}`;
+}
+function clearAuthToken() {
+  localStorage.removeItem('wc_auth_token');
+  document.cookie = 'wc_auth_token=; Path=/; Max-Age=0; SameSite=Lax';
+}
 let slowLoadingCount = 0;
 let slowLoadingTimer = null;
 function beginSlowLoading(delay = 900) {
@@ -2175,7 +2185,7 @@ async function submitLogin(e) {
     });
     const data = await res.json();
     if (data.error) { showAuthError(data.error); return; }
-    localStorage.setItem('wc_auth_token', data.token);
+    setAuthToken(data.token);
     onAuthSuccess(data.user);
   } catch (err) {
     showAuthError('Connection error — is the server running?');
@@ -2200,7 +2210,7 @@ async function submitRegister(e) {
     });
     const data = await res.json();
     if (data.error) { showAuthError(data.error); return; }
-    localStorage.setItem('wc_auth_token', data.token);
+    setAuthToken(data.token);
     onAuthSuccess(data.user);
   } catch (err) {
     showAuthError('Connection error — is the server running?');
@@ -2315,7 +2325,7 @@ async function logout() {
   if (token) {
     try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }); } catch {}
   }
-  localStorage.removeItem('wc_auth_token');
+  clearAuthToken();
   currentUser = null;
   allJobs = [];
   activeJobId = null;
@@ -2935,7 +2945,7 @@ async function checkExistingSession() {
   const oauthToken = urlParams.get('oauth_token');
   const oauthError = urlParams.get('oauth_error');
   if (oauthToken) {
-    localStorage.setItem('wc_auth_token', oauthToken);
+    setAuthToken(oauthToken);
     window.history.replaceState({}, '', window.location.pathname);
   }
   if (oauthError) {
@@ -2947,12 +2957,13 @@ async function checkExistingSession() {
 
   const token = oauthToken || localStorage.getItem('wc_auth_token');
   if (!token) { revealForm(); return false; }
+  setAuthToken(token);
   authScreen.classList.add('auth-resuming');
   try {
     const signal = AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined;
     const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token }, signal });
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) localStorage.removeItem('wc_auth_token');
+      if (res.status === 401 || res.status === 403) clearAuthToken();
       revealForm();
       if (res.status !== 401 && res.status !== 403) showAuthError('Could not verify your session. Please refresh or try again.');
       return false;
@@ -3511,8 +3522,8 @@ async function switchJob(id) {
   showJob(job);
   if (job.status === 'done' && job.outDir) {
     editorOutDir = job.outDir;
-    loadEditorPages(job.outDir);
-    loadPreviewPages(job.outDir);
+    if (currentTab === 'editor') loadEditorPages(job.outDir);
+    if (currentTab === 'preview') loadPreviewPages(job.outDir);
   }
 }
 
@@ -3546,7 +3557,7 @@ async function loadPreviewPages(outDir) {
       return;
     }
     select.innerHTML = routes.map(r => `<option value="${encodeURIComponent(r)}">${r === '/' ? '/ (home)' : r}</option>`).join('');
-    loadPreviewRoute(encodeURIComponent(routes[0]));
+    await loadPreviewRoute(encodeURIComponent(routes[0]));
   } catch (e) {
     select.innerHTML = '';
     empty.textContent = 'Preview could not load pages: ' + (e.message || 'unknown error');
@@ -3560,15 +3571,21 @@ async function loadPreviewRoute(encodedRoute) {
   const route = decodeURIComponent(encodedRoute);
   const empty = document.getElementById('previewEmpty');
   const frame = document.getElementById('previewFrame');
-  empty.style.display = 'none';
-  frame.style.display = 'block';
+  empty.textContent = 'LOADING...';
+  empty.style.display = 'flex';
+  frame.style.display = 'none';
   try {
-    const res = await apiFetch('/api/page?outDir=' + encodeURIComponent(editorOutDir) + '&route=' + encodeURIComponent(route));
-    if (!res.ok) throw new Error('Preview request failed');
-    frame.removeAttribute('src');
-    frame.srcdoc = preparePreviewHtml(await res.text());
+    const src = '/api/page?outDir=' + encodeURIComponent(editorOutDir) + '&route=' + encodeURIComponent(route);
+    frame.onload = () => {
+      empty.style.display = 'none';
+      frame.style.display = 'block';
+      frame.onload = null;
+    };
+    frame.removeAttribute('srcdoc');
+    frame.src = src;
   } catch {
     frame.style.display = 'none';
+    frame.onload = null;
     empty.textContent = 'Preview could not load this page';
     empty.style.display = 'flex';
   }
@@ -4020,10 +4037,6 @@ function prepareEditorHtml(html) {
     script.setAttribute('type', 'text/plain');
   });
   return '<!doctype html>\n' + parsed.documentElement.outerHTML;
-}
-
-function preparePreviewHtml(html) {
-  return html;
 }
 
 function restoreEditorScripts(doc) {

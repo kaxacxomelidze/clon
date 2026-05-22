@@ -235,7 +235,12 @@ function _invalidateUserSessions(userId) {
 setInterval(() => { const now = Date.now(); for (const [t, e] of _sessionCache) if (now > e.exp) _sessionCache.delete(t); }, 120000);
 
 async function getSessionUser(req) {
-  const token = req.headers['x-auth-token'] || '';
+  const cookieToken = String(req.headers.cookie || '')
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith('wc_auth_token='))
+    ?.slice('wc_auth_token='.length);
+  const token = req.headers['x-auth-token'] || (cookieToken ? decodeURIComponent(cookieToken) : '');
   if (!token) return null;
   const hit = _sessionCache.get(token);
   if (hit) {
