@@ -938,6 +938,21 @@ function previewReplayPatch(assetMap, targetOrigin = '') {
 </script>`;
 }
 
+async function previewOutDirFromReferer(req) {
+  const raw = String(req.headers.referer || '');
+  if (!raw) return '';
+  try {
+    const ref = new URL(raw);
+    if (ref.pathname.startsWith('/share/')) {
+      const shareId = ref.pathname.slice(7).split('/')[0].replace(/[^a-z0-9]/gi, '');
+      const share = shareId ? await getShare(shareId) : null;
+      return share?.out_dir || '';
+    }
+    if (ref.pathname === '/api/page') return ref.searchParams.get('outDir') || '';
+  } catch {}
+  return '';
+}
+
 async function rewritePreviewAssetUrls(html, outDir) {
   const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   let out = String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
@@ -1415,6 +1430,24 @@ async function handleRequest(req, res) {
   }
   if (req.method === 'GET' && url.pathname === '/app') {
     return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
+  }
+  if (req.method === 'GET' && url.pathname.startsWith('/media/')) {
+    const outDir = await previewOutDirFromReferer(req);
+    if (outDir) {
+      const { map, targetOrigin } = await buildPreviewAssetContext(outDir);
+      const nextMediaPath = '/_next/static' + url.pathname;
+      const mapped = map[nextMediaPath + url.search] || map[nextMediaPath];
+      if (mapped) {
+        res.writeHead(302, { Location: mapped, 'Cache-Control': 'public, max-age=3600' });
+        res.end();
+        return;
+      }
+      if (targetOrigin) {
+        res.writeHead(302, { Location: targetOrigin + nextMediaPath + url.search, 'Cache-Control': 'public, max-age=3600' });
+        res.end();
+        return;
+      }
+    }
   }
   const staticExts = { '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
   const ext = url.pathname.match(/\.\w+$/)?.[0];
