@@ -326,6 +326,28 @@ h1.hero-h1{font-size:clamp(42px,6vw,82px);font-weight:900;line-height:1.02;lette
 .cta-btns{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
 .cta-note{margin-top:20px;font-size:12px;color:var(--text3)}
 
+/* Contact */
+.contact-section{border-top:1px solid var(--border);padding:96px 24px;background:linear-gradient(180deg,var(--bg),var(--bg2))}
+.contact-inner{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,520px);gap:56px;align-items:start}
+.contact-copy{max-width:480px}
+.contact-points{display:grid;gap:12px;margin-top:28px}
+.contact-point{font-size:13px;color:var(--text2);line-height:1.65;padding-left:18px;position:relative}
+.contact-point::before{content:'';position:absolute;left:0;top:.75em;width:6px;height:6px;border-radius:50%;background:var(--blue)}
+.contact-form{display:grid;grid-template-columns:1fr 1fr;gap:14px;background:var(--bg);border:1px solid var(--border2);border-radius:16px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.28)}
+.contact-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.contact-field.full{grid-column:1/-1}
+.contact-field label{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text3)}
+.contact-field input,.contact-field textarea{width:100%;border:1px solid var(--border2);border-radius:8px;background:var(--bg2);color:var(--text);font:inherit;font-size:13px;padding:11px 12px;outline:none;transition:border-color .15s,background .15s}
+.contact-field textarea{min-height:126px;resize:vertical;line-height:1.55}
+.contact-field input:focus,.contact-field textarea:focus{border-color:rgba(91,141,239,.55);background:#101010}
+.contact-submit-row{grid-column:1/-1;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.contact-submit{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:11px 22px;border-radius:9px;background:var(--grad);color:#fff;font-weight:800;font-size:13px;transition:opacity .15s,transform .15s}
+.contact-submit:hover{opacity:.9;transform:translateY(-1px)}
+.contact-submit:disabled{opacity:.6;transform:none;cursor:not-allowed}
+.contact-status{font-size:12px;color:var(--text3);min-height:18px}
+.contact-status.ok{color:var(--green)}
+.contact-status.err{color:var(--red)}
+
 /* ─── Footer ─────────────────────────────────────────── */
 footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(--bg)}
 .footer-grid{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:56px}
@@ -362,6 +384,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   .how-steps{grid-template-columns:repeat(2,1fr);gap:32px}
   .how-steps::before{display:none}
   .how-step{align-items:flex-start;text-align:left}
+  .contact-inner{grid-template-columns:1fr;gap:32px}
   .footer-grid{grid-template-columns:1fr 1fr;gap:36px}
   .app-mock{height:380px}
   .mock-editor{display:none}
@@ -378,6 +401,8 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   .stat{border-right:none;border-bottom:1px solid var(--border)}
   .stat:last-child{border-bottom:none}
   .logos-row{gap:28px}
+  .contact-section{padding:72px 18px}
+  .contact-form{grid-template-columns:1fr;padding:18px}
   .footer-grid{grid-template-columns:1fr;gap:28px}
   .mock-sidebar{width:140px}
   .app-mock{height:320px}
@@ -400,6 +425,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
       <a href="#product" class="nav-a" role="listitem">How it works</a>
       <a href="#pricing" class="nav-a" role="listitem">Pricing</a>
       <a href="#faq" class="nav-a" role="listitem">FAQ</a>
+      <a href="#contact" class="nav-a" role="listitem">Contact</a>
     </div>
     <div class="nav-right">
       <a href="https://github.com" class="nav-badge" aria-label="View on GitHub">
@@ -964,6 +990,47 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
 </section>
 
 <!-- ── CTA ── -->
+<section class="contact-section" id="contact" aria-label="Contact">
+  <div class="contact-inner">
+    <div class="contact-copy fade-up">
+      <div class="s-label">Contact</div>
+      <h2 class="s-title">Talk to CLONYFY</h2>
+      <p class="s-sub">Send your details and message. Every submission lands inside the admin panel so support can follow up from one place.</p>
+      <div class="contact-points">
+        <div class="contact-point">Use this for support, billing, custom cloning needs, or account questions.</div>
+        <div class="contact-point">Your phone and mail are saved with the message for faster replies.</div>
+      </div>
+    </div>
+    <form class="contact-form fade-up fade-up-d1" id="contact-form" onsubmit="submitContactForm(event)">
+      <div class="contact-field">
+        <label for="contact-name">Name</label>
+        <input id="contact-name" name="name" autocomplete="given-name" maxlength="80" required>
+      </div>
+      <div class="contact-field">
+        <label for="contact-lastname">Lastname</label>
+        <input id="contact-lastname" name="lastName" autocomplete="family-name" maxlength="80" required>
+      </div>
+      <div class="contact-field">
+        <label for="contact-phone">Phone</label>
+        <input id="contact-phone" name="phone" autocomplete="tel" maxlength="60" required>
+      </div>
+      <div class="contact-field">
+        <label for="contact-mail">Mail</label>
+        <input id="contact-mail" name="email" type="email" autocomplete="email" maxlength="120" required>
+      </div>
+      <div class="contact-field full">
+        <label for="contact-message">Message</label>
+        <textarea id="contact-message" name="message" maxlength="2000" required></textarea>
+      </div>
+      <div class="contact-submit-row">
+        <button class="contact-submit" id="contact-submit" type="submit">Send</button>
+        <span class="contact-status" id="contact-status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- CTA -->
 <section class="cta-section" aria-label="Call to action">
   <div class="cta-glow-l" aria-hidden="true"></div>
   <div class="cta-glow-r" aria-hidden="true"></div>
@@ -996,7 +1063,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
         <a href="https://twitter.com" class="footer-social" aria-label="Twitter / X">
           <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.259 5.63L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
         </a>
-        <a href="mailto:support@clonyfy.app" class="footer-social" aria-label="Email support">
+        <a href="#contact" class="footer-social" aria-label="Contact support">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
         </a>
       </div>
@@ -1016,14 +1083,14 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
       <a href="#faq">FAQ</a>
       <a href="/privacy">Privacy Policy</a>
       <a href="/tos">Terms of Service</a>
-      <a href="mailto:support@clonyfy.app">Support</a>
+      <a href="#contact">Support</a>
     </div>
 
     <div class="footer-col">
       <h4>Legal</h4>
       <a href="/privacy">Privacy Policy</a>
       <a href="/tos">Terms of Service</a>
-      <a href="mailto:support@clonyfy.app">Contact Us</a>
+      <a href="#contact">Contact Us</a>
     </div>
   </div>
 
@@ -1032,7 +1099,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
     <div class="footer-bottom-links">
       <a href="/privacy">Privacy</a>
       <a href="/tos">Terms</a>
-      <a href="mailto:support@clonyfy.app">Contact</a>
+      <a href="#contact">Contact</a>
     </div>
   </div>
 </footer>
@@ -1045,6 +1112,42 @@ const observer = new IntersectionObserver((entries) => {
 document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
 
 /* ── Terminal typewriter ── */
+async function submitContactForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.getElementById('contact-status');
+  const submit = document.getElementById('contact-submit');
+  const payload = {
+    name: form.elements.name.value.trim(),
+    lastName: form.elements.lastName.value.trim(),
+    phone: form.elements.phone.value.trim(),
+    email: form.elements.email.value.trim(),
+    message: form.elements.message.value.trim(),
+  };
+  status.className = 'contact-status';
+  status.textContent = '';
+  submit.disabled = true;
+  submit.textContent = 'Sending...';
+  try {
+    const res = await fetch('/api/support/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) throw new Error(data.error || 'Failed to send.');
+    form.reset();
+    status.className = 'contact-status ok';
+    status.textContent = 'Sent';
+  } catch (err) {
+    status.className = 'contact-status err';
+    status.textContent = err.message || 'Failed to send.';
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Send';
+  }
+}
+
 const lines = [
   { delay: 400,  html: '<span class="tc-dim">  Checking robots.txt…</span> <span class="tc-green">allowed</span>' },
   { delay: 900,  html: '<span class="tc-dim">  Fetching sitemap…</span> <span class="tc-green">found 38 URLs</span>' },
@@ -1342,6 +1445,8 @@ function sbShowContactForm() {
     <div style="margin-bottom:8px;font-size:13px">Sure! Leave us a message and we'll get back to you by email.</div>
     <div class="sb-contact-form" id="sb-contact-form">
       <input id="sb-cf-name" placeholder="Your name" maxlength="80">
+      <input id="sb-cf-lastname" placeholder="Lastname" maxlength="80">
+      <input id="sb-cf-phone" placeholder="Phone" maxlength="60">
       <input id="sb-cf-email" type="email" placeholder="Email address" maxlength="120">
       <textarea id="sb-cf-msg" placeholder="How can we help?" rows="3" maxlength="1000"></textarea>
       <button class="sb-submit-btn" id="sb-cf-submit" onclick="sbSubmitContact()">Send message</button>
@@ -1355,11 +1460,15 @@ function sbShowContactForm() {
 
 async function sbSubmitContact() {
   const name  = document.getElementById('sb-cf-name')?.value.trim();
+  const lastName = document.getElementById('sb-cf-lastname')?.value.trim();
+  const phone = document.getElementById('sb-cf-phone')?.value.trim();
   const email = document.getElementById('sb-cf-email')?.value.trim();
   const msg   = document.getElementById('sb-cf-msg')?.value.trim();
   const errEl = document.getElementById('sb-cf-err');
   const btn   = document.getElementById('sb-cf-submit');
   if (!name)  { errEl.style.display='block'; errEl.textContent='Name is required.'; return; }
+  if (!lastName) { errEl.style.display='block'; errEl.textContent='Lastname is required.'; return; }
+  if (!phone) { errEl.style.display='block'; errEl.textContent='Phone is required.'; return; }
   if (!email || !email.includes('@')) { errEl.style.display='block'; errEl.textContent='Valid email is required.'; return; }
   if (!msg)   { errEl.style.display='block'; errEl.textContent='Message is required.'; return; }
   errEl.style.display = 'none';
@@ -1368,9 +1477,10 @@ async function sbSubmitContact() {
     const r = await fetch('/api/support/contact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, message: msg }),
+      body: JSON.stringify({ name, lastName, phone, email, message: msg }),
     });
     const data = await r.json();
+    if (!r.ok || data.error) throw new Error(data.error || 'Failed to send.');
     document.getElementById('sb-contact-form').innerHTML =
       `<div style="color:#3ecf8e;font-size:13px;font-weight:600">✓ Sent! We'll reply to ${email} shortly.</div>`;
     sbContactMode = false;

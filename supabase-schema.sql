@@ -123,6 +123,19 @@ CREATE TABLE IF NOT EXISTS announcements (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS contact_submissions (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT NOT NULL,
+  message TEXT NOT NULL,
+  ip TEXT,
+  user_agent TEXT,
+  created_at TEXT NOT NULL,
+  read_at TEXT
+);
+
 -- Disable RLS for all tables (service role key bypasses anyway, but this keeps it clean)
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions DISABLE ROW LEVEL SECURITY;
@@ -134,3 +147,4 @@ ALTER TABLE promo_codes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE errors DISABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log DISABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE contact_submissions DISABLE ROW LEVEL SECURITY;

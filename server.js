@@ -21,6 +21,7 @@ import {
   getAllErrors, insertError, deleteError, clearErrors, pruneErrors,
   insertAudit, getAuditLog, getAuditCount, audit,
   insertAnnouncement, getAllAnnouncements,
+  insertContactSubmission, getContactSubmissions,
   getCloneByOutDir, uploadCloneFile, downloadCloneFile, saveCloneTextFile, getCloneTextFile,
 } from './db.js';
 
@@ -2611,6 +2612,12 @@ async function handleRequest(req, res) {
     return json(res, await getAllAnnouncements());
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/admin/contacts') {
+    if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
+    const limit = Math.max(1, Math.min(300, parseInt(url.searchParams.get('limit') || '100', 10) || 100));
+    return json(res, await getContactSubmissions(limit));
+  }
+
   // ── Payments ───────────────────────────────────────────────────────────────
 
   if (req.method === 'GET' && url.pathname === '/api/payments/settings') {
@@ -3562,22 +3569,43 @@ async function handleRequest(req, res) {
   // ── Support contact ────────────────────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/support/contact') {
     if (!checkRateLimit(`support:${ip}`, 3, 3600000)) return json(res, { error: 'Too many requests. Try again later.' }, 429);
-    const { name, email, message } = await readJsonBody(req);
-    if (!name || !email || !message) return json(res, { error: 'All fields are required.' }, 400);
-    if (!email.includes('@')) return json(res, { error: 'Invalid email.' }, 400);
+    const body = await readJsonBody(req);
+    const cleanName = String(body.name || '').trim().slice(0, 80);
+    const cleanLastName = String(body.lastName || body.lastname || '').trim().slice(0, 80);
+    const cleanPhone = String(body.phone || '').trim().slice(0, 60);
+    const cleanEmail = String(body.email || body.mail || '').trim().slice(0, 120);
+    const cleanMessage = String(body.message || '').trim().slice(0, 2000);
+    if (!cleanName || !cleanLastName || !cleanPhone || !cleanEmail || !cleanMessage) {
+      return json(res, { error: 'Name, lastname, phone, mail, and message are required.' }, 400);
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return json(res, { error: 'Invalid email.' }, 400);
+
+    await insertContactSubmission({
+      id: randomUUID(),
+      name: cleanName,
+      lastName: cleanLastName,
+      phone: cleanPhone,
+      email: cleanEmail,
+      message: cleanMessage,
+      ip,
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 300),
+      createdAt: new Date().toISOString(),
+    });
+
     const s = getCachedSettings();
     const supportEmail = s.support_email || s.smtp_from || '';
     if (supportEmail) {
-      const subject = `Support request from ${name}`;
+      const fullName = `${cleanName} ${cleanLastName}`.trim();
+      const subject = `Contact form: ${fullName}`;
       const body = renderEmail('support-contact', {
         SUBJECT: subject,
-        FROM_NAME: String(name).slice(0, 80),
-        FROM_EMAIL: String(email).slice(0, 120),
-        MESSAGE: String(message).slice(0, 2000).replace(/\n/g, '<br>'),
+        FROM_NAME: fullName,
+        FROM_EMAIL: cleanEmail,
+        MESSAGE: `Phone: ${htmlEsc(cleanPhone)}<br><br>${htmlEsc(cleanMessage).replace(/\n/g, '<br>')}`,
       });
       sendEmail(supportEmail, subject, body).catch(() => {});
     }
-    audit(null, String(name).slice(0,80), 'support_contact', `email=${email}`, ip);
+    audit(null, `${cleanName} ${cleanLastName}`.trim(), 'support_contact', `email=${cleanEmail}`, ip);
     return json(res, { ok: true });
   }
 

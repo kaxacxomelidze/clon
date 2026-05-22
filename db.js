@@ -398,6 +398,71 @@ export const getAllAnnouncements = () =>
 
 // ── Audit helper ──────────────────────────────────────────────────────────────
 
+const CONTACT_FALLBACK_KEY = 'contact_submissions';
+
+async function getFallbackContacts() {
+  const row = await getSetting(CONTACT_FALLBACK_KEY).catch(() => null);
+  try {
+    const parsed = JSON.parse(row?.value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveFallbackContacts(items) {
+  await setSetting(CONTACT_FALLBACK_KEY, JSON.stringify(items.slice(0, 500)));
+}
+
+export async function insertContactSubmission(c) {
+  const row = {
+    id: c.id,
+    name: c.name,
+    last_name: c.lastName,
+    phone: c.phone,
+    email: c.email,
+    message: c.message,
+    ip: c.ip || null,
+    user_agent: c.userAgent || null,
+    created_at: c.createdAt,
+    read_at: null,
+  };
+  try {
+    const { error } = await supabase.from('contact_submissions').insert(row);
+    if (!error) return;
+    if (!/relation .*contact_submissions|could not find the table|schema cache/i.test(error.message || '')) {
+      throw new Error(error.message);
+    }
+  } catch (err) {
+    if (!/contact_submissions|schema cache|does not exist/i.test(err?.message || '')) throw err;
+  }
+  const fallback = await getFallbackContacts();
+  fallback.unshift(row);
+  await saveFallbackContacts(fallback);
+}
+
+export async function getContactSubmissions(limit = 100) {
+  let tableRows = [];
+  try {
+    const { data, error } = await supabase
+      .from('contact_submissions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (!error) tableRows = data || [];
+  } catch {}
+  const fallbackRows = await getFallbackContacts();
+  const seen = new Set();
+  return [...tableRows, ...fallbackRows]
+    .filter((row) => {
+      if (!row?.id || seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    })
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    .slice(0, limit);
+}
+
 const CLONE_FILES_BUCKET = 'clone-files';
 let _cloneBucketReady = false;
 

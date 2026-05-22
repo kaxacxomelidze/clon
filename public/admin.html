@@ -342,6 +342,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
           Payments
           <span class="panel-tab-count" id="payments-count">0</span>
         </button>
+        <button class="panel-tab" id="tab-btn-contacts" onclick="switchTab('contacts')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+          Contact Forms
+          <span class="panel-tab-count" id="contacts-count">0</span>
+        </button>
         <button class="panel-tab" id="tab-btn-announce" onclick="switchTab('announce')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/></svg>
           Announce
@@ -566,6 +571,20 @@ tbody td{padding:11px 14px;vertical-align:middle}
         <div class="pagination" id="payments-pagination"></div>
       </div>
 
+      <!-- Contact Forms panel -->
+      <div id="panel-contacts" class="hidden">
+        <div class="panel-toolbar">
+          <span style="font-size:11px;color:var(--text3)" id="contacts-total-label"></span>
+          <button class="act-btn" style="margin-left:auto" onclick="loadContacts()">Refresh</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Lastname</th><th>Phone</th><th>Mail</th><th>Message</th><th>Sent</th></tr></thead>
+            <tbody id="contacts-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Announce panel -->
       <div id="panel-announce" class="hidden">
         <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -758,6 +777,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 // ── State ─────────────────────────────────────────────────────────────────────
 let adminToken = sessionStorage.getItem('wc_admin_token') || '';
 let allUsers = [];
+let contactsCache = [];
 let usersPage = 0;
 let usersTotal = 0;
 const USERS_PAGE_SIZE = 50;
@@ -917,6 +937,7 @@ async function refreshAll() {
       activeTab === 'clones' ? loadClones() : Promise.resolve(),
       activeTab === 'errors' ? loadErrors() : Promise.resolve(),
       activeTab === 'payments' ? loadPayments() : Promise.resolve(),
+      activeTab === 'contacts' ? loadContacts() : Promise.resolve(),
     ]);
     renderStats(stats);
     toast('Refreshed', 'ok');
@@ -943,7 +964,7 @@ function renderStats(s) {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
-  for (const t of ['users','clones','errors','promos','payments','settings','announce','audit']) {
+  for (const t of ['users','clones','errors','promos','payments','contacts','settings','announce','audit']) {
     document.getElementById(`panel-${t}`)?.classList.toggle('hidden', tab !== t);
     document.getElementById(`tab-btn-${t}`)?.classList.toggle('on', tab === t);
   }
@@ -951,6 +972,7 @@ function switchTab(tab) {
   if (tab === 'errors') loadErrors();
   if (tab === 'promos') loadPromos();
   if (tab === 'payments') loadPayments();
+  if (tab === 'contacts') loadContacts();
   if (tab === 'settings') loadAdminSettings();
   if (tab === 'announce') loadAnnouncements();
   if (tab === 'audit') loadAuditLog();
@@ -1280,6 +1302,35 @@ function renderPaymentsPagination(total, page, pageSize) {
     </div>`;
 }
 function goPayPage(p) { paymentsPage = p; loadPayments(); }
+
+async function loadContacts() {
+  try {
+    const data = await adminFetch('GET', '/api/admin/contacts?limit=300');
+    if (data.error) throw new Error(data.error);
+    contactsCache = Array.isArray(data) ? data : [];
+    document.getElementById('contacts-count').textContent = contactsCache.length;
+    document.getElementById('contacts-total-label').textContent = `${contactsCache.length} messages`;
+    renderContacts(contactsCache);
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function renderContacts(items) {
+  const tbody = document.getElementById('contacts-tbody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No contact messages</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(c => `
+    <tr>
+      <td><div class="user-name">${esc(c.name || '')}</div></td>
+      <td>${esc(c.last_name || c.lastName || '')}</td>
+      <td><a href="tel:${esc(c.phone || '')}" style="color:var(--blue)">${esc(c.phone || '')}</a></td>
+      <td><a href="mailto:${esc(c.email || '')}" style="color:var(--blue)">${esc(c.email || '')}</a></td>
+      <td class="error-summary-cell" title="${esc(c.message || '')}">${esc(c.message || '')}</td>
+      <td><span class="date-cell">${relTime(c.created_at || c.createdAt)}</span></td>
+    </tr>
+  `).join('');
+}
 
 async function refreshStats() {
   try {
