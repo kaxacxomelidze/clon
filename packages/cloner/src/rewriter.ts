@@ -6,8 +6,21 @@ import type { PageRecord, AssetEntry } from './types.js';
 function buildAssetMap(assets: AssetEntry[]): Map<string, string> {
   const m = new Map<string, string>();
   for (const a of assets) {
-    m.set(a.originalUrl, a.localPath);
-    m.set(a.originalUrl.split('?')[0].split('#')[0], a.localPath);
+    const variants = new Set<string>([
+      a.originalUrl,
+      a.originalUrl.split('?')[0].split('#')[0],
+    ]);
+
+    try {
+      const u = new URL(a.originalUrl);
+      variants.add(`${u.pathname}${u.search}${u.hash}`);
+      variants.add(`${u.pathname}${u.search}`);
+      variants.add(u.pathname);
+    } catch { /* asset URL should be absolute, but keep rewriting tolerant */ }
+
+    for (const key of variants) {
+      if (key && key !== '/') m.set(key, a.localPath);
+    }
   }
   return m;
 }
@@ -37,7 +50,7 @@ function rewriteUrl(value: string, assetMap: Map<string, string>, baseUrl: strin
 const URL_ATTRS: Record<string, string[]> = {
   '': ['src', 'href', 'action', 'data-src', 'data-href', 'data-url',
        'data-image', 'data-bg', 'data-background', 'data-video', 'data-poster',
-       'poster', 'srcset', 'style'],
+       'poster', 'srcset', 'imagesrcset', 'style'],
   'link': ['href'],
   'use': ['href', 'xlink:href'],
   'image': ['href', 'xlink:href'],
@@ -91,7 +104,7 @@ function rewriteAttrValue(
 ): string {
   if (!value) return value;
 
-  if (name === 'srcset') {
+  if (name === 'srcset' || name === 'imagesrcset') {
     return value.split(',').map((part) => {
       const trimmed = part.trim();
       const spaceIdx = trimmed.search(/\s/);
@@ -117,6 +130,42 @@ interface RewriteStats {
   attrsToRelative: number;   // same-origin links converted to relative (not assets, just nav links)
   styleUrlsRewritten: number;
   externalUrls: number;      // pointing to other origins — left as-is intentionally
+  inlineScriptUrlsRewritten: number;
+}
+
+function toEscapedSlash(value: string): string {
+  return value.replace(/\//g, '\\/');
+}
+
+function toUnicodeEscapedSlash(value: string): string {
+  return value.replace(/\//g, '\\u002F');
+}
+
+function replaceAllLiteral(input: string, search: string, replacement: string): string {
+  return search ? input.split(search).join(replacement) : input;
+}
+
+function rewriteInlineAssetReferences(text: string, assetMap: Map<string, string>): string {
+  let output = text;
+  const entries = [...assetMap.entries()]
+    .filter(([from, to]) => from.length > 1 && to && from !== to)
+    .sort((a, b) => b[0].length - a[0].length);
+
+  for (const [from, to] of entries) {
+    output = replaceAllLiteral(output, from, to);
+
+    const escapedFrom = toEscapedSlash(from);
+    if (escapedFrom !== from) {
+      output = replaceAllLiteral(output, escapedFrom, toEscapedSlash(to));
+    }
+
+    const unicodeEscapedFrom = toUnicodeEscapedSlash(from);
+    if (unicodeEscapedFrom !== from) {
+      output = replaceAllLiteral(output, unicodeEscapedFrom, toUnicodeEscapedSlash(to));
+    }
+  }
+
+  return output;
 }
 
 function walkNode(
@@ -151,6 +200,17 @@ function walkNode(
         const before = textNode.value;
         textNode.value = rewriteCssUrls(before, assetMap, baseUrl);
         if (textNode.value !== before) stats.styleUrlsRewritten++;
+      }
+    }
+  }
+
+  if (tagName === 'script' && el.childNodes) {
+    for (const child of el.childNodes) {
+      if (child.nodeName === '#text') {
+        const textNode = child as parse5.DefaultTreeAdapterMap['textNode'];
+        const before = textNode.value;
+        textNode.value = rewriteInlineAssetReferences(before, assetMap);
+        if (textNode.value !== before) stats.inlineScriptUrlsRewritten++;
       }
     }
   }
@@ -232,7 +292,13 @@ function preprocessHtml(html: string): string {
 export function rewriteHtml(record: PageRecord, origin: string): string {
   const assetMap = buildAssetMap(record.assets);
   const failedAssets = new Set<string>(record.failedAssets ?? []);
-  const stats: RewriteStats = { attrsRewritten: 0, attrsToRelative: 0, styleUrlsRewritten: 0, externalUrls: 0 };
+  const stats: RewriteStats = {
+    attrsRewritten: 0,
+    attrsToRelative: 0,
+    styleUrlsRewritten: 0,
+    externalUrls: 0,
+    inlineScriptUrlsRewritten: 0,
+  };
   const baseUrl = record.url || origin;
 
   const doc = parse5.parse(preprocessHtml(record.html));
@@ -242,7 +308,7 @@ export function rewriteHtml(record: PageRecord, origin: string): string {
 
   logger.debug(
     `  [REWRITE] ${record.url}\n` +
-    `    attrs_rewritten_to_assets=${stats.attrsRewritten}  style_blocks_rewritten=${stats.styleUrlsRewritten}\n` +
+    `    attrs_rewritten_to_assets=${stats.attrsRewritten}  style_blocks_rewritten=${stats.styleUrlsRewritten}  inline_scripts_rewritten=${stats.inlineScriptUrlsRewritten}\n` +
     `    attrs_converted_to_relative=${stats.attrsToRelative}  external_urls_unchanged=${stats.externalUrls}`,
   );
 

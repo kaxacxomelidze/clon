@@ -10199,8 +10199,20 @@ function parse(html, options) {
 function buildAssetMap(assets) {
   const m = /* @__PURE__ */ new Map();
   for (const a of assets) {
-    m.set(a.originalUrl, a.localPath);
-    m.set(a.originalUrl.split("?")[0].split("#")[0], a.localPath);
+    const variants = /* @__PURE__ */ new Set([
+      a.originalUrl,
+      a.originalUrl.split("?")[0].split("#")[0]
+    ]);
+    try {
+      const u = new URL(a.originalUrl);
+      variants.add(`${u.pathname}${u.search}${u.hash}`);
+      variants.add(`${u.pathname}${u.search}`);
+      variants.add(u.pathname);
+    } catch {
+    }
+    for (const key of variants) {
+      if (key && key !== "/") m.set(key, a.localPath);
+    }
   }
   return m;
 }
@@ -10235,6 +10247,7 @@ var URL_ATTRS = {
     "data-poster",
     "poster",
     "srcset",
+    "imagesrcset",
     "style"
   ],
   "link": ["href"],
@@ -10277,7 +10290,7 @@ function isMetaImageContent(el) {
 }
 function rewriteAttrValue(name, value, assetMap, baseUrl) {
   if (!value) return value;
-  if (name === "srcset") {
+  if (name === "srcset" || name === "imagesrcset") {
     return value.split(",").map((part) => {
       const trimmed = part.trim();
       const spaceIdx = trimmed.search(/\s/);
@@ -10294,6 +10307,31 @@ function rewriteAttrValue(name, value, assetMap, baseUrl) {
     });
   }
   return rewriteUrl(value, assetMap, baseUrl);
+}
+function toEscapedSlash(value) {
+  return value.replace(/\//g, "\\/");
+}
+function toUnicodeEscapedSlash(value) {
+  return value.replace(/\//g, "\\u002F");
+}
+function replaceAllLiteral(input, search, replacement) {
+  return search ? input.split(search).join(replacement) : input;
+}
+function rewriteInlineAssetReferences(text, assetMap) {
+  let output = text;
+  const entries = [...assetMap.entries()].filter(([from, to]) => from.length > 1 && to && from !== to).sort((a, b) => b[0].length - a[0].length);
+  for (const [from, to] of entries) {
+    output = replaceAllLiteral(output, from, to);
+    const escapedFrom = toEscapedSlash(from);
+    if (escapedFrom !== from) {
+      output = replaceAllLiteral(output, escapedFrom, toEscapedSlash(to));
+    }
+    const unicodeEscapedFrom = toUnicodeEscapedSlash(from);
+    if (unicodeEscapedFrom !== from) {
+      output = replaceAllLiteral(output, unicodeEscapedFrom, toUnicodeEscapedSlash(to));
+    }
+  }
+  return output;
 }
 function walkNode(node, assetMap, origin, baseUrl, stats, failedAssets) {
   if (node.nodeName === "#text" || node.nodeName === "#comment" || node.nodeName === "#document") return;
@@ -10316,6 +10354,16 @@ function walkNode(node, assetMap, origin, baseUrl, stats, failedAssets) {
         const before = textNode.value;
         textNode.value = rewriteCssUrls(before, assetMap, baseUrl);
         if (textNode.value !== before) stats.styleUrlsRewritten++;
+      }
+    }
+  }
+  if (tagName === "script" && el.childNodes) {
+    for (const child of el.childNodes) {
+      if (child.nodeName === "#text") {
+        const textNode = child;
+        const before = textNode.value;
+        textNode.value = rewriteInlineAssetReferences(before, assetMap);
+        if (textNode.value !== before) stats.inlineScriptUrlsRewritten++;
       }
     }
   }
@@ -10384,7 +10432,13 @@ function preprocessHtml(html) {
 function rewriteHtml(record, origin) {
   const assetMap = buildAssetMap(record.assets);
   const failedAssets = new Set(record.failedAssets ?? []);
-  const stats = { attrsRewritten: 0, attrsToRelative: 0, styleUrlsRewritten: 0, externalUrls: 0 };
+  const stats = {
+    attrsRewritten: 0,
+    attrsToRelative: 0,
+    styleUrlsRewritten: 0,
+    externalUrls: 0,
+    inlineScriptUrlsRewritten: 0
+  };
   const baseUrl = record.url || origin;
   const doc = parse(preprocessHtml(record.html));
   for (const child of doc.childNodes) {
@@ -10392,7 +10446,7 @@ function rewriteHtml(record, origin) {
   }
   logger.debug(
     `  [REWRITE] ${record.url}
-    attrs_rewritten_to_assets=${stats.attrsRewritten}  style_blocks_rewritten=${stats.styleUrlsRewritten}
+    attrs_rewritten_to_assets=${stats.attrsRewritten}  style_blocks_rewritten=${stats.styleUrlsRewritten}  inline_scripts_rewritten=${stats.inlineScriptUrlsRewritten}
     attrs_converted_to_relative=${stats.attrsToRelative}  external_urls_unchanged=${stats.externalUrls}`
   );
   return serialize(doc);
@@ -10877,4 +10931,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-44USFTRN.js.map
+//# sourceMappingURL=chunk-HOJLZAQ6.js.map
