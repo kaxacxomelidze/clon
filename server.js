@@ -1292,16 +1292,18 @@ async function handleRequest(req, res) {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  // Content-Security-Policy — blocks inline data: URI scripts, rogue iframes, etc.
-  // unsafe-inline is required because the HTML files use inline <script> and <style>.
+  // Content-Security-Policy.
+  // Cloned-site previews run inside the app shell and may need captured/external scripts,
+  // animation workers, blob URLs, and runtime eval used by framework bundles.
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' js.stripe.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:",
     "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
     "font-src 'self' fonts.gstatic.com data:",
     "img-src 'self' data: blob: https:",
-    "connect-src 'self' api.stripe.com",
-    "frame-src js.stripe.com",
+    "connect-src 'self' https: wss:",
+    "frame-src 'self' https: blob: data: about:",
+    "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
