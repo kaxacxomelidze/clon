@@ -3686,6 +3686,22 @@ async function exportZip() {
   const job = allJobs.find(j => j.id === activeJobId);
   if (!job?.outDir) return;
   const zipName = (job.outDir.split(/[\\/]/).pop() || 'clone') + '.zip';
+  let saveHandle = null;
+  if (window.showSaveFilePicker) {
+    try {
+      saveHandle = await window.showSaveFilePicker({
+        suggestedName: zipName,
+        types: [{ description: 'ZIP archive', accept: { 'application/zip': ['.zip'] } }],
+      });
+    } catch (saveErr) {
+      if (saveErr?.name === 'AbortError') {
+        toast('ZIP save cancelled', 'warn');
+        return;
+      }
+      console.warn('[ZIP SAVE PICKER]', saveErr);
+      toast('Save picker unavailable, using browser download', 'warn');
+    }
+  }
   try {
     toast('Building ZIP…', 'inf');
     const token = localStorage.getItem('wc_auth_token') || '';
@@ -3694,25 +3710,12 @@ async function exportZip() {
     });
     if (!dlRes.ok) { const d = await dlRes.json().catch(() => ({})); throw new Error(d.error || `HTTP ${dlRes.status}`); }
     const blob = await dlRes.blob();
-    if (window.showSaveFilePicker) {
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: zipName,
-          types: [{ description: 'ZIP archive', accept: { 'application/zip': ['.zip'] } }],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        toast('ZIP saved where you selected', 'ok');
-        return;
-      } catch (saveErr) {
-        if (saveErr?.name === 'AbortError') {
-          toast('ZIP save cancelled', 'warn');
-          return;
-        }
-        console.warn('[ZIP SAVE PICKER]', saveErr);
-        toast('Save picker unavailable, using browser download', 'warn');
-      }
+    if (saveHandle) {
+      const writable = await saveHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      toast('ZIP saved where you selected', 'ok');
+      return;
     }
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');

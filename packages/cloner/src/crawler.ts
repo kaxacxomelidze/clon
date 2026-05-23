@@ -75,8 +75,17 @@ async function getChromiumLaunchOptions(chromium: ChromiumLauncher) {
   const playwrightPath = IS_SERVERLESS ? '' : chromium.executablePath();
   const useBundledChromium = shouldUseBundledChromium(playwrightPath);
   const channel = systemBrowserChannel(playwrightPath);
-  const sparticuzChromium = useBundledChromium ? (await import('@sparticuz/chromium')).default : null;
-  const executablePath = useBundledChromium ? await sparticuzChromium.executablePath() : undefined;
+  let sparticuzChromium: typeof import('@sparticuz/chromium').default | null = null;
+  let executablePath: string | undefined;
+  if (useBundledChromium) {
+    try {
+      sparticuzChromium = (await import('@sparticuz/chromium')).default;
+      executablePath = await sparticuzChromium.executablePath();
+    } catch (err) {
+      logger.warn(`  [BROWSER] Bundled Chromium unavailable: ${(err as Error).message}`);
+      executablePath = undefined;
+    }
+  }
 
   if (useBundledChromium) {
     logger.debug(`  [BROWSER] Using bundled Chromium: ${executablePath}`);
@@ -88,7 +97,7 @@ async function getChromiumLaunchOptions(chromium: ChromiumLauncher) {
     executablePath,
     channel,
     args: [
-      ...(useBundledChromium ? sparticuzChromium.args : []),
+      ...(sparticuzChromium ? sparticuzChromium.args : []),
       '--disable-blink-features=AutomationControlled',
       '--no-sandbox',
       '--disable-setuid-sandbox',

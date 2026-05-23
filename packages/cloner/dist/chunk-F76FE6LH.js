@@ -1743,8 +1743,17 @@ async function getChromiumLaunchOptions(chromium) {
   const playwrightPath = IS_SERVERLESS2 ? "" : chromium.executablePath();
   const useBundledChromium = shouldUseBundledChromium(playwrightPath);
   const channel = systemBrowserChannel(playwrightPath);
-  const sparticuzChromium = useBundledChromium ? (await import("@sparticuz/chromium")).default : null;
-  const executablePath = useBundledChromium ? await sparticuzChromium.executablePath() : void 0;
+  let sparticuzChromium = null;
+  let executablePath;
+  if (useBundledChromium) {
+    try {
+      sparticuzChromium = (await import("@sparticuz/chromium")).default;
+      executablePath = await sparticuzChromium.executablePath();
+    } catch (err) {
+      logger.warn(`  [BROWSER] Bundled Chromium unavailable: ${err.message}`);
+      executablePath = void 0;
+    }
+  }
   if (useBundledChromium) {
     logger.debug(`  [BROWSER] Using bundled Chromium: ${executablePath}`);
   } else if (channel) {
@@ -1754,7 +1763,7 @@ async function getChromiumLaunchOptions(chromium) {
     executablePath,
     channel,
     args: [
-      ...useBundledChromium ? sparticuzChromium.args : [],
+      ...sparticuzChromium ? sparticuzChromium.args : [],
       "--disable-blink-features=AutomationControlled",
       "--no-sandbox",
       "--disable-setuid-sandbox"
@@ -10936,4 +10945,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-LO2UO6ZZ.js.map
+//# sourceMappingURL=chunk-F76FE6LH.js.map
