@@ -1069,17 +1069,20 @@ function htmlEsc(value) {
   }[ch]));
 }
 
-function shareRouteFromPath(pathname, shareId) {
+function shareRouteFromPath(pathname, shareId, search = '') {
   let rest = pathname.slice(`/share/${shareId}`.length) || '/';
   try { rest = decodeURIComponent(rest); } catch {}
   rest = rest.replace(/\/+/g, '/');
-  return rest.startsWith('/') ? rest : `/${rest}`;
+  const route = rest.startsWith('/') ? rest : `/${rest}`;
+  return search && search !== '?' ? `${route}${search}` : route;
 }
 
 function shareRouteCandidates(route) {
   const clean = route.split('#')[0].split('?')[0] || '/';
   const noSlash = clean.replace(/\/$/, '') || '/';
-  const candidates = [clean, noSlash];
+  const query = route.includes('?') ? route.slice(route.indexOf('?')) : '';
+  const candidates = [route, clean, noSlash];
+  if (query && clean !== '/') candidates.push(`${clean}${query}`, `${noSlash}${query}`);
   if (clean.endsWith('.html')) candidates.push(clean.slice(0, -5) || '/');
   else candidates.push(`${noSlash}.html`);
   candidates.push(`${noSlash}/index`, `${noSlash}/index.html`);
@@ -1095,25 +1098,86 @@ function resolveSharedRoute(map, requestedRoute, defaultRoute = '/') {
   return { route: requestedRoute, filename: null };
 }
 
-function rewriteSharedNavigationUrls(html, shareId) {
+function sharedNavigationPatch(shareId, targetOrigin = '') {
   const shareBase = `/share/${shareId}`;
+  return `<script data-clonyfy-share-nav>
+(() => {
+  const shareBase = ${JSON.stringify(shareBase)};
+  const targetOrigin = ${JSON.stringify(String(targetOrigin || '').replace(/\/$/, ''))};
+  const sameShare = (url) => url.origin === location.origin && url.pathname.startsWith(shareBase);
+  const shareUrl = (value) => {
+    if (!value || /^#/.test(String(value))) return value;
+    try {
+      const url = new URL(value, location.href);
+      if (sameShare(url) || url.pathname.startsWith('/api/') || url.pathname.startsWith('/_assets/')) return value;
+      if (url.origin === location.origin || (targetOrigin && url.origin === targetOrigin)) {
+        return shareBase + (url.pathname === '/' ? '/' : url.pathname) + url.search + url.hash;
+      }
+    } catch {}
+    return value;
+  };
+  document.addEventListener('click', (event) => {
+    const a = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+    if (!a || a.target || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const next = shareUrl(a.getAttribute('href'));
+    if (next && next !== a.getAttribute('href')) {
+      event.preventDefault();
+      location.href = next;
+    }
+  }, true);
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!form || !form.getAttribute) return;
+    const next = shareUrl(form.getAttribute('action') || location.href);
+    if (next && next !== form.getAttribute('action')) form.setAttribute('action', next);
+  }, true);
+  for (const name of ['pushState', 'replaceState']) {
+    const native = history[name];
+    history[name] = function(state, title, url) {
+      if (url != null) url = shareUrl(url);
+      return native.call(this, state, title, url);
+    };
+  }
+})();
+</script>`;
+}
+
+function injectSharedNavigationPatch(html, shareId, targetOrigin) {
+  if (String(html).includes('data-clonyfy-share-nav')) return html;
+  const patch = sharedNavigationPatch(shareId, targetOrigin);
+  if (html.includes('</body>')) return html.replace('</body>', `${patch}</body>`);
+  return html + patch;
+}
+
+function rewriteSharedNavigationUrls(html, shareId, targetOrigin = '') {
+  const shareBase = `/share/${shareId}`;
+  const cleanTargetOrigin = String(targetOrigin || '').replace(/\/$/, '');
   const rewrite = (raw) => {
     if (!raw) return raw;
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(raw)) return raw;
+    if (/^#/i.test(raw)) return raw;
+    if (/^(?:mailto|tel|sms|javascript|data|blob):/i.test(raw)) return raw;
     if (raw.startsWith('/api/') || raw.startsWith('/_assets/') || raw.startsWith('/share/')) return raw;
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)) {
+      try {
+        const u = new URL(raw, cleanTargetOrigin || undefined);
+        if (cleanTargetOrigin && u.origin === cleanTargetOrigin) return `${shareBase}${u.pathname}${u.search}${u.hash}`;
+      } catch {}
+      return raw;
+    }
 
     if (raw === '/') return `${shareBase}/`;
     if (raw.startsWith('/#')) return `${shareBase}/${raw.slice(1)}`;
     if (raw.startsWith('/')) return `${shareBase}${raw}`;
     return `${shareBase}/${raw.replace(/^\.?\//, '')}`;
   };
-  return String(html).replace(/\b(href|action)=("([^"]*)"|'([^']*)')/gi, (match, attr, quoted, dbl, sgl) => {
+  const rewritten = String(html).replace(/\b(href|action)=("([^"]*)"|'([^']*)')/gi, (match, attr, quoted, dbl, sgl) => {
     const value = dbl ?? sgl ?? '';
     const next = rewrite(value);
     if (next === value) return match;
     const quote = quoted.startsWith("'") ? "'" : '"';
     return `${attr}=${quote}${next}${quote}`;
   });
+  return injectSharedNavigationPatch(rewritten, shareId, cleanTargetOrigin);
 }
 
 function routeFilename(route) {
@@ -2400,9 +2464,9 @@ async function handleRequest(req, res) {
       const hash = createHash('sha256').update(share.salt + pw + SHARE_PASSWORD_PEPPER).digest('hex');
       if (hash !== share.password_hash) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.')); return; }
     }
-    const map = await loadRouteMapAsync(share.out_dir);
+    const map = await loadRouteMapAsync(share.out_dir) || await inferRouteMapFromCapturedPages(share.out_dir);
     if (!map) { res.writeHead(404); res.end('Clone no longer exists'); return; }
-    const requestedRoute = shareRouteFromPath(url.pathname, shareId);
+    const requestedRoute = shareRouteFromPath(url.pathname, shareId, url.search);
     const defaultRoute = share.route || '/';
     const resolved = resolveSharedRoute(map, requestedRoute, defaultRoute);
     const filename = resolved.filename;
@@ -2411,7 +2475,9 @@ async function handleRequest(req, res) {
     if (!data) { res.writeHead(404); res.end('Page file missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     const previewHtml = await rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir);
-    res.end(rewriteSharedNavigationUrls(previewHtml, shareId));
+    const manifestData = await readCloneFile(share.out_dir, 'manifest.json').catch(() => null);
+    const manifest = manifestData ? safeJsonParse(manifestData.toString('utf8'), null) : null;
+    res.end(rewriteSharedNavigationUrls(previewHtml, shareId, manifest?.targetOrigin || ''));
     return;
   }
 
