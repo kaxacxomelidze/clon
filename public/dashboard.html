@@ -406,6 +406,8 @@ const PLAN_LABELS = {
 };
 const PLAN_ALIASES = { popular:'growth', pro:'growth', scale:'unlimited', enterprise:'unlimited' };
 function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
+const AUTH_TOKEN_KEY = 'wc_auth_token';
+const DASH_CACHE_KEY = 'wc_dashboard_cache';
 const PLANS = [
   {
     key: 'starter', label: 'Starter',
@@ -452,7 +454,7 @@ function beginSlowLoading(delay = 900) {
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body, options = {}) {
-  const token = localStorage.getItem('wc_auth_token') || '';
+  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
   const doneLoading = options.silentLoading ? () => {} : beginSlowLoading();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
@@ -463,7 +465,14 @@ async function apiFetch(method, path, body, options = {}) {
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
-    return res.json();
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    data._status = res.status;
+    if (res.status === 401 || res.status === 403) {
+      const err = new Error(data.error || 'Not authenticated');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
   } finally {
     clearTimeout(timeout);
     doneLoading();
@@ -482,7 +491,7 @@ async function init() {
 
   const impersonateToken = urlParams.get('impersonate_token');
   if (impersonateToken) {
-    localStorage.setItem('wc_auth_token', impersonateToken);
+    localStorage.setItem(AUTH_TOKEN_KEY, impersonateToken);
     history.replaceState(null, '', '/dashboard');
   }
 
@@ -490,7 +499,7 @@ async function init() {
   const stripeSessionId = urlParams.get('session_id');
   if (stripeResult) history.replaceState(null, '', '/dashboard');
 
-  const token = localStorage.getItem('wc_auth_token');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) { location.href = '/'; return; }
 
   try {
@@ -504,7 +513,8 @@ async function init() {
     const settingsPromise = apiFetch('GET', '/api/payments/settings', null, { silentLoading: true });
     const billingPromise = apiFetch('GET', '/api/user/billing', null, { silentLoading: true });
     dashData = await apiFetch('GET', '/api/user/dashboard');
-    if (dashData.error) { location.href = '/'; return; }
+    if (dashData.error) throw new Error(dashData.error);
+    try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(dashData)); } catch {}
 
     if (dashData.impersonatedBy) {
       const banner = document.createElement('div');
@@ -515,16 +525,37 @@ async function init() {
 
     renderDashboard(dashData);
 
-    const [settings, billing] = await Promise.all([settingsPromise, billingPromise]);
-    dashPaySettings = settings || dashPaySettings;
-    renderBilling(billing.payments || []);
+    const [settingsResult, billingResult] = await Promise.allSettled([settingsPromise, billingPromise]);
+    if (settingsResult.status === 'fulfilled' && settingsResult.value && !settingsResult.value.error) {
+      dashPaySettings = settingsResult.value;
+    }
+    if (billingResult.status === 'fulfilled' && billingResult.value && !billingResult.value.error) {
+      renderBilling(billingResult.value.payments || []);
+    } else {
+      renderBilling([]);
+    }
 
     document.getElementById('field-name').value = dashData.user.name || '';
     document.getElementById('field-email').value = dashData.user.email || '';
 
     if (stripeResult === 'success') toast('Payment successful — your plan is now active!', 'ok');
     else if (stripeResult === 'cancelled') toast('Checkout cancelled. No charge was made.', 'inf');
-  } catch { toast('Failed to load dashboard', 'err'); }
+  } catch(e) {
+    if (e.status === 401 || e.status === 403) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(DASH_CACHE_KEY);
+      location.href = '/';
+      return;
+    }
+    const cached = (() => { try { return JSON.parse(localStorage.getItem(DASH_CACHE_KEY) || 'null'); } catch { return null; } })();
+    if (cached) {
+      dashData = cached;
+      renderDashboard(dashData);
+      toast('Dashboard is loading slowly. Showing cached data while you retry.', 'warn');
+      return;
+    }
+    toast(e.message || 'Failed to load dashboard. Please refresh.', 'err');
+  }
 }
 
 // ── Render dashboard ──────────────────────────────────────────────────────────
@@ -809,7 +840,7 @@ async function saveProfile() {
 
 // ── GDPR ──────────────────────────────────────────────────────────────────────
 function exportMyData() {
-  const token = localStorage.getItem('wc_auth_token') || '';
+  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
   fetch('/api/user/export', { headers: { 'X-Auth-Token': token } })
     .then(r => r.blob())
     .then(blob => {
@@ -832,15 +863,16 @@ function confirmDeleteAccount() {
       const pw = document.getElementById('del-account-pw')?.value || '';
       if (!pw) { toast('Password is required', 'err'); return; }
       try {
-        const token = localStorage.getItem('wc_auth_token') || '';
+        const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
         const res = await fetch('/api/user/account', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
           body: JSON.stringify({ password: pw }),
         });
-        const r = await res.json();
+        const r = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         if (r.error) throw new Error(r.error);
-        localStorage.removeItem('wc_auth_token');
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(DASH_CACHE_KEY);
         toast('Account deleted', 'ok');
         setTimeout(() => { location.href = '/'; }, 1800);
       } catch(e) { toast(e.message, 'err'); }
@@ -851,9 +883,10 @@ function confirmDeleteAccount() {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function logout() {
-  const token = localStorage.getItem('wc_auth_token');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (token) fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }).catch(() => {});
-  localStorage.removeItem('wc_auth_token');
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(DASH_CACHE_KEY);
   location.href = '/';
 }
 

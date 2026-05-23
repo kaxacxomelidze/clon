@@ -2040,16 +2040,25 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 <script>
 const isElectron = typeof window.electronAPI !== 'undefined';
 const API_TOKEN = window.__CLONYFY_TOKEN || '';
+const AUTH_TOKEN_KEY = 'wc_auth_token';
+const AUTH_USER_KEY = 'wc_auth_user';
 function apiUrl(path) { return path; }
 function setAuthToken(token) {
   if (!token) return;
-  localStorage.setItem('wc_auth_token', token);
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
   const secure = location.protocol === 'https:' ? '; Secure' : '';
   document.cookie = `wc_auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secure}`;
 }
 function clearAuthToken() {
-  localStorage.removeItem('wc_auth_token');
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
   document.cookie = 'wc_auth_token=; Path=/; Max-Age=0; SameSite=Lax';
+}
+function getCachedAuthUser() {
+  try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY) || 'null'); } catch { return null; }
+}
+function setCachedAuthUser(user) {
+  try { if (user) localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); } catch {}
 }
 let slowLoadingCount = 0;
 let slowLoadingTimer = null;
@@ -2079,7 +2088,7 @@ function apiFetch(path, init) {
   delete next.timeoutMs;
   next.headers = Object.assign({}, next.headers || {});
   if (API_TOKEN) next.headers['X-CLONYFY-Token'] = API_TOKEN;
-  const authToken = localStorage.getItem('wc_auth_token');
+  const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
   if (authToken) next.headers['X-Auth-Token'] = authToken;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs);
@@ -2258,6 +2267,7 @@ async function submitRegister(e) {
 function onAuthSuccess(user) {
   user.plan = normalizePlan(user.plan || user.rawPlan);
   currentUser = user;
+  setCachedAuthUser(user);
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('titlebarUser').style.display = 'flex';
   document.getElementById('userName').textContent = user.name;
@@ -2358,7 +2368,7 @@ async function submitForgot(e) {
 }
 
 async function logout() {
-  const token = localStorage.getItem('wc_auth_token');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (token) {
     try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }); } catch {}
   }
@@ -3003,22 +3013,38 @@ async function checkExistingSession() {
     return false;
   }
 
-  const token = oauthToken || localStorage.getItem('wc_auth_token');
+  const token = oauthToken || localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) { revealForm(); return false; }
   setAuthToken(token);
+  const cachedUser = getCachedAuthUser();
   authScreen.classList.add('auth-resuming');
   try {
-    const signal = AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined;
+    const signal = AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined;
     const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token }, signal });
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) clearAuthToken();
+      if (res.status === 401 || res.status === 403) {
+        clearAuthToken();
+        revealForm();
+        return false;
+      }
+      if (cachedUser) {
+        onAuthSuccess(cachedUser);
+        toast('Session check is slow. Using cached account while retrying.', 'warn');
+        return true;
+      }
       revealForm();
-      if (res.status !== 401 && res.status !== 403) showAuthError('Could not verify your session. Please refresh or try again.');
+      showAuthError('Could not verify your session. Please refresh or try again.');
       return false;
     }
     const data = await readJsonResponse(res, 'Session check');
     if (data.user) { onAuthSuccess(data.user); return true; }
-  } catch {}
+  } catch {
+    if (cachedUser) {
+      onAuthSuccess(cachedUser);
+      toast('Connection is slow. Using cached account while retrying.', 'warn');
+      return true;
+    }
+  }
   revealForm();
   return false;
 }
@@ -3729,7 +3755,7 @@ async function exportZip() {
   }
   try {
     toast('Building ZIP…', 'inf');
-    const token = localStorage.getItem('wc_auth_token') || '';
+    const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
     const dlRes = await fetch(`/api/download-zip?outDir=${encodeURIComponent(job.outDir)}`, {
       headers: token ? { 'X-Auth-Token': token } : {},
     });
