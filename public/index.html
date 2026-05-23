@@ -2114,6 +2114,18 @@ async function readJsonResponse(res, label = 'Request') {
   if (!res.ok || payload?.error) throw new Error(payload?.error || `HTTP ${res.status}`);
   return payload;
 }
+async function readJsonBody(res, label = 'Request') {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    const clean = text.trim();
+    if (/^<!doctype html|^<html[\s>]/i.test(clean)) {
+      throw new Error(`${label} returned HTML instead of JSON. Please refresh and try again.`);
+    }
+    throw new Error(`${label} returned invalid JSON.`);
+  }
+}
 function deferAppWork(fn, delay = 0) {
   const run = () => { try { fn(); } catch {} };
   if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1200 });
@@ -2207,8 +2219,8 @@ async function submitLogin(e) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, remember }),
     });
-    const data = await res.json();
-    if (data.error) { showAuthError(data.error); return; }
+    const data = await readJsonBody(res, 'Login');
+    if (!res.ok || data?.error || !data?.token) { showAuthError(data?.error || `HTTP ${res.status}`); return; }
     setAuthToken(data.token);
     onAuthSuccess(data.user);
   } catch (err) {
@@ -2232,8 +2244,8 @@ async function submitRegister(e) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
     });
-    const data = await res.json();
-    if (data.error) { showAuthError(data.error); return; }
+    const data = await readJsonBody(res, 'Register');
+    if (!res.ok || data?.error || !data?.token) { showAuthError(data?.error || `HTTP ${res.status}`); return; }
     setAuthToken(data.token);
     onAuthSuccess(data.user);
   } catch (err) {
@@ -2472,7 +2484,7 @@ async function validatePricingPromo() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
     });
-    const data = await r.json();
+    const data = await readJsonResponse(r, 'Promo validation');
     if (data.error) { result.style.color = '#e05070'; result.textContent = '✗ ' + data.error; return; }
     result.style.color = '#1fd17a';
     result.textContent = `✓ ${data.discountPercent}% off applied at checkout`;
@@ -2491,7 +2503,7 @@ async function handleBuy(plan) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan, interval: pricingInterval, promoCode }),
       });
-      const data = await r.json();
+      const data = await readJsonResponse(r, 'Stripe checkout');
       if (data.error) { toast(data.error, 'err'); return; }
       window.location.href = data.url;
     } else {
@@ -2723,7 +2735,7 @@ async function submitManualPayment() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plan: _mpayState.plan, method, txId, note, promoCode, interval: pricingInterval }),
     });
-    const data = await r.json();
+    const data = await readJsonResponse(r, 'Payment submission');
     if (data.error) {
       if (errEl) { errEl.style.display = 'block'; errEl.textContent = data.error; }
       return;
@@ -2776,7 +2788,7 @@ async function openProfile() {
 
   try {
     const res = await apiFetch('/api/outputs?fast=1&limit=50', { silentLoading: true });
-    const outputs = await res.json();
+    const outputs = await readJsonResponse(res, 'Profile history');
     const total = outputs.length;
     const totalPages = outputs.reduce((s, o) => s + (o.pages || 0), 0);
     document.getElementById('profileTotalClones').textContent = total;
@@ -2852,8 +2864,7 @@ async function createShareLink() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ outDir: job.outDir, route: editorRoute || '/', password: password || undefined, expiresInDays: expiresInDays ? Number(expiresInDays) : undefined }),
     });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Share link');
     if (data.error) { toast('Share failed: ' + data.error, 'err'); return; }
     document.getElementById('share-create-form').style.display = 'none';
     document.getElementById('shareLinkInp').value = data.url;
@@ -3005,7 +3016,7 @@ async function checkExistingSession() {
       if (res.status !== 401 && res.status !== 403) showAuthError('Could not verify your session. Please refresh or try again.');
       return false;
     }
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Session check');
     if (data.user) { onAuthSuccess(data.user); return true; }
   } catch {}
   revealForm();
@@ -3085,7 +3096,7 @@ async function loadTemplates() {
   const pane = document.getElementById('buildTemplatePane') || document.getElementById('buildBody');
   try {
     const res = await apiFetch('/api/templates');
-    const templates = await res.json();
+    const templates = await readJsonResponse(res, 'Templates');
     if (!Array.isArray(templates) || templates.length === 0) {
       pane.innerHTML = '<div style="padding:40px;color:var(--text3);font-size:13px">No templates found.</div>';
       return;
@@ -3134,7 +3145,7 @@ async function createFromTemplate(id, btn) {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ templateId: id }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Template creation');
     if (data.error) { toast('Error: ' + data.error, 'err'); return; }
     await loadHistory({ fast: true });
     // Re-set after loadHistory() since showJob() inside it can overwrite editorOutDir
@@ -3266,7 +3277,7 @@ async function loadAnnouncements() {
   try {
     const res = await fetch('/api/announcements');
     if (!res.ok) return;
-    const items = await res.json();
+    const items = await readJsonResponse(res, 'Announcements');
     const dismissed = JSON.parse(localStorage.getItem('wc_ann_dismissed') || '[]');
     const unseen = items.filter(a => !dismissed.includes(a.id));
     const container = document.getElementById('ann-banners');
@@ -3322,7 +3333,7 @@ async function startClone() {
       body: JSON.stringify({ url, maxPages, depth: document.getElementById('depth').value, ignoreRobots: document.getElementById('ignoreRobots').checked }),
       timeoutMs: 120000,
     });
-    const job = await res.json();
+    const job = await readJsonResponse(res, 'Clone start');
     if (job.error) {
       if (res.status === 429) { openPricing(); }
       toast('Error: ' + job.error, 'err');
@@ -3354,7 +3365,7 @@ async function _submitRetry(ignoreRobots) {
       body: JSON.stringify({ url: job.url, maxPages: job.maxPages || document.getElementById('maxPages').value, depth: job.depth || document.getElementById('depth').value, ignoreRobots: ignoreRobots || false }),
       timeoutMs: 120000,
     });
-    const newJob = await res.json();
+    const newJob = await readJsonResponse(res, 'Clone retry');
     if (newJob.error) {
       if (res.status === 429) openPricing();
       toast('Error: ' + newJob.error, 'err');
@@ -3474,8 +3485,8 @@ function startPolling(jobId) {
     let delay = 1000;
     try {
       const res = await apiFetch(`/api/status?id=${jobId}&logsFrom=${lastLogLen}`, { silentLoading: true, timeoutMs: 12000 });
-      const job = await res.json();
-      if (!res.ok || job.error || !job.id) throw new Error(job.error || 'Status unavailable');
+      const job = await readJsonResponse(res, 'Clone status');
+      if (job.error || !job.id) throw new Error(job.error || 'Status unavailable');
       updateJobView(job);
       if (job.status === 'saving') delay = 1500;
       else if (job.status !== 'running') return;
@@ -3538,7 +3549,7 @@ async function renameClone(id, e) {
     inp.removeEventListener('blur', finish);
     try {
       const r = await apiFetch(`/api/clones/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ label: val }) });
-      const d = await r.json();
+      const d = await readJsonResponse(r, 'Rename clone');
       if (!d.error) job.label = d.label || null;
     } catch {}
     renderSidebar();
@@ -3555,7 +3566,7 @@ async function deleteClone(id, e) {
   if (job.outDir) {
     try {
       const r = await apiFetch('/api/output', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ outDir: job.outDir }) });
-      const d = await r.json();
+      const d = await readJsonResponse(r, 'Delete clone');
       if (d.error) { toast('Delete failed: ' + d.error, 'err'); return; }
     } catch(err) { toast('Delete failed: ' + friendlyFetchError(err), 'err'); return; }
   }
@@ -3681,7 +3692,7 @@ async function runPreview() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ outDir: job.outDir }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Preview start');
     if (data.error) throw new Error(data.error);
     const url = data.url || 'http://localhost:3000';
     if (data.hosted) {
@@ -3722,7 +3733,7 @@ async function exportZip() {
     const dlRes = await fetch(`/api/download-zip?outDir=${encodeURIComponent(job.outDir)}`, {
       headers: token ? { 'X-Auth-Token': token } : {},
     });
-    if (!dlRes.ok) { const d = await dlRes.json().catch(() => ({})); throw new Error(d.error || `HTTP ${dlRes.status}`); }
+    if (!dlRes.ok) await readJsonResponse(dlRes, 'ZIP download');
     const blob = await dlRes.blob();
     if (saveHandle) {
       const writable = await saveHandle.createWritable();
@@ -3799,7 +3810,7 @@ async function connectGithub() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'GitHub connect');
     if (data.error) throw new Error(data.error);
     if (document.getElementById('github-remember').checked) localStorage.setItem(GITHUB_TOKEN_KEY, token);
     else localStorage.removeItem(GITHUB_TOKEN_KEY);
@@ -3833,7 +3844,7 @@ async function onGithubRepoPicked() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: githubToken(), repo }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'GitHub branches');
     if (data.error || !Array.isArray(data.branches) || !data.branches.length) return;
     branchSelect.innerHTML = data.branches.map(b => `<option value="${optionEsc(b)}">${optionEsc(b)}</option>`).join('');
     branchSelect.value = data.branches.includes(defaultBranch) ? defaultBranch : data.branches[0];
@@ -3868,7 +3879,7 @@ async function pushToGithub() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ outDir, repo, branch, targetPath, commitMessage, token, cleanTarget }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'GitHub push');
     if (data.error) throw new Error(data.error);
     const urlEl = document.getElementById('github-result-url');
     urlEl.textContent = `${data.files} files pushed to ${repo}#${data.branch}${data.targetPath ? `/${data.targetPath}` : ''}`;
@@ -4065,7 +4076,7 @@ async function createAuthPage(kind) {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ outDir: editorOutDir, kind }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Auth page creation');
     if (data.error) throw new Error(data.error);
     await loadEditorPages(editorOutDir, data.route);
     await loadPreviewPages(editorOutDir);
@@ -5257,7 +5268,7 @@ async function importPickedAsset() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ outDir: editorOutDir, dataUrl, filename: file.name }),
   });
-  const data = await res.json();
+  const data = await readJsonResponse(res, 'Asset import');
   if (data.error) throw new Error(data.error);
   document.getElementById('p-media-src').value = data.path;
   input.value = '';
@@ -6281,7 +6292,7 @@ async function savePage() {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ outDir: editorOutDir, route: editorRoute, html }),
     });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
+    await readJsonResponse(res, 'Page save');
     toast('Page saved!', 'ok');
   } catch(e) { toast('Save failed: ' + friendlyFetchError(e), 'err'); }
   btn.disabled = false;
@@ -6389,7 +6400,7 @@ async function deployToProvider() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ outDir: editorOutDir, netlifyToken: token }),
     });
-    const data = await r.json();
+    const data = await readJsonResponse(r, 'Netlify deploy');
     if (data.error) { showDeployErr(data.error); return; }
     const urlEl = document.getElementById('deploy-result-url');
     urlEl.textContent = data.url;
