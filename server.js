@@ -620,9 +620,28 @@ function json(res, data, status = 200) {
 }
 
 function isInsideOutputDir(candidate) {
-  const base = resolve(OUTPUT_DIR);
+  return isInsideDir(OUTPUT_DIR, candidate);
+}
+
+function isInsideDir(baseDir, candidate) {
+  const base = resolve(baseDir);
   const resolved = resolve(candidate || '');
   return resolved === base || resolved.startsWith(base + '\\') || resolved.startsWith(base + '/');
+}
+
+function normalizeCloneRelPath(input, allowedPrefixes = []) {
+  const normalized = String(input || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/');
+  if (!normalized || normalized.length > 500) throw new Error('Invalid clone file path');
+  if (/[\x00-\x1F]/.test(normalized)) throw new Error('Invalid clone file path');
+  const parts = normalized.split('/');
+  if (parts.some(part => !part || part === '.' || part === '..')) throw new Error('Invalid clone file path');
+  if (allowedPrefixes.length && !allowedPrefixes.some(prefix => normalized === prefix || normalized.startsWith(prefix + '/'))) {
+    throw new Error('Invalid clone file path');
+  }
+  return normalized;
 }
 
 function cloneStoragePrefix(outDir) {
@@ -630,7 +649,7 @@ function cloneStoragePrefix(outDir) {
 }
 
 function cloneStoragePath(outDir, relPath) {
-  return `${cloneStoragePrefix(outDir)}/${String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '')}`;
+  return `${cloneStoragePrefix(outDir)}/${normalizeCloneRelPath(relPath)}`;
 }
 
 function cloneFileListStoragePath(outDir) {
@@ -743,12 +762,13 @@ async function persistCloneOutput(outDir) {
 }
 
 async function readCloneFile(outDir, relPath) {
-  const localPath = join(outDir, relPath);
+  const normalized = normalizeCloneRelPath(relPath);
+  const localPath = join(outDir, normalized);
   if (isInsideOutputDir(localPath) && existsSync(localPath)) return readFileSync(localPath);
-  const storagePath = cloneStoragePath(outDir, relPath);
+  const storagePath = cloneStoragePath(outDir, normalized);
   const stored = await downloadCloneFile(storagePath);
   if (stored) return stored;
-  if (relPath === 'route-map.json' || relPath === 'manifest.json' || String(relPath).replace(/\\/g, '/').startsWith('captured-pages/')) {
+  if (normalized === 'route-map.json' || normalized === 'manifest.json' || normalized.startsWith('captured-pages/')) {
     const text = await getCloneTextFile(storagePath);
     if (text != null) return Buffer.from(text, 'utf8');
   }
@@ -756,9 +776,8 @@ async function readCloneFile(outDir, relPath) {
 }
 
 async function writeCloneFile(outDir, relPath, bytes, contentType = contentTypeForPath(relPath)) {
-  const normalized = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const normalized = normalizeCloneRelPath(relPath);
   const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(String(bytes ?? ''), 'utf8');
-  if (!normalized || normalized.includes('..')) throw new Error('Invalid clone file path');
   const localPath = join(outDir, normalized);
   if (isInsideOutputDir(localPath) && existsSync(outDir)) {
     mkdirSync(dirname(localPath), { recursive: true });
@@ -832,7 +851,10 @@ async function readPersistedCloneFileList(outDir) {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed)
-      ? parsed.filter(f => f?.rel && !String(f.rel).includes('..')).map(f => ({ ...f, rel: String(f.rel).replace(/\\/g, '/') }))
+      ? parsed.map(f => {
+          try { return { ...f, rel: normalizeCloneRelPath(f?.rel) }; }
+          catch { return null; }
+        }).filter(Boolean)
       : [];
   } catch {
     return [];
@@ -848,12 +870,13 @@ async function materializeCloneOutput(outDir) {
   mkdirSync(tempDir, { recursive: true });
   try {
     for (const file of files) {
-      const rel = String(file.rel || '').replace(/\\/g, '/').replace(/^\/+/, '');
-      if (!rel || rel.includes('..')) continue;
+      let rel;
+      try { rel = normalizeCloneRelPath(file.rel); }
+      catch { continue; }
       const data = await readCloneFile(outDir, rel);
       if (!data) continue;
       const dest = join(tempDir, rel);
-      if (!isInsideOutputDir(dest)) continue;
+      if (!isInsideDir(tempDir, dest)) continue;
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, data);
     }
@@ -1310,14 +1333,25 @@ function readRawBody(req, limitBytes = 2_000_000) {
 
 function extensionForAsset(filename, mimeType) {
   const ext = String(filename || '').match(/\.[a-z0-9]{1,8}$/i)?.[0];
-  if (ext) return ext.toLowerCase();
+  const safeExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.css', '.woff', '.woff2', '.ttf', '.mp4', '.webm', '.avif']);
+  if (ext && safeExts.has(ext.toLowerCase())) return ext.toLowerCase();
   const mime = String(mimeType || '').toLowerCase();
   if (mime.includes('png')) return '.png';
   if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg';
   if (mime.includes('webp')) return '.webp';
   if (mime.includes('gif')) return '.gif';
   if (mime.includes('svg')) return '.svg';
+  if (mime.includes('css')) return '.css';
+  if (mime.includes('woff2')) return '.woff2';
+  if (mime.includes('woff')) return '.woff';
+  if (mime.includes('mp4')) return '.mp4';
+  if (mime.includes('webm')) return '.webm';
+  if (mime.includes('avif')) return '.avif';
   return '.bin';
+}
+
+function isAllowedImportedAssetMime(mimeType) {
+  return /^(image\/(png|jpeg|webp|gif|svg\+xml|avif)|text\/css|font\/(woff|woff2|ttf)|video\/(mp4|webm))$/i.test(String(mimeType || ''));
 }
 
 let _outputsCache = null;
@@ -1448,7 +1482,9 @@ function routeToStaticPath(route) {
     .split('/')
     .map(part => part.trim())
     .filter(Boolean)
-    .map(part => part.replace(/[<>:"\\|?*\x00-\x1F]/g, '-'));
+    .filter(part => part !== '.' && part !== '..')
+    .map(part => part.replace(/[<>:"\\|?*\x00-\x1F]/g, '-'))
+    .filter(Boolean);
   const last = parts[parts.length - 1] || '';
   if (/\.[a-z0-9]{1,8}$/i.test(last)) return join(...parts);
   return join(...parts, 'index.html');
@@ -1475,11 +1511,13 @@ async function materializeStaticWebsite(outDir) {
     const routeMap = existsSync(routeMapPath) ? JSON.parse(readFileSync(routeMapPath, 'utf8')) : null;
     if (routeMap && existsSync(capturedPagesDir)) {
       for (const [route, filename] of Object.entries(routeMap)) {
-        if (!filename || String(filename).includes('..')) continue;
-        const srcPath = join(capturedPagesDir, String(filename));
+        let cleanFilename;
+        try { cleanFilename = normalizeCloneRelPath(join('captured-pages', String(filename)), ['captured-pages']).slice('captured-pages/'.length); }
+        catch { continue; }
+        const srcPath = join(capturedPagesDir, cleanFilename);
         if (!existsSync(srcPath)) continue;
         const destPath = join(siteDir, routeToStaticPath(route));
-        if (!isInsideOutputDir(destPath)) continue;
+        if (!isInsideDir(siteDir, destPath)) continue;
         mkdirSync(dirname(destPath), { recursive: true });
         copyFileSync(srcPath, destPath);
       }
@@ -1643,6 +1681,38 @@ function isAllowedOrigin(origin) {
   return false;
 }
 
+function contentSecurityPolicyForPath(pathname) {
+  const isPreviewSurface = pathname === '/api/page' || pathname.startsWith('/share/') || pathname === '/api/asset' || pathname.startsWith('/_assets/');
+  if (isPreviewSurface) {
+    return [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:",
+      "style-src 'self' 'unsafe-inline' fonts.googleapis.com https:",
+      "font-src 'self' fonts.gstatic.com data: https:",
+      "img-src 'self' data: blob: https:",
+      "connect-src 'self' https: wss:",
+      "frame-src 'self' https: blob: data: about:",
+      "worker-src 'self' blob:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ');
+  }
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
+    "font-src 'self' fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https: wss:",
+    "frame-src 'self'",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+}
+
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const ip = req.socket?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
@@ -1664,22 +1734,7 @@ async function handleRequest(req, res) {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  // Content-Security-Policy.
-  // Cloned-site previews run inside the app shell and may need captured/external scripts,
-  // animation workers, blob URLs, and runtime eval used by framework bundles.
-  res.setHeader('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:",
-    "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
-    "font-src 'self' fonts.gstatic.com data:",
-    "img-src 'self' data: blob: https:",
-    "connect-src 'self' https: wss:",
-    "frame-src 'self' https: blob: data: about:",
-    "worker-src 'self' blob:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join('; '));
+  res.setHeader('Content-Security-Policy', contentSecurityPolicyForPath(url.pathname));
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   // Static UI files
@@ -1710,10 +1765,17 @@ async function handleRequest(req, res) {
   const staticExts = { '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
   const ext = url.pathname.match(/\.\w+$/)?.[0];
   if (ext && staticExts[ext] && !url.pathname.startsWith('/_assets/')) {
-    return serveFile(res, join(__dirname, 'public', url.pathname.slice(1)), staticExts[ext], 60);
+    let staticRel;
+    try { staticRel = normalizeCloneRelPath(url.pathname.slice(1)); }
+    catch { return json(res, { error: 'Invalid path' }, 400); }
+    const staticPath = join(__dirname, 'public', staticRel);
+    if (!isInsideDir(join(__dirname, 'public'), staticPath)) return json(res, { error: 'Invalid path' }, 400);
+    return serveFile(res, staticPath, staticExts[ext], 60);
   }
   if (req.method === 'GET' && url.pathname.startsWith('/_assets/')) {
-    const relPath = url.pathname.replace(/^\//, '');
+    let relPath;
+    try { relPath = normalizeCloneRelPath(url.pathname.replace(/^\//, ''), ['_assets']); }
+    catch { return json(res, { error: 'Invalid asset' }, 400); }
     const mimeMap = {
       '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ico': 'image/x-icon',
       '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
@@ -1734,9 +1796,11 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/asset') {
     const assetUser = await getSessionUser(req);
     const outDir = url.searchParams.get('outDir') || '';
-    const relPath = String(url.searchParams.get('path') || '').replace(/^\/+/, '');
+    let relPath;
+    try { relPath = normalizeCloneRelPath(url.searchParams.get('path') || '', ['_assets']); }
+    catch { return json(res, { error: 'Invalid asset' }, 400); }
     const assetToken = String(url.searchParams.get('assetToken') || '');
-    if (!isInsideOutputDir(outDir) || !relPath.startsWith('_assets/')) return json(res, { error: 'Invalid asset' }, 400);
+    if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid asset' }, 400);
     const readable = await canReadOutDir(assetUser, outDir) || assetToken === cloneAssetToken(outDir);
     if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
     const data = await readCloneFile(outDir, join('public', relPath));
@@ -1927,7 +1991,9 @@ async function handleRequest(req, res) {
     if (!map) { res.writeHead(404); res.end('No clone loaded'); return; }
     const filename = map[route] || map['/'];
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
-    const data = await readCloneFile(outDir, join('captured-pages', filename));
+    let data;
+    try { data = await readCloneFile(outDir, join('captured-pages', filename)); }
+    catch { return json(res, { error: 'Invalid page path' }, 400); }
     if (!data) { res.writeHead(404); res.end('File missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(await rewritePreviewAssetUrls(data.toString('utf8'), outDir));
@@ -1984,6 +2050,7 @@ async function handleRequest(req, res) {
       if (!await canUseCloneOutput(assetUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
       if (!match) return json(res, { error: 'Invalid file data' }, 400);
+      if (!isAllowedImportedAssetMime(match[1])) return json(res, { error: 'Unsupported asset type' }, 400);
       const bytes = Buffer.from(match[2], 'base64');
       if (bytes.length > 50 * 1024 * 1024) return json(res, { error: 'File is larger than 50MB' }, 400);
       const assetsDir = join(outDir, 'public', '_assets');
@@ -2531,7 +2598,9 @@ async function handleRequest(req, res) {
     const resolved = resolveSharedRoute(map, requestedRoute, defaultRoute);
     const filename = resolved.filename;
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
-    const data = await readCloneFile(share.out_dir, join('captured-pages', filename));
+    let data;
+    try { data = await readCloneFile(share.out_dir, join('captured-pages', filename)); }
+    catch { return json(res, { error: 'Invalid page path' }, 400); }
     if (!data) { res.writeHead(404); res.end('Page file missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     const previewHtml = await rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir);
@@ -3651,14 +3720,13 @@ async function handleRequest(req, res) {
       if (existsSync(routeMapPath) && existsSync(capturedPagesDir)) {
         const routeMap = JSON.parse(readFileSync(routeMapPath, 'utf8'));
         for (const [route, filename] of Object.entries(routeMap)) {
-          const srcPath = join(capturedPagesDir, filename);
+          let cleanFilename;
+          try { cleanFilename = normalizeCloneRelPath(join('captured-pages', String(filename)), ['captured-pages']).slice('captured-pages/'.length); }
+          catch { continue; }
+          const srcPath = join(capturedPagesDir, cleanFilename);
           if (!existsSync(srcPath)) continue;
-          let destPath;
-          if (route === '/') { destPath = join(deployTmp, 'index.html'); }
-          else {
-            const seg = route.replace(/^\//, '').replace(/\/+$/, '');
-            destPath = join(deployTmp, seg, 'index.html');
-          }
+          const destPath = join(deployTmp, routeToStaticPath(route));
+          if (!isInsideDir(deployTmp, destPath)) continue;
           mkdirSync(dirname(destPath), { recursive: true });
           copyFileSync(srcPath, destPath);
         }
@@ -3674,14 +3742,19 @@ async function handleRequest(req, res) {
         for (const f of readdirSync(assetsDir)) copyFileSync(join(assetsDir, f), join(destAssets, f));
       }
 
-      const isWin = process.platform === 'win32';
-      const zipCmd = isWin
-        ? `powershell -NoProfile -Command "Compress-Archive -Path '${deployTmp}\\*' -DestinationPath '${zipPath}' -Force"`
-        : `cd '${deployTmp}' && zip -r '${zipPath}' .`;
-      await new Promise((res2, rej) => {
-        const p = spawn(zipCmd, [], { shell: true, stdio: 'ignore' });
-        p.on('close', code => code === 0 ? res2() : rej(new Error(`zip exited ${code}`)));
-      });
+      try {
+        await runProcess('tar', ['-a', '-c', '-f', zipPath, '-C', deployTmp, '.']);
+      } catch {
+        if (process.platform !== 'win32') {
+          await runProcess('zip', ['-qr', zipPath, '.'], { cwd: deployTmp });
+        } else {
+          await runProcess('powershell', [
+            '-NoProfile', '-Command',
+            'Get-ChildItem -LiteralPath $args[0] -Force | Compress-Archive -DestinationPath $args[1] -Force',
+            deployTmp, zipPath,
+          ]);
+        }
+      }
 
       const zipData = readFileSync(zipPath);
 
