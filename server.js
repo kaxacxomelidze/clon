@@ -1,6 +1,6 @@
 import { createServer } from 'http';
 import { spawn } from 'child_process';
-import { randomUUID, createHash } from 'crypto';
+import { randomUUID, createHash, createHmac, timingSafeEqual } from 'crypto';
 import { resolve, join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync, createReadStream, copyFileSync } from 'fs';
@@ -58,6 +58,45 @@ if (!ADMIN_PASSWORD) { console.error('[FATAL] ADMIN_PASSWORD env var is not set.
 // Admin sessions persisted to disk so they survive server restarts.
 const ADMIN_SESSIONS_FILE = join(__dirname, '.admin-sessions.json');
 const adminSessions = new Map(); // token → expiresAt
+const ADMIN_TOKEN_TTL_MS = 8 * 3600 * 1000;
+
+function base64UrlEncode(input) {
+  return Buffer.from(input).toString('base64url');
+}
+
+function base64UrlDecode(input) {
+  return Buffer.from(String(input || ''), 'base64url').toString('utf8');
+}
+
+function signAdminPayload(payload) {
+  return createHmac('sha256', `${ADMIN_PASSWORD || ''}:${PASSWORD_PEPPER}`)
+    .update(payload)
+    .digest('base64url');
+}
+
+function createAdminToken() {
+  const payload = base64UrlEncode(JSON.stringify({
+    exp: Date.now() + ADMIN_TOKEN_TTL_MS,
+    nonce: randomUUID(),
+  }));
+  return `adm1.${payload}.${signAdminPayload(payload)}`;
+}
+
+function verifySignedAdminToken(token) {
+  if (!ADMIN_PASSWORD || !String(token || '').startsWith('adm1.')) return false;
+  const parts = String(token).split('.');
+  if (parts.length !== 3 || !parts[1] || !parts[2]) return false;
+  const expected = signAdminPayload(parts[1]);
+  const got = Buffer.from(parts[2]);
+  const exp = Buffer.from(expected);
+  if (got.length !== exp.length || !timingSafeEqual(got, exp)) return false;
+  try {
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    return Number(payload.exp || 0) > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 function _loadAdminSessions() {
   try {
@@ -87,6 +126,7 @@ _loadAdminSessions();
 function isAdmin(req) {
   const t = req.headers['x-admin-token'] || '';
   if (!t) return false;
+  if (verifySignedAdminToken(t)) return true;
   const exp = adminSessions.get(t);
   if (!exp) return false;
   if (Date.now() > exp) { adminSessions.delete(t); _persistAdminSessions(); return false; }
@@ -2490,9 +2530,7 @@ async function handleRequest(req, res) {
     const { password } = await readJsonBody(req);
     if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled because ADMIN_PASSWORD is missing on this server. Add it in your hosting environment variables, then redeploy/restart.' }, 503);
     if (!password || password !== ADMIN_PASSWORD) return json(res, { error: 'Wrong password' }, 401);
-    const token = randomUUID();
-    adminSessions.set(token, Date.now() + 8 * 3600 * 1000);
-    _persistAdminSessions();
+    const token = createAdminToken();
     return json(res, { token });
   }
 
