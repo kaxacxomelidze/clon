@@ -2485,7 +2485,7 @@ async function handleBuy(plan) {
       openManualPaymentModal(plan);
     }
   } catch(e) {
-    toast('Checkout error: ' + e.message, 'err');
+    toast('Checkout error: ' + friendlyFetchError(e), 'err');
   } finally {
     updatePricingButtons();
   }
@@ -2716,7 +2716,7 @@ async function submitManualPayment() {
     closeMpay();
     toast('Payment submitted — admin will review within 24 hours.', 'ok');
   } catch(e) {
-    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Failed to submit: ' + e.message; }
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Failed to submit: ' + friendlyFetchError(e); }
   } finally {
     if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
   }
@@ -2843,7 +2843,7 @@ async function createShareLink() {
     document.getElementById('share-create-form').style.display = 'none';
     document.getElementById('shareLinkInp').value = data.url;
     document.getElementById('share-result').style.display = 'block';
-  } catch(err) { toast('Share failed: ' + err.message, 'err'); }
+  } catch(err) { toast('Share failed: ' + friendlyFetchError(err), 'err'); }
 }
 function copyShareLink() {
   const inp = document.getElementById('shareLinkInp');
@@ -3092,7 +3092,7 @@ async function loadTemplates() {
     pane.innerHTML = html;
     templatesLoaded = true;
   } catch(e) {
-    pane.innerHTML = `<div style="padding:40px;color:var(--red);font-size:13px">Failed to load templates: ${e.message}</div>`;
+    pane.innerHTML = `<div style="padding:40px;color:var(--red);font-size:13px">Failed to load templates: ${escHtml(friendlyFetchError(e))}</div>`;
   }
 }
 
@@ -3128,7 +3128,7 @@ async function createFromTemplate(id, btn) {
     await loadEditorPages(data.outDir);
     toast('Template loaded — start editing!', 'ok');
   } catch(e) {
-    toast('Failed: ' + e.message, 'err');
+    toast('Failed: ' + friendlyFetchError(e), 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Use Template'; }
   }
@@ -3542,7 +3542,7 @@ async function deleteClone(id, e) {
       const r = await apiFetch('/api/output', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ outDir: job.outDir }) });
       const d = await r.json();
       if (d.error) { toast('Delete failed: ' + d.error, 'err'); return; }
-    } catch(err) { toast('Delete failed: ' + err.message, 'err'); return; }
+    } catch(err) { toast('Delete failed: ' + friendlyFetchError(err), 'err'); return; }
   }
   allJobs = allJobs.filter(j => j.id !== id);
   if (activeJobId === id) {
@@ -3598,7 +3598,7 @@ async function loadPreviewPages(outDir) {
     await loadPreviewRoute(encodedRouteValue(routes[0]));
   } catch (e) {
     select.innerHTML = '';
-    empty.textContent = 'Preview could not load pages: ' + (e.message || 'unknown error');
+    empty.textContent = 'Preview could not load pages: ' + friendlyFetchError(e);
     empty.style.display = 'flex';
     frame.style.display = 'none';
   }
@@ -3678,7 +3678,7 @@ async function runPreview() {
       setTimeout(() => window.open(url, '_blank'), 4000);
     }
   } catch (e) {
-    toast('Preview failed: ' + e.message, 'err');
+    toast('Preview failed: ' + friendlyFetchError(e), 'err');
   }
 }
 async function exportZip() {
@@ -3691,7 +3691,7 @@ async function exportZip() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       window.electronAPI.openFolder(data.folder || data.zipPath);
-    } catch (e) { toast('ZIP failed: ' + e.message, 'err'); }
+    } catch (e) { toast('ZIP failed: ' + friendlyFetchError(e), 'err'); }
     return;
   }
   try {
@@ -3710,7 +3710,7 @@ async function exportZip() {
     a.click();
     setTimeout(() => { URL.revokeObjectURL(blobUrl); document.body.removeChild(a); }, 2000);
     toast('ZIP downloaded', 'ok');
-  } catch (e) { toast('ZIP failed: ' + e.message, 'err'); }
+  } catch (e) { toast('ZIP failed: ' + friendlyFetchError(e), 'err'); }
 }
 function activeOutDir() {
   const job = allJobs.find(j => j.id === activeJobId);
@@ -3781,7 +3781,7 @@ async function connectGithub() {
     select.style.display = data.repos.length ? 'block' : 'none';
     setGithubStatus(`Connected as ${data.user.login}. ${data.repos.length} writable repos found.`, 'ok');
   } catch (e) {
-    showGithubErr(e.message || 'Could not connect to GitHub');
+    showGithubErr(friendlyFetchError(e) || 'Could not connect to GitHub');
     setGithubStatus('Connection failed', 'err');
   } finally {
     btn.disabled = false;
@@ -3847,7 +3847,7 @@ async function pushToGithub() {
     document.getElementById('github-result').classList.add('show');
     toast('Pushed to GitHub', 'ok');
   } catch (e) {
-    showGithubErr(e.message || 'GitHub push failed');
+    showGithubErr(friendlyFetchError(e) || 'GitHub push failed');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Push files';
@@ -4024,8 +4024,8 @@ async function loadEditorPages(outDir, preferredRoute = '') {
     const nextRoute = routes.includes(preferredRoute) ? preferredRoute : (routes.includes(editorRoute) ? editorRoute : routes[0]);
     loadEditorPage(encodedRouteValue(nextRoute));
   } catch(e) {
-    document.getElementById('edPageList').innerHTML = `<div class="ed-no-site">Error loading pages<br><small>${escHtml(e.message || 'unknown error')}</small></div>`;
-    toast('Editor pages failed: ' + (e.message || 'unknown error'), 'err');
+    document.getElementById('edPageList').innerHTML = `<div class="ed-no-site">Error loading pages<br><small>${escHtml(friendlyFetchError(e))}</small></div>`;
+    toast('Editor pages failed: ' + friendlyFetchError(e), 'err');
   }
 }
 
@@ -4043,7 +4043,7 @@ async function createAuthPage(kind) {
     await loadPreviewPages(editorOutDir);
     toast(`${kind === 'register' ? 'Register' : 'Login'} page ready`, 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Could not create page', 'err');
+    toast(friendlyFetchError(err) || 'Could not create page', 'err');
   }
 }
 
@@ -4100,7 +4100,7 @@ async function loadEditorPage(encodedRoute) {
     frame.onload = null;
     frame.removeAttribute('srcdoc');
     document.getElementById('edEmptyPreview').style.display = 'flex';
-    document.getElementById('edEmptyPreview').textContent = 'Editor could not load this page: ' + (e.message || 'unknown error');
+    document.getElementById('edEmptyPreview').textContent = 'Editor could not load this page: ' + friendlyFetchError(e);
   }
 }
 
@@ -5271,7 +5271,7 @@ document.getElementById('act-upload-replace').addEventListener('click', async ()
     setSelectedMediaPath(src);
     toast('Media updated', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Media update failed', 'err');
+    toast(friendlyFetchError(err) || 'Media update failed', 'err');
   }
 });
 document.getElementById('act-add-image').addEventListener('click', async () => {
@@ -5282,7 +5282,7 @@ document.getElementById('act-add-image').addEventListener('click', async () => {
     insertNodeAfterSelection(img);
     toast('Image added', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Image add failed', 'err');
+    toast(friendlyFetchError(err) || 'Image add failed', 'err');
   }
 });
 document.getElementById('act-set-bg-img').addEventListener('click', async () => {
@@ -5296,7 +5296,7 @@ document.getElementById('act-set-bg-img').addEventListener('click', async () => 
     syncPanel(edSelEl);
     toast('Background image set', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Background update failed', 'err');
+    toast(friendlyFetchError(err) || 'Background update failed', 'err');
   }
 });
 document.getElementById('act-clear-bg-img').addEventListener('click', () => {
@@ -5588,7 +5588,7 @@ async function exportFigmaSvg() {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
     toast('Figma SVG exported', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Figma export failed', 'err');
+    toast(friendlyFetchError(err) || 'Figma export failed', 'err');
   } finally {
     btn.disabled = false;
     btn.textContent = oldText;
@@ -6151,7 +6151,7 @@ async function insertSectionIntoPage(id, btn, closeModal = false) {
     document.getElementById('edSaveBtn').disabled = false;
     if (currentTab !== 'editor') switchTab('editor');
   } catch(e) {
-    toast('Insert failed: ' + e.message, 'err');
+    toast('Insert failed: ' + friendlyFetchError(e), 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Insert'; }
   }
@@ -6255,7 +6255,7 @@ async function savePage() {
     });
     if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
     toast('Page saved!', 'ok');
-  } catch(e) { toast('Save failed: ' + e.message, 'err'); }
+  } catch(e) { toast('Save failed: ' + friendlyFetchError(e), 'err'); }
   btn.disabled = false;
   btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save`;
 }
@@ -6368,7 +6368,7 @@ async function deployToProvider() {
     document.getElementById('deploy-result').classList.add('show');
     toast('Deployed to Netlify!', 'ok');
   } catch(e) {
-    showDeployErr('Network error: ' + e.message);
+    showDeployErr('Network error: ' + friendlyFetchError(e));
   } finally {
     btn.disabled = false; btn.textContent = 'Deploy Now';
   }
