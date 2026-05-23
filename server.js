@@ -16,6 +16,7 @@ import {
   insertClone, updateCloneLabel, updateCloneStatus, getClonesByUser, getAllClones, deleteCloneById, deleteUserClones, getCloneCountThisMonth,
   getAllPayments, getPaymentsByUser, getPaymentById, insertPayment, updatePayment, getPendingPaymentByUserPlan, getAdminStats,
   getSettings, saveSettings,
+  getUserBlockReason, getUserBlockReasons, setUserBlockReason,
   getShare, insertShare,
   getAllPromoCodes, getPromoCode, insertPromoCode, incrementPromoUsed, deletePromoCode,
   getAllErrors, insertError, deleteError, clearErrors, pruneErrors,
@@ -275,6 +276,24 @@ function _invalidateUserSessions(userId) {
   for (const [t, e] of _sessionCache) { if (e.user?.id === userId) _sessionCache.delete(t); }
 }
 setInterval(() => { const now = Date.now(); for (const [t, e] of _sessionCache) if (now > e.exp) _sessionCache.delete(t); }, 120000);
+
+async function userBlockedReason(user) {
+  const columnReason = String(user?.blocked_reason || '').trim();
+  if (columnReason) return columnReason;
+  return user?.id ? String(await getUserBlockReason(user.id) || '').trim() : '';
+}
+
+async function userBlockedMessage(user) {
+  const reason = await userBlockedReason(user);
+  return reason
+    ? `Your account has been suspended. Reason: ${reason}`
+    : 'Your account has been suspended. Contact support.';
+}
+
+async function blockedUserResponse(res, user) {
+  const reason = await userBlockedReason(user);
+  return json(res, { error: reason ? `Your account has been suspended. Reason: ${reason}` : await userBlockedMessage(user), blocked: true, blockedReason: reason }, 403);
+}
 
 async function getSessionUser(req) {
   const cookieToken = String(req.headers.cookie || '')
@@ -1811,7 +1830,7 @@ async function handleRequest(req, res) {
     const user = await getUserByEmail(email.toLowerCase().trim());
     const ok = user ? await verifyPw(password, user) : false;
     if (!ok) return json(res, { error: 'Invalid email or password' }, 401);
-    if (user.blocked) return json(res, { error: 'Your account has been suspended. Contact support.' }, 403);
+    if (user.blocked) return await blockedUserResponse(res, user);
     if (bcrypt && user.hash && !user.hash.startsWith('$2b$') && !user.hash.startsWith('$2a$')) {
       await updateUser(user.id, { hash: await bcrypt.hash(password, 12), salt: null });
     }
@@ -1825,6 +1844,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/auth/me') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     return json(res, { user: userPublic(user) });
   }
 
@@ -1993,7 +2013,7 @@ async function handleRequest(req, res) {
 
   if (req.method === 'POST' && url.pathname === '/api/clone') {
     const cloneUser = await getSessionUser(req);
-    if (cloneUser && cloneUser.blocked) return json(res, { error: 'Your account has been suspended. Contact support.' }, 403);
+    if (cloneUser && cloneUser.blocked) return await blockedUserResponse(res, cloneUser);
 
     let body = '';
     req.on('data', (c) => (body += c));
@@ -2571,6 +2591,7 @@ async function handleRequest(req, res) {
     const blockedFilter = statusFilter === 'blocked' ? true : statusFilter === 'active' ? false : null;
     const { users, total } = await getUsersPage({ search, plan: planFilter, blocked: blockedFilter, limit: PAGE_SIZE, offset: page * PAGE_SIZE });
     const clones = await getClonesByUserIds(users.map(u => u.id));
+    const blockReasons = await getUserBlockReasons(users.filter(u => u.blocked === 1).map(u => u.id));
     const cloneMap = {};
     for (const c of clones) {
       if (!cloneMap[c.user_id]) cloneMap[c.user_id] = [];
@@ -2583,7 +2604,7 @@ async function handleRequest(req, res) {
           id: u.id, name: u.name, email: u.email,
           plan: normalizePlan(u.plan), rawPlan: u.plan || 'free', planLabel: getPlanLabel(u.plan), planRenewsAt: u.plan_renews_at || null,
           billingInterval: u.billing_interval || 'monthly',
-          blocked: u.blocked === 1, createdAt: u.created_at,
+          blocked: u.blocked === 1, blockedReason: u.blocked_reason || blockReasons[u.id] || '', createdAt: u.created_at,
           cloneCount: uc.length,
           lastCloneAt: uc.length > 0 ? uc[0].started_at : null,
         };
@@ -2604,7 +2625,11 @@ async function handleRequest(req, res) {
     if (body.plan !== undefined) fields.plan = normalizePlan(body.plan);
     if (body.planRenewsAt !== undefined) fields.plan_renews_at = body.planRenewsAt;
     if (body.billingInterval !== undefined) fields.billing_interval = body.billingInterval;
-    if (body.blocked !== undefined) fields.blocked = body.blocked ? 1 : 0;
+    if (body.blocked !== undefined) {
+      fields.blocked = body.blocked ? 1 : 0;
+      fields.blocked_reason = body.blocked ? String(body.blockedReason || '').trim().slice(0, 500) : null;
+      await setUserBlockReason(userId, fields.blocked_reason || '');
+    }
     await updateUser(userId, fields);
     if (fields.blocked !== undefined) _invalidateUserSessions(userId);
     if (fields.plan !== undefined || fields.plan_renews_at !== undefined || fields.billing_interval !== undefined) _invalidateUserSessions(userId);
@@ -3039,6 +3064,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/user/dashboard') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     const userClones = await getClonesByUser(user.id);
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const clonesThisMonth = userClones.filter(c => new Date(c.started_at) >= monthStart).length;
@@ -3064,12 +3090,14 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/user/billing') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     return json(res, { payments: await getPaymentsByUser(user.id) });
   }
 
   if (req.method === 'PUT' && url.pathname === '/api/user/profile') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     const { name, password } = await readJsonBody(req);
     const fields = {};
     if (name !== undefined) {
@@ -3125,6 +3153,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/user/export') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     const clones = await getClonesByUser(user.id);
     const payments = await getPaymentsByUser(user.id);
     const exportData = {
@@ -3286,7 +3315,12 @@ async function handleRequest(req, res) {
         audit(newId, googleName, 'register_google', null, ip);
       }
 
-      if (dbUser.blocked) { res.writeHead(302, { Location: `${appUrl}/app?oauth_error=blocked` }); res.end(); return; }
+      if (dbUser.blocked) {
+        const reason = encodeURIComponent(await userBlockedReason(dbUser));
+        res.writeHead(302, { Location: `${appUrl}/app?oauth_error=blocked&ban_reason=${reason}` });
+        res.end();
+        return;
+      }
 
       const sessionToken = randomUUID();
       await insertSession({ token: sessionToken, userId: dbUser.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + 30*24*60*60*1000, impersonatedBy: null });

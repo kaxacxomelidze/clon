@@ -217,6 +217,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:28px 32px;width:min(380px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .modal-title{font-size:16px;font-weight:800;margin-bottom:8px}
 .modal-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:22px}
+.modal-field{width:100%;box-sizing:border-box;margin-top:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font:inherit;font-size:13px;line-height:1.5;padding:10px 12px;outline:none;resize:vertical;min-height:92px}
+.modal-field:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(91,141,239,.12)}
+.blocked-reason{display:block;margin-top:5px;max-width:190px;color:var(--red);font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 .modal-cancel{padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
 .modal-cancel:hover{color:var(--text);border-color:var(--border3)}
@@ -1079,10 +1082,11 @@ function renderUsers(users) {
           <span class="dot ${u.blocked ? 'blocked' : 'active'}"></span>
           ${u.blocked ? 'Blocked' : 'Active'}
         </span>
+        ${u.blocked && u.blockedReason ? `<span class="blocked-reason" title="${esc(u.blockedReason)}">${esc(u.blockedReason)}</span>` : ''}
       </td>
       <td>
         <div class="actions-cell">
-          <button class="act-btn ${u.blocked ? 'unblock' : 'block'}" onclick="toggleBlock('${u.id}', ${u.blocked})">
+          <button class="act-btn ${u.blocked ? 'unblock' : 'block'}" data-id="${esc(u.id)}" data-blocked="${u.blocked ? '1' : '0'}" data-name="${esc(u.name)}" onclick="toggleBlock(this.dataset.id, this.dataset.blocked === '1', this.dataset.name)">
             ${u.blocked ? '✓ Unblock' : '⊘ Block'}
           </button>
           <button class="act-btn" onclick="viewUserClones('${u.id}')">Clones</button>
@@ -1105,17 +1109,30 @@ async function updatePlan(userId, plan) {
   } catch(e) { toast(e.message, 'err'); filterUsers(); }
 }
 
-async function toggleBlock(userId, currentlyBlocked) {
+async function toggleBlock(userId, currentlyBlocked, name = 'this user') {
   const blocked = !currentlyBlocked;
-  try {
-    const r = await adminFetch('PUT', `/api/admin/users/${userId}`, { blocked });
-    if (r.error) throw new Error(r.error);
-    const u = allUsers.find(u => u.id === userId);
-    if (u) u.blocked = blocked;
-    filterUsers();
-    toast(blocked ? 'User blocked' : 'User unblocked', blocked ? 'err' : 'ok');
-    refreshStats();
-  } catch(e) { toast(e.message, 'err'); }
+  const applyBlock = async (reason = '') => {
+    try {
+      const r = await adminFetch('PUT', `/api/admin/users/${userId}`, { blocked, blockedReason: reason });
+      if (r.error) throw new Error(r.error);
+      const u = allUsers.find(u => u.id === userId);
+      if (u) { u.blocked = blocked; u.blockedReason = blocked ? reason : ''; }
+      filterUsers();
+      toast(blocked ? 'User blocked' : 'User unblocked', blocked ? 'err' : 'ok');
+      refreshStats();
+    } catch(e) { toast(e.message, 'err'); }
+  };
+  if (!blocked) { await applyBlock(''); return; }
+  openModal(
+    'Block User',
+    `<p style="margin:0">Write the reason <strong>${esc(name)}</strong> will see when they try to sign in.</p>
+     <textarea id="block-reason-input" class="modal-field" maxlength="500" placeholder="Example: Payment dispute, abuse, spam, or policy violation." autofocus></textarea>`,
+    async () => {
+      const reason = document.getElementById('block-reason-input')?.value.trim() || '';
+      await applyBlock(reason);
+    }
+  );
+  setTimeout(() => document.getElementById('block-reason-input')?.focus(), 50);
 }
 
 function confirmDeleteUser(userId, name) {

@@ -3002,6 +3002,7 @@ async function checkExistingSession() {
   const urlParams = new URLSearchParams(window.location.search);
   const oauthToken = urlParams.get('oauth_token');
   const oauthError = urlParams.get('oauth_error');
+  const banReason = urlParams.get('ban_reason') || '';
   if (oauthToken) {
     setAuthToken(oauthToken);
     window.history.replaceState({}, '', window.location.pathname);
@@ -3009,12 +3010,20 @@ async function checkExistingSession() {
   if (oauthError) {
     window.history.replaceState({}, '', window.location.pathname);
     revealForm();
-    showAuthError(oauthError === 'cancelled' ? 'Sign-in cancelled.' : oauthError === 'blocked' ? 'Account suspended.' : 'Google sign-in failed. Please try again.');
+    showAuthError(oauthError === 'cancelled' ? 'Sign-in cancelled.' : oauthError === 'blocked' ? `Account suspended.${banReason ? ` Reason: ${banReason}` : ''}` : 'Google sign-in failed. Please try again.');
     return false;
   }
 
   const token = oauthToken || localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) { revealForm(); return false; }
+  if (!token) {
+    revealForm();
+    const storedAuthError = sessionStorage.getItem('wc_auth_error');
+    if (storedAuthError) {
+      sessionStorage.removeItem('wc_auth_error');
+      showAuthError(storedAuthError);
+    }
+    return false;
+  }
   setAuthToken(token);
   const cachedUser = getCachedAuthUser();
   authScreen.classList.add('auth-resuming');
@@ -3023,8 +3032,10 @@ async function checkExistingSession() {
     const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token }, signal });
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) {
+        const data = await readJsonBody(res, 'Session check').catch(() => null);
         clearAuthToken();
         revealForm();
+        if (res.status === 403) showAuthError(data?.error || 'Your account has been suspended. Contact support.');
         return false;
       }
       if (cachedUser) {

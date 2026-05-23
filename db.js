@@ -80,7 +80,7 @@ export const updateUser = async (id, fields) => {
   const allowed = [
     'name','email','hash','salt','plan','plan_renews_at','billing_interval',
     'email_verified','verify_token','verify_expiry','reset_token','reset_expiry',
-    'blocked','cancel_at_period_end','renewal_reminder_sent','usage_alert_sent',
+    'blocked','blocked_reason','cancel_at_period_end','renewal_reminder_sent','usage_alert_sent',
     'google_id','stripe_customer_id','stripe_subscription_id',
   ];
   const update = {};
@@ -89,6 +89,13 @@ export const updateUser = async (id, fields) => {
   }
   if (!Object.keys(update).length) return;
   const { error } = await supabase.from('users').update(update).eq('id', id);
+  if (error && update.blocked_reason !== undefined && /blocked_reason/i.test(error.message || '')) {
+    delete update.blocked_reason;
+    if (!Object.keys(update).length) return;
+    const retry = await supabase.from('users').update(update).eq('id', id);
+    if (retry.error) throw new Error(retry.error.message);
+    return;
+  }
   if (error) throw new Error(error.message);
 };
 
@@ -288,6 +295,27 @@ export async function saveSettings(obj) {
   const { error } = await supabase.from('settings').upsert(rows, { onConflict: 'key' });
   if (error) throw new Error(error.message);
 }
+
+const blockedReasonKey = (userId) => `blocked_reason:${userId}`;
+
+export const getUserBlockReason = async (userId) => {
+  const { data } = await supabase.from('settings').select('value').eq('key', blockedReasonKey(userId)).maybeSingle();
+  return data?.value || '';
+};
+
+export const getUserBlockReasons = async (userIds = []) => {
+  const keys = userIds.map(blockedReasonKey);
+  if (!keys.length) return {};
+  const { data, error } = await supabase.from('settings').select('key,value').in('key', keys);
+  if (error) return {};
+  const out = {};
+  for (const row of data || []) out[row.key.replace(/^blocked_reason:/, '')] = row.value || '';
+  return out;
+};
+
+export const setUserBlockReason = async (userId, reason) => {
+  await supabase.from('settings').upsert({ key: blockedReasonKey(userId), value: String(reason || '') });
+};
 
 // ── Shares ────────────────────────────────────────────────────────────────────
 

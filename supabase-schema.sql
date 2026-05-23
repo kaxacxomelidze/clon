@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   reset_token TEXT,
   reset_expiry BIGINT,
   blocked INTEGER NOT NULL DEFAULT 0,
+  blocked_reason TEXT,
   cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
   renewal_reminder_sent INTEGER NOT NULL DEFAULT 0,
   usage_alert_sent INTEGER NOT NULL DEFAULT 0,
@@ -23,6 +24,8 @@ CREATE TABLE IF NOT EXISTS users (
   stripe_subscription_id TEXT,
   created_at TEXT NOT NULL
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_reason TEXT;
 
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
