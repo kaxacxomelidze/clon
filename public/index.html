@@ -2082,13 +2082,22 @@ function apiFetch(path, init) {
   const authToken = localStorage.getItem('wc_auth_token');
   if (authToken) next.headers['X-Auth-Token'] = authToken;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs);
   next.signal = next.signal || controller.signal;
   const doneLoading = showLoading ? beginSlowLoading() : () => {};
   return fetch(apiUrl(path), next).finally(() => {
     clearTimeout(timeout);
     doneLoading();
   });
+}
+
+function friendlyFetchError(err) {
+  const name = err?.name || '';
+  const msg = String(err?.message || err || '');
+  if (name === 'AbortError' || name === 'TimeoutError' || /aborted|abort|timed out/i.test(msg)) {
+    return 'Request timed out. Please try again; if a clone started, it will appear in your history in a moment.';
+  }
+  return msg || 'Network request failed';
 }
 function deferAppWork(fn, delay = 0) {
   const run = () => { try { fn(); } catch {} };
@@ -3296,6 +3305,7 @@ async function startClone() {
     const res = await apiFetch('/api/clone', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ url, maxPages, depth: document.getElementById('depth').value, ignoreRobots: document.getElementById('ignoreRobots').checked }),
+      timeoutMs: 120000,
     });
     const job = await res.json();
     if (job.error) {
@@ -3309,7 +3319,8 @@ async function startClone() {
     document.getElementById('urlInput').value = '';
     updateUsageMeter();
   } catch(e) {
-    toast('Failed to start: ' + e.message, 'err');
+    toast('Failed to start: ' + friendlyFetchError(e), 'err');
+    loadHistory();
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Clone`;
@@ -3326,6 +3337,7 @@ async function _submitRetry(ignoreRobots) {
     const res = await apiFetch('/api/clone', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: job.url, maxPages: job.maxPages || document.getElementById('maxPages').value, depth: job.depth || document.getElementById('depth').value, ignoreRobots: ignoreRobots || false }),
+      timeoutMs: 120000,
     });
     const newJob = await res.json();
     if (newJob.error) {
@@ -3338,7 +3350,8 @@ async function _submitRetry(ignoreRobots) {
     showJob(newJob);
     updateUsageMeter();
   } catch(e) {
-    toast('Failed to retry: ' + e.message, 'err');
+    toast('Failed to retry: ' + friendlyFetchError(e), 'err');
+    loadHistory();
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg> Retry Clone'; }
   }
