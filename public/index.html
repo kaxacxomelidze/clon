@@ -2099,6 +2099,21 @@ function friendlyFetchError(err) {
   }
   return msg || 'Network request failed';
 }
+async function readJsonResponse(res, label = 'Request') {
+  const text = await res.text();
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    const clean = text.trim();
+    if (/^<!doctype html|^<html[\s>]/i.test(clean)) {
+      throw new Error(`${label} returned HTML instead of JSON. Please refresh and sign in again.`);
+    }
+    throw new Error(`${label} returned invalid JSON.`);
+  }
+  if (!res.ok || payload?.error) throw new Error(payload?.error || `HTTP ${res.status}`);
+  return payload;
+}
 function deferAppWork(fn, delay = 0) {
   const run = () => { try { fn(); } catch {} };
   if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1200 });
@@ -3581,8 +3596,7 @@ async function loadPreviewPages(outDir) {
   }
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
-    const payload = await res.json();
-    if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
+    const payload = await readJsonResponse(res, 'Preview pages');
     if (!Array.isArray(payload)) throw new Error('Invalid pages response');
     const routes = sortRoutes(payload);
     if (!routes.length) {
@@ -4028,8 +4042,7 @@ async function loadEditorPages(outDir, preferredRoute = '') {
   if (list) list.innerHTML = '<div class="ed-no-site">LOADING...</div>';
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
-    const payload = await res.json();
-    if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
+    const payload = await readJsonResponse(res, 'Editor pages');
     if (!Array.isArray(payload)) throw new Error('Invalid pages response');
     const routes = sortRoutes(payload);
     if (!routes.length) { list.innerHTML = '<div class="ed-no-site">No pages found</div>'; return; }
