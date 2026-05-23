@@ -775,7 +775,19 @@ tbody td{padding:11px 14px;vertical-align:middle}
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
-let adminToken = sessionStorage.getItem('wc_admin_token') || '';
+const ADMIN_TOKEN_KEY = 'wc_admin_token';
+function getStoredAdminToken() {
+  return localStorage.getItem(ADMIN_TOKEN_KEY) || sessionStorage.getItem(ADMIN_TOKEN_KEY) || '';
+}
+function storeAdminToken(token) {
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+function clearAdminToken() {
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+let adminToken = getStoredAdminToken();
 let allUsers = [];
 let contactsCache = [];
 let usersPage = 0;
@@ -816,7 +828,7 @@ function beginSlowLoading(delay = 900) {
 (async () => {
   if (adminToken) {
     const ok = await tryLoadApp();
-    if (!ok) { adminToken = ''; sessionStorage.removeItem('wc_admin_token'); showLogin(); }
+    if (!ok) { adminToken = ''; clearAdminToken(); showLogin(); }
   } else {
     showLogin();
   }
@@ -853,13 +865,19 @@ async function checkSecurity() {
 async function tryLoadApp() {
   try {
     const r = await adminFetch('GET', '/api/admin/stats');
-    if (r.error) return false;
+    if (r._status === 401 || r._status === 403) return false;
+    if (r.error) throw new Error(r.error);
     showApp();
     renderStats(r);
-    await loadUsers();
+    try { await loadUsers(); } catch (e) { toast(e.message || 'Users failed to load', 'err'); }
     checkSecurity();
     return true;
-  } catch { return false; }
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) return false;
+    showApp();
+    toast(e.message || 'Admin data failed to load. Refresh will retry.', 'err');
+    return true;
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -875,7 +893,7 @@ async function doLogin() {
     const data = await apiFetch('POST', '/api/admin/auth', { password: pw });
     if (data.error) throw new Error(data.error);
     adminToken = data.token;
-    sessionStorage.setItem('wc_admin_token', adminToken);
+    storeAdminToken(adminToken);
     await tryLoadApp();
   } catch(e) {
     const message = e.message || 'Wrong password';
@@ -893,7 +911,7 @@ async function doLogin() {
 async function doLogout() {
   try { await adminFetch('POST', '/api/admin/logout'); } catch {}
   adminToken = '';
-  sessionStorage.removeItem('wc_admin_token');
+  clearAdminToken();
   showLogin();
   document.getElementById('login-pw').value = '';
 }
@@ -907,7 +925,9 @@ async function apiFetch(method, path, body) {
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
-    return res.json();
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    data._status = res.status;
+    return data;
   } finally {
     doneLoading();
   }
@@ -920,7 +940,14 @@ async function adminFetch(method, path, body) {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
       body: body ? JSON.stringify(body) : undefined,
     });
-    return res.json();
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    data._status = res.status;
+    if (res.status === 401 || res.status === 403) {
+      const err = new Error(data.error || 'Admin session expired');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
   } finally {
     doneLoading();
   }
