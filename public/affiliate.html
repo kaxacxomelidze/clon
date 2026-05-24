@@ -339,17 +339,13 @@ async function loadAffiliate(manual = false) {
       status.textContent = 'Affiliate program is disabled right now.';
       return;
     }
-    if (!config.affiliate_dashboard_enabled) {
-      status.className = 'status warn';
-      status.textContent = 'Affiliate tracking is installed, but the in-app dashboard needs the Affonso API Key and Program ID in Admin Settings.';
-      document.getElementById('ref-link').value = 'Admin setup needed';
-      document.getElementById('referrals-body').innerHTML = '<tr><td class="empty" colspan="4">Waiting for Affonso API setup</td></tr>';
-      document.getElementById('rewards-body').innerHTML = '<tr><td class="empty" colspan="4">Waiting for Affonso API setup</td></tr>';
-      return;
-    }
     const res = await apiFetch('GET', '/api/affiliate/dashboard', null, { timeoutMs: 25000 });
     if (res.error) throw new Error(res.error);
     renderAffiliate(res.data || {});
+    if (res.configured === false && res.message) {
+      status.className = 'status warn';
+      status.textContent = res.message;
+    }
     if (manual) toast('Affiliate dashboard refreshed', 'ok');
   } catch (err) {
     status.className = 'status err';

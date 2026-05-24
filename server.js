@@ -364,18 +364,30 @@ function splitAffiliateName(nameOrEmail = '') {
   };
 }
 
+function affiliateSlug(user) {
+  const raw = `${user.name || user.email || user.id || 'partner'}-${user.id || ''}`.toLowerCase();
+  const slug = raw.replace(/@.*/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+  return slug || `partner-${String(user.id || '').slice(0, 8) || 'clonyfy'}`;
+}
+
+function localReferralLink(req, user) {
+  const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host || '';
+  const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(String(host));
+  const base = isLocal ? `http://${host}` : publicAppUrl(req);
+  return `${String(base).replace(/\/$/, '')}/?via=${encodeURIComponent(affiliateSlug(user))}`;
+}
+
 async function createAffonsoEmbedToken(user, settings) {
   const names = splitAffiliateName(user.name || user.email);
   const payload = {
     programId: settings.affiliate_program_id,
     partner: {
       email: user.email,
-      firstName: names.firstName,
-      lastName: names.lastName,
+      name: user.name || `${names.firstName} ${names.lastName}`.trim(),
     },
   };
   if (settings.affiliate_group_id) payload.groupId = settings.affiliate_group_id;
-  const affonsoRes = await fetch('https://api.affonso.io/v1/embed/create-token', {
+  const affonsoRes = await fetch('https://api.affonso.io/v1/embed/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -387,11 +399,16 @@ async function createAffonsoEmbedToken(user, settings) {
   if (!affonsoRes.ok) {
     throw new Error(data?.message || data?.error || 'Affonso could not create an embed token.');
   }
-  return data.token || data.embedToken || data.publicToken || data.data?.token || '';
+  const root = data.data || data;
+  return {
+    token: root.token || root.embedToken || root.publicToken || data.token || data.publicToken || '',
+    link: root.link || root.referralLink || root.referral_link || data.link || '',
+    partner: root.partner || data.partner || null,
+  };
 }
 
 async function getAffonsoEmbedData(token) {
-  const affonsoRes = await fetch(`https://api.affonso.io/v1/embed/get-data?token=${encodeURIComponent(token)}`);
+  const affonsoRes = await fetch(`https://api.affonso.io/v1/embed/data?token=${encodeURIComponent(token)}`);
   const data = await affonsoRes.json().catch(() => ({}));
   if (!affonsoRes.ok) {
     throw new Error(data?.message || data?.error || 'Affonso dashboard data could not be loaded.');
@@ -2940,9 +2957,9 @@ async function handleRequest(req, res) {
       return json(res, { error: 'Affiliate dashboard is not configured yet.', program_url: s.affiliate_program_url || 'https://affonso.io/' }, 503);
     }
     try {
-      const token = await createAffonsoEmbedToken(user, s);
-      if (!token) return json(res, { error: 'Affonso did not return an embed token.' }, 502);
-      return json(res, { ok: true, token });
+      const embed = await createAffonsoEmbedToken(user, s);
+      if (!embed.token) return json(res, { error: 'Affonso did not return an embed token.' }, 502);
+      return json(res, { ok: true, token: embed.token, link: embed.link || localReferralLink(req, user) });
     } catch (err) {
       return json(res, { error: err.message || 'Affonso request failed. Check the API key and program ID.' }, 502);
     }
@@ -2957,16 +2974,35 @@ async function handleRequest(req, res) {
     if (!enabled) return json(res, { error: 'Affiliate program is disabled.' }, 404);
     if (!s.affiliate_api_key || !s.affiliate_program_id) {
       return json(res, {
-        error: 'Affiliate dashboard is not configured yet.',
+        ok: true,
         configured: false,
         needs: ['Affonso API Key', 'Affonso Program ID'],
-      }, 503);
+        data: {
+          link: localReferralLink(req, user),
+          referralLink: localReferralLink(req, user),
+          stats: { clicks: 0, referrals: 0, conversions: 0, rewards: 0 },
+          referrals: [],
+          rewards: [],
+        },
+        message: 'Affiliate dashboard is using a CLONYFY referral link until Affonso API credentials are configured.',
+      });
     }
     try {
-      const token = await createAffonsoEmbedToken(user, s);
-      if (!token) return json(res, { error: 'Affonso did not return an embed token.' }, 502);
-      const data = await getAffonsoEmbedData(token);
-      return json(res, { ok: true, configured: true, token, data });
+      const embed = await createAffonsoEmbedToken(user, s);
+      if (!embed.token) return json(res, { error: 'Affonso did not return an embed token.' }, 502);
+      const data = await getAffonsoEmbedData(embed.token);
+      const link = data.link || data.referralLink || data.referral_link || data.partner?.referralLink || embed.link || localReferralLink(req, user);
+      return json(res, {
+        ok: true,
+        configured: true,
+        token: embed.token,
+        data: {
+          ...data,
+          link,
+          referralLink: link,
+          partner: { ...(data.partner || embed.partner || {}), referralLink: link },
+        },
+      });
     } catch (err) {
       return json(res, { error: err.message || 'Affonso dashboard failed to load.' }, 502);
     }
