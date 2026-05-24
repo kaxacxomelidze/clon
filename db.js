@@ -299,6 +299,7 @@ export async function saveSettings(obj) {
 }
 
 const affiliateReferralKey = (ownerId) => `affiliate_referrals:${ownerId}`;
+const affiliateVisitKey = (ownerId) => `affiliate_visits:${ownerId}`;
 const affiliateSlugKey = (slug) => `affiliate_slug:${slug}`;
 
 export async function getAffiliateOwnerBySlug(slug) {
@@ -325,6 +326,22 @@ export async function addAffiliateReferral(ownerId, referral) {
   if (!rows.some(r => r.userId === referral.userId)) {
     rows.unshift({ ...referral, createdAt: referral.createdAt || new Date().toISOString(), status: referral.status || 'Signed up' });
     await supabase.from('settings').upsert({ key: affiliateReferralKey(ownerId), value: JSON.stringify(rows.slice(0, 500)) }, { onConflict: 'key' });
+  }
+}
+
+export async function getAffiliateVisits(ownerId) {
+  const { data } = await supabase.from('settings').select('value').eq('key', affiliateVisitKey(ownerId)).maybeSingle();
+  try { return JSON.parse(data?.value || '[]'); } catch { return []; }
+}
+
+export async function addAffiliateVisit(ownerId, visit) {
+  if (!ownerId || !visit?.visitorId) return;
+  const rows = await getAffiliateVisits(ownerId);
+  const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const existsRecent = rows.some(r => r.visitorId === visit.visitorId && new Date(r.createdAt || 0).getTime() > recentCutoff);
+  if (!existsRecent) {
+    rows.unshift({ ...visit, createdAt: visit.createdAt || new Date().toISOString() });
+    await supabase.from('settings').upsert({ key: affiliateVisitKey(ownerId), value: JSON.stringify(rows.slice(0, 1000)) }, { onConflict: 'key' });
   }
 }
 

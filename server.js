@@ -24,7 +24,7 @@ import {
   insertAnnouncement, getAllAnnouncements,
   insertContactSubmission, getContactSubmissions,
   getCloneByOutDir, uploadCloneFile, downloadCloneFile, saveCloneTextFile, getCloneTextFile,
-  getAffiliateOwnerBySlug, saveAffiliateSlug, getAffiliateReferrals, addAffiliateReferral,
+  getAffiliateOwnerBySlug, saveAffiliateSlug, getAffiliateReferrals, addAffiliateReferral, getAffiliateVisits, addAffiliateVisit,
 } from './db.js';
 
 const _cjsRequire = createRequire(import.meta.url);
@@ -2985,6 +2985,24 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/affiliate/track') {
+    const body = await readJsonBody(req);
+    const referralCode = cleanReferralCode(body.referral || body.via || '');
+    if (!referralCode) return json(res, { ok: false, error: 'Missing referral code' }, 400);
+    if (!checkRateLimit(`affiliate_track:${ip}:${referralCode}`, 30, 3600000)) return json(res, { ok: true, throttled: true });
+    const ownerId = await getAffiliateOwnerBySlug(referralCode);
+    if (!ownerId) return json(res, { ok: true, tracked: false });
+    const visitorId = cleanReferralCode(body.visitorId || createHash('sha256').update(`${ip}:${referralCode}`).digest('hex').slice(0, 32));
+    await addAffiliateVisit(ownerId, {
+      visitorId,
+      source: referralCode,
+      path: String(body.path || '').slice(0, 200),
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 200),
+      createdAt: new Date().toISOString(),
+    });
+    return json(res, { ok: true, tracked: true });
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/affiliate/dashboard') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Sign in to view your affiliate dashboard.' }, 401);
@@ -2994,6 +3012,7 @@ async function handleRequest(req, res) {
     if (!enabled) return json(res, { error: 'Affiliate program is disabled.' }, 404);
     await saveAffiliateSlug(affiliateSlug(user), user.id).catch(() => {});
     const localReferrals = await getAffiliateReferrals(user.id).catch(() => []);
+    const localVisits = await getAffiliateVisits(user.id).catch(() => []);
     if (!s.affiliate_api_key || !s.affiliate_program_id) {
       return json(res, {
         ok: true,
@@ -3002,8 +3021,9 @@ async function handleRequest(req, res) {
         data: {
           link: localReferralLink(req, user),
           referralLink: localReferralLink(req, user),
-          stats: { clicks: 0, referrals: localReferrals.length, conversions: 0, rewards: 0 },
+          stats: { clicks: localVisits.length, referrals: localReferrals.length, conversions: 0, rewards: 0 },
           referrals: localReferrals,
+          visits: localVisits,
           rewards: [],
         },
         message: 'Your referral link is ready. Affonso reporting will appear here after the API key and program ID are connected in Admin Settings.',
@@ -3024,7 +3044,12 @@ async function handleRequest(req, res) {
           link,
           referralLink: link,
           referrals: [...localReferrals, ...affonsoReferrals],
-          stats: { ...(data.stats || {}), referrals: Math.max(Number(data.stats?.referrals || 0), localReferrals.length + affonsoReferrals.length) },
+          visits: localVisits,
+          stats: {
+            ...(data.stats || {}),
+            clicks: Math.max(Number(data.stats?.clicks || data.stats?.visits || 0), localVisits.length),
+            referrals: Math.max(Number(data.stats?.referrals || 0), localReferrals.length + affonsoReferrals.length),
+          },
           partner: { ...(data.partner || embed.partner || {}), referralLink: link },
         },
       });

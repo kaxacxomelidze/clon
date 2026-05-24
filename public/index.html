@@ -2043,6 +2043,26 @@ const isElectron = typeof window.electronAPI !== 'undefined';
 const API_TOKEN = window.__CLONYFY_TOKEN || '';
 const AUTH_TOKEN_KEY = 'wc_auth_token';
 const AUTH_USER_KEY = 'wc_auth_user';
+function captureReferralCode() {
+  const params = new URLSearchParams(location.search);
+  const via = (params.get('via') || params.get('ref') || '').trim();
+  if (!via) return;
+  const clean = via.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 80);
+  try {
+    localStorage.setItem('clonyfy_referral_code', clean);
+    let visitorId = localStorage.getItem('clonyfy_referral_visitor');
+    if (!visitorId) {
+      visitorId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      localStorage.setItem('clonyfy_referral_visitor', visitorId);
+    }
+    fetch('/api/affiliate/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ referral: clean, visitorId, path: location.pathname + location.search }),
+    }).catch(() => {});
+  } catch {}
+}
+captureReferralCode();
 function apiUrl(path) { return path; }
 function setAuthToken(token) {
   if (!token) return;
