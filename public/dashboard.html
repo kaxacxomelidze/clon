@@ -96,6 +96,15 @@ a:hover{text-decoration:underline}
 .affiliate-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 18px;border-radius:9px;background:var(--grad);color:#fff;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap}
 .affiliate-btn:hover{opacity:.88;text-decoration:none}
 .affiliate-mini{font-size:11px;color:var(--text3);margin-top:8px}
+.affiliate-dashboard{padding:0 20px 20px}
+.affiliate-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.affiliate-stat{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:13px 14px;min-width:0}
+.affiliate-stat-value{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.affiliate-stat-label{font-size:10px;color:var(--text3);font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+.affiliate-link-box{display:grid;grid-template-columns:1fr auto;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px}
+.affiliate-link-input{min-width:0;background:transparent;border:none;color:var(--text);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;outline:none}
+.affiliate-copy-btn{padding:8px 12px;border-radius:8px;background:var(--blue-bg);border:1px solid rgba(91,141,239,.25);color:var(--blue);font-size:12px;font-weight:800}
+.affiliate-state{padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:12.5px;line-height:1.7}
 
 /* ── Table ── */
 table{width:100%;border-collapse:collapse}
@@ -208,6 +217,8 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
   .stats-grid{grid-template-columns:1fr 1fr}
   .plan-hero{flex-direction:column;align-items:flex-start}
   .affiliate-panel{grid-template-columns:1fr}
+  .affiliate-stats{grid-template-columns:1fr 1fr}
+  .affiliate-link-box{grid-template-columns:1fr}
   thead th:nth-child(n+4){display:none}
   tbody td:nth-child(n+4){display:none}
   .plan-grid{padding:12px 16px}
@@ -278,15 +289,18 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
   <div class="section" id="affiliate-section">
     <div class="section-hd">
       <div class="section-title">Affiliate Program</div>
-      <a id="affiliate-header-link" class="section-action" href="https://affonso.io/" target="_blank" rel="noopener">Open Affonso -></a>
+      <button id="affiliate-refresh" class="section-action" onclick="loadAffiliateDashboard()">Refresh</button>
     </div>
     <div class="affiliate-panel">
       <div>
         <div class="affiliate-title">Earn by sharing CLONYFY</div>
-        <div class="affiliate-copy">Join the affiliate program, get your tracked referral link, and manage referrals and payouts in Affonso.</div>
-        <div class="affiliate-mini">The program link is controlled from Admin Settings.</div>
+        <div class="affiliate-copy">Your affiliate workspace is built into CLONYFY. Track clicks, referrals, conversions, rewards, and payouts here.</div>
+        <div class="affiliate-mini">Powered by Affonso embed data. No external redirect needed.</div>
       </div>
-      <a id="affiliate-main-link" class="affiliate-btn" href="https://affonso.io/" target="_blank" rel="noopener" onclick="openAffiliateDashboard(event)">Join program</a>
+      <button id="affiliate-main-link" class="affiliate-btn" onclick="loadAffiliateDashboard()">Load affiliate dashboard</button>
+    </div>
+    <div class="affiliate-dashboard" id="affiliate-dashboard">
+      <div class="affiliate-state">LOADING...</div>
     </div>
   </div>
 
@@ -454,8 +468,8 @@ let dashPaySettings = { stripe_ready: false, stripe_error: 'Payment system is no
 let currentBillingInterval = 'monthly';
 let currentPlan = 'free';
 let checkoutInProgress = false;
-let affiliateProgramUrl = 'https://affonso.io/';
 let affiliateDashboardEnabled = false;
+let affiliateDashboardLoaded = false;
 let slowLoadingCount = 0;
 let slowLoadingTimer = null;
 function beginSlowLoading(delay = 900) {
@@ -518,16 +532,14 @@ function renderAffiliateConfig(cfg = {}) {
     section.classList.add('hidden');
     return;
   }
-  const programUrl = cfg.affiliate_program_url || 'https://affonso.io/';
-  affiliateProgramUrl = programUrl;
   affiliateDashboardEnabled = !!cfg.affiliate_dashboard_enabled;
   section.classList.remove('hidden');
-  ['affiliate-header-link', 'affiliate-main-link'].forEach(id => {
-    const link = document.getElementById(id);
-    if (link) link.href = programUrl;
-  });
   const mainLink = document.getElementById('affiliate-main-link');
-  if (mainLink) mainLink.textContent = affiliateDashboardEnabled ? 'Open affiliate dashboard' : 'Join program';
+  const dash = document.getElementById('affiliate-dashboard');
+  if (mainLink) mainLink.textContent = affiliateDashboardEnabled ? 'Load affiliate dashboard' : 'Affiliate setup needed';
+  if (dash && !affiliateDashboardEnabled) {
+    dash.innerHTML = '<div class="affiliate-state">Affiliate tracking is installed, but the in-app dashboard needs the Affonso API Key and Program ID in Admin Settings.</div>';
+  }
   if (cfg.affiliate_public_id && !document.querySelector('script[src*="cdn.affonso.io/js/pixel.min.js"]')) {
     const script = document.createElement('script');
     script.src = 'https://cdn.affonso.io/js/pixel.min.js';
@@ -538,34 +550,76 @@ function renderAffiliateConfig(cfg = {}) {
     script.dataset.affonsoPixel = 'true';
     document.head.appendChild(script);
   }
+  if (affiliateDashboardEnabled && !affiliateDashboardLoaded) loadAffiliateDashboard();
 }
 
-async function openAffiliateDashboard(event) {
-  if (!affiliateDashboardEnabled) return;
-  event.preventDefault();
-  const link = event.currentTarget;
-  const oldText = link.textContent;
-  link.textContent = 'LOADING...';
+function pickAffiliateValue(obj, keys, fallback = 0) {
+  for (const key of keys) {
+    const value = key.split('.').reduce((acc, part) => acc && acc[part], obj);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return fallback;
+}
+
+function formatAffiliateMoney(value) {
+  if (typeof value === 'string' && value.includes('$')) return value;
+  const num = Number(value || 0);
+  return `$${num.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function renderAffiliateDashboard(data = {}) {
+  const dash = document.getElementById('affiliate-dashboard');
+  if (!dash) return;
+  const partner = data.partner || data.affiliate || data;
+  const stats = data.stats || data.analytics || partner.stats || {};
+  const referralLink = pickAffiliateValue(data, ['referralLink', 'referral_link', 'link', 'partner.referralLink', 'partner.referral_link', 'affiliate.referralLink'], '');
+  const clicks = pickAffiliateValue(stats, ['clicks', 'visits', 'totalClicks', 'total_clicks'], 0);
+  const referrals = pickAffiliateValue(stats, ['referrals', 'leads', 'customers', 'partners'], 0);
+  const conversions = pickAffiliateValue(stats, ['conversions', 'sales', 'paidReferrals', 'paid_referrals'], 0);
+  const rewards = pickAffiliateValue(stats, ['rewards', 'commission', 'commissions', 'earnings', 'totalRewards', 'total_rewards'], 0);
+  dash.innerHTML = `
+    <div class="affiliate-stats">
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${clicks}</div><div class="affiliate-stat-label">Clicks</div></div>
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${referrals}</div><div class="affiliate-stat-label">Referrals</div></div>
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${conversions}</div><div class="affiliate-stat-label">Conversions</div></div>
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${formatAffiliateMoney(rewards)}</div><div class="affiliate-stat-label">Rewards</div></div>
+    </div>
+    ${referralLink ? `
+      <div class="affiliate-link-box">
+        <input id="affiliate-ref-link" class="affiliate-link-input" value="${String(referralLink).replace(/"/g, '&quot;')}" readonly>
+        <button class="affiliate-copy-btn" onclick="copyAffiliateLink()">Copy link</button>
+      </div>
+    ` : '<div class="affiliate-state">Your affiliate account is ready, but Affonso did not return a referral link yet. Refresh in a moment.</div>'}
+  `;
+}
+
+async function copyAffiliateLink() {
+  const input = document.getElementById('affiliate-ref-link');
+  if (!input) return;
+  await navigator.clipboard.writeText(input.value);
+  toast('Affiliate link copied', 'ok');
+}
+
+async function loadAffiliateDashboard() {
+  const dash = document.getElementById('affiliate-dashboard');
+  const link = document.getElementById('affiliate-main-link');
+  if (!affiliateDashboardEnabled) {
+    if (dash) dash.innerHTML = '<div class="affiliate-state">Affiliate dashboard is not configured yet. Add the Affonso API Key and Program ID in Admin Settings.</div>';
+    return;
+  }
+  const oldText = link ? link.textContent : '';
+  if (link) link.textContent = 'LOADING...';
+  if (dash) dash.innerHTML = '<div class="affiliate-state">LOADING...</div>';
   try {
-    const r = await apiFetch('POST', '/api/affiliate/embed-token', {}, { silentLoading: true, timeoutMs: 20000 });
-    if (r.url) {
-      window.open(r.url, '_blank', 'noopener');
-      return;
-    }
-    if (r.token) {
-      toast('Affiliate dashboard token created, but Affonso did not return a URL. Check embed settings.', 'inf');
-      return;
-    }
-    if (r.program_url) {
-      window.open(r.program_url, '_blank', 'noopener');
-      return;
-    }
+    const r = await apiFetch('GET', '/api/affiliate/dashboard', null, { silentLoading: true, timeoutMs: 25000 });
     if (r.error) throw new Error(r.error);
-    window.open(affiliateProgramUrl, '_blank', 'noopener');
+    affiliateDashboardLoaded = true;
+    renderAffiliateDashboard(r.data || {});
   } catch (e) {
+    if (dash) dash.innerHTML = `<div class="affiliate-state">${e.message || 'Affiliate dashboard failed to load.'}</div>`;
     toast(e.message || 'Affiliate dashboard failed to open.', 'err');
   } finally {
-    link.textContent = oldText;
+    if (link) link.textContent = oldText || 'Load affiliate dashboard';
   }
 }
 
