@@ -343,7 +343,7 @@ async function loadAffiliate(manual = false) {
     if (res.error) throw new Error(res.error);
     renderAffiliate(res.data || {});
     if (res.configured === false && res.message) {
-      status.className = 'status warn';
+      status.className = 'status';
       status.textContent = res.message;
     }
     if (manual) toast('Affiliate dashboard refreshed', 'ok');

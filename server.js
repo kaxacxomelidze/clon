@@ -2984,7 +2984,7 @@ async function handleRequest(req, res) {
           referrals: [],
           rewards: [],
         },
-        message: 'Affiliate dashboard is using a CLONYFY referral link until Affonso API credentials are configured.',
+        message: 'Your referral link is ready. Affonso reporting will appear here after the API key and program ID are connected in Admin Settings.',
       });
     }
     try {
