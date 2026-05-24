@@ -383,6 +383,14 @@ function cleanReferralCode(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 80);
 }
 
+function finiteNumber(...values) {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
+  }
+  return 0;
+}
+
 async function createAffonsoEmbedToken(user, settings) {
   const names = splitAffiliateName(user.name || user.email);
   const payload = {
@@ -3052,10 +3060,10 @@ async function handleRequest(req, res) {
           visits: localVisits,
           stats: {
             ...stats,
-            clicks: Math.max(Number(stats.clicks || stats.visits || 0), localVisits.length),
-            referrals: Math.max(Number(stats.referrals || stats.leads || 0), localReferrals.length + affonsoReferrals.length),
-            conversions: Number(stats.conversions || stats.sales || 0),
-            rewards: Number(stats.rewards || stats.earnings || stats.commissions || 0),
+            clicks: Math.max(finiteNumber(stats.clicks, stats.visits), localVisits.length),
+            referrals: Math.max(finiteNumber(stats.referrals, stats.leads), localReferrals.length + affonsoReferrals.length),
+            conversions: finiteNumber(stats.conversions, stats.sales),
+            rewards: finiteNumber(stats.rewards, stats.earnings, stats.commissions),
           },
           partner: { ...(data.partner || data.affiliate || embed.partner || {}), referralLink: link, status: data.partnershipStatus || data.partner?.status },
         },
