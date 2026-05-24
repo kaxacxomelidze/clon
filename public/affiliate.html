@@ -354,13 +354,13 @@ async function loadAffiliate(manual = false) {
 }
 
 async function copyReferralLink() {
-  if (!currentReferralLink) return toast('Referral link is not ready yet', 'err');
+  if (!currentReferralLink) return toast('Referral link is loading. Refresh the dashboard.', 'err');
   await navigator.clipboard.writeText(currentReferralLink);
   toast('Referral link copied', 'ok');
 }
 
 async function copyShareText(kind) {
-  if (!currentReferralLink) return toast('Referral link is not ready yet', 'err');
+  if (!currentReferralLink) return toast('Referral link is loading. Refresh the dashboard.', 'err');
   const pitches = {
     short: `Try CLONYFY: clone and edit websites fast. ${currentReferralLink}`,
     agency: `For agencies and builders: CLONYFY turns live websites into editable projects with previews, editor, and ZIP export. ${currentReferralLink}`,
