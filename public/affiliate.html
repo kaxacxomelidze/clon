@@ -271,7 +271,7 @@ function normalize(data = {}) {
   const partner = data.partner || data.affiliate || data;
   const stats = data.stats || data.analytics || partner.stats || {};
   const referrals = asArray(data.referrals, data.customers, data.leads, partner.referrals);
-  const rewards = asArray(data.rewards, data.commissions, data.payouts, partner.rewards, partner.payouts);
+  const rewards = asArray(data.earnings, data.rewards, data.commissions, data.payouts, partner.earnings, partner.rewards, partner.payouts);
   return {
     partner,
     stats: {
@@ -281,7 +281,7 @@ function normalize(data = {}) {
       rewards: pick(stats, ['rewards','commission','commissions','earnings','totalRewards','total_rewards'], 0),
     },
     link: pick(data, ['referralLink','referral_link','link','partner.referralLink','partner.referral_link','affiliate.referralLink'], ''),
-    status: pick(partner, ['status','state'], 'Active'),
+    status: pick(data, ['partnershipStatus','status','state'], pick(partner, ['status','state'], 'Active')),
     referrals,
     rewards,
   };
@@ -301,8 +301,8 @@ function renderRows(tbodyId, rows, type) {
       const date = pick(row, ['createdAt','created_at','date','signedUpAt'], '');
       return `<tr><td>${esc(name)}</td><td>${esc(email)}</td><td><span class="pill ${/paid|active|converted/i.test(status) ? 'ok' : 'warn'}">${esc(status)}</span></td><td>${esc(dateText(date))}</td></tr>`;
     }
-    const kind = pick(row, ['type','kind','description','name'], 'Reward');
-    const amount = pick(row, ['amount','commission','reward','value'], 0);
+    const kind = pick(row, ['type','kind','description','name','source'], 'Reward');
+    const amount = pick(row, ['amount','commission','reward','value','earnings'], 0);
     const status = pick(row, ['status','state'], 'Pending');
     const date = pick(row, ['createdAt','created_at','date','paidAt'], '');
     return `<tr><td>${esc(kind)}</td><td>${esc(money(amount))}</td><td><span class="pill ${/paid|approved|complete/i.test(status) ? 'ok' : 'warn'}">${esc(status)}</span></td><td>${esc(dateText(date))}</td></tr>`;

@@ -3037,6 +3037,8 @@ async function handleRequest(req, res) {
       const data = await getAffonsoEmbedData(embed.token);
       const link = data.link || data.referralLink || data.referral_link || data.partner?.referralLink || embed.link || localReferralLink(req, user);
       const affonsoReferrals = Array.isArray(data.referrals) ? data.referrals : [];
+      const affonsoRewards = Array.isArray(data.earnings) ? data.earnings : (Array.isArray(data.rewards) ? data.rewards : []);
+      const stats = data.stats || {};
       return json(res, {
         ok: true,
         configured: true,
@@ -3046,13 +3048,16 @@ async function handleRequest(req, res) {
           link,
           referralLink: link,
           referrals: [...localReferrals, ...affonsoReferrals],
+          rewards: affonsoRewards,
           visits: localVisits,
           stats: {
-            ...(data.stats || {}),
-            clicks: Math.max(Number(data.stats?.clicks || data.stats?.visits || 0), localVisits.length),
-            referrals: Math.max(Number(data.stats?.referrals || 0), localReferrals.length + affonsoReferrals.length),
+            ...stats,
+            clicks: Math.max(Number(stats.clicks || stats.visits || 0), localVisits.length),
+            referrals: Math.max(Number(stats.referrals || stats.leads || 0), localReferrals.length + affonsoReferrals.length),
+            conversions: Number(stats.conversions || stats.sales || 0),
+            rewards: Number(stats.rewards || stats.earnings || stats.commissions || 0),
           },
-          partner: { ...(data.partner || embed.partner || {}), referralLink: link },
+          partner: { ...(data.partner || data.affiliate || embed.partner || {}), referralLink: link, status: data.partnershipStatus || data.partner?.status },
         },
       });
     } catch (err) {
