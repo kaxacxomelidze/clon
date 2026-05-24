@@ -537,10 +537,7 @@ function renderAffiliateConfig(cfg = {}) {
   section.classList.remove('hidden');
   const mainLink = document.getElementById('affiliate-main-link');
   const dash = document.getElementById('affiliate-dashboard');
-  if (mainLink) mainLink.textContent = affiliateDashboardEnabled ? 'Load affiliate dashboard' : 'Affiliate setup needed';
-  if (dash && !affiliateDashboardEnabled) {
-    dash.innerHTML = '<div class="affiliate-state">Affiliate tracking is installed, but the in-app dashboard needs the Affonso API Key and Program ID in Admin Settings.</div>';
-  }
+  if (mainLink) mainLink.textContent = 'Load referral link';
   if (cfg.affiliate_public_id && !document.querySelector('script[src*="cdn.affonso.io/js/pixel.min.js"]')) {
     const script = document.createElement('script');
     script.src = 'https://cdn.affonso.io/js/pixel.min.js';
@@ -551,7 +548,7 @@ function renderAffiliateConfig(cfg = {}) {
     script.dataset.affonsoPixel = 'true';
     document.head.appendChild(script);
   }
-  if (affiliateDashboardEnabled && !affiliateDashboardLoaded) loadAffiliateDashboard();
+  if (!affiliateDashboardLoaded) loadAffiliateDashboard();
 }
 
 function pickAffiliateValue(obj, keys, fallback = 0) {
@@ -604,10 +601,6 @@ async function copyAffiliateLink() {
 async function loadAffiliateDashboard() {
   const dash = document.getElementById('affiliate-dashboard');
   const link = document.getElementById('affiliate-main-link');
-  if (!affiliateDashboardEnabled) {
-    if (dash) dash.innerHTML = '<div class="affiliate-state">Affiliate dashboard is not configured yet. Add the Affonso API Key and Program ID in Admin Settings.</div>';
-    return;
-  }
   const oldText = link ? link.textContent : '';
   if (link) link.textContent = 'LOADING...';
   if (dash) dash.innerHTML = '<div class="affiliate-state">LOADING...</div>';
@@ -617,7 +610,7 @@ async function loadAffiliateDashboard() {
     affiliateDashboardLoaded = true;
     renderAffiliateDashboard(r.data || {});
   } catch (e) {
-    if (dash) dash.innerHTML = `<div class="affiliate-state">${e.message || 'Affiliate dashboard failed to load.'}</div>`;
+    if (dash) dash.innerHTML = '<div class="affiliate-state">Open the full affiliate page to view and copy your referral link.</div>';
     toast(e.message || 'Affiliate dashboard failed to open.', 'err');
   } finally {
     if (link) link.textContent = oldText || 'Load affiliate dashboard';

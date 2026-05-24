@@ -2954,7 +2954,7 @@ async function handleRequest(req, res) {
     const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
     if (!enabled) return json(res, { error: 'Affiliate program is disabled.' }, 404);
     if (!s.affiliate_api_key || !s.affiliate_program_id) {
-      return json(res, { error: 'Affiliate dashboard is not configured yet.', program_url: s.affiliate_program_url || 'https://affonso.io/' }, 503);
+      return json(res, { ok: true, token: '', link: localReferralLink(req, user), configured: false });
     }
     try {
       const embed = await createAffonsoEmbedToken(user, s);
