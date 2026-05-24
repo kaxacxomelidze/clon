@@ -277,7 +277,7 @@ const SETTINGS_DEFAULTS = {
   btc:'', eth:'', usdt_trc20:'', paypal_email:'', paypal_me:'', app_note:'',
   smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
   smtp_secure:'false', app_url:(process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || 'http://localhost:5000').replace(/\/$/, ''),
-  affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:'',
+  affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:'cmpj1i5tn00087mxngp80ddzy',
   affiliate_program_id:'', affiliate_group_id:'', affiliate_api_key:'',
 };
 

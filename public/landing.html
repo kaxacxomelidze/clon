@@ -1171,11 +1171,13 @@ function applyAffiliateConfig(cfg = {}) {
     link.style.display = enabled ? '' : 'none';
   });
   if (section) section.style.display = enabled ? '' : 'none';
-  if (!enabled || !cfg.affiliate_public_id || document.querySelector('script[data-affonso-pixel]')) return;
+  if (!enabled || !cfg.affiliate_public_id || document.querySelector('script[src*="cdn.affonso.io/js/pixel.min.js"]')) return;
   const script = document.createElement('script');
   script.src = 'https://cdn.affonso.io/js/pixel.min.js';
   script.async = true;
+  script.defer = true;
   script.setAttribute('data-affonso', cfg.affiliate_public_id);
+  script.setAttribute('data-cookie_duration', '30');
   script.dataset.affonsoPixel = 'true';
   document.head.appendChild(script);
 }

@@ -38,6 +38,7 @@ const EMAILS_DIR = join(__dirname, 'templates', 'emails');
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 const DEFAULT_APP_URL = (process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || `http://localhost:${PORT}`).replace(/\/$/, '');
 const CANONICAL_APP_URL = (process.env.PUBLIC_APP_URL || process.env.SHARE_BASE_URL || (process.env.VERCEL ? 'https://www.clonyfy.com' : '')).replace(/\/$/, '');
+const DEFAULT_AFFONSO_PUBLIC_ID = 'cmpj1i5tn00087mxngp80ddzy';
 
 const jobs = new Map();
 const ACTIVE_JOB_STATUSES = new Set(['running', 'saving']);
@@ -323,7 +324,7 @@ const SETTINGS_DEFAULTS = {
   btc:'', eth:'', usdt_trc20:'', paypal_email:'', paypal_me:'', app_note:'',
   smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
   smtp_secure: false, app_url: DEFAULT_APP_URL, support_email:'',
-  affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:'',
+  affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:DEFAULT_AFFONSO_PUBLIC_ID,
   affiliate_program_id:'', affiliate_group_id:'', affiliate_api_key:'',
 };
 let _settingsCache = { ...SETTINGS_DEFAULTS };
@@ -618,12 +619,31 @@ async function checkUsageAlert(userId) {
 const OUTPUT_DIR = resolve(process.env.CLONYFY_OUTPUT_DIR || (process.env.VERCEL ? '/tmp/output' : './output'));
 
 const _fileCache = new Map();
+function affonsoPixelHtml() {
+  const s = getCachedSettings();
+  const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
+  const publicId = String(s.affiliate_public_id || DEFAULT_AFFONSO_PUBLIC_ID).trim();
+  if (!enabled || !publicId) return '';
+  return `<script async defer src="https://cdn.affonso.io/js/pixel.min.js" data-affonso="${htmlEsc(publicId)}" data-cookie_duration="30"></script>`;
+}
+
+function injectAffonsoPixel(html) {
+  if (!html || /<script\b[^>]*src=["']https:\/\/cdn\.affonso\.io\/js\/pixel\.min\.js["'][^>]*>/i.test(html)) return html;
+  const script = affonsoPixelHtml();
+  if (!script) return html;
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${script}\n</head>`);
+  return `${script}\n${html}`;
+}
+
 function serveFile(res, filePath, contentType, cacheSecs = 0) {
   try {
     let data = _fileCache.get(filePath);
     if (!data) {
       data = readFileSync(filePath);
       if (cacheSecs > 0) _fileCache.set(filePath, data);
+    }
+    if (String(contentType || '').toLowerCase().includes('text/html')) {
+      data = Buffer.from(injectAffonsoPixel(data.toString('utf8')), 'utf8');
     }
     const headers = { 'Content-Type': contentType };
     if (cacheSecs > 0) headers['Cache-Control'] = `public, max-age=${cacheSecs}`;
@@ -2859,7 +2879,7 @@ async function handleRequest(req, res) {
     return json(res, {
       affiliate_enabled: enabled,
       affiliate_program_url: s.affiliate_program_url || 'https://affonso.io/',
-      affiliate_public_id: enabled ? (s.affiliate_public_id || '') : '',
+      affiliate_public_id: enabled ? (s.affiliate_public_id || DEFAULT_AFFONSO_PUBLIC_ID) : '',
       affiliate_dashboard_enabled: enabled && !!(s.affiliate_api_key && s.affiliate_program_id),
     });
   }

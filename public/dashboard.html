@@ -528,11 +528,13 @@ function renderAffiliateConfig(cfg = {}) {
   });
   const mainLink = document.getElementById('affiliate-main-link');
   if (mainLink) mainLink.textContent = affiliateDashboardEnabled ? 'Open affiliate dashboard' : 'Join program';
-  if (cfg.affiliate_public_id && !document.querySelector('script[data-affonso-pixel]')) {
+  if (cfg.affiliate_public_id && !document.querySelector('script[src*="cdn.affonso.io/js/pixel.min.js"]')) {
     const script = document.createElement('script');
     script.src = 'https://cdn.affonso.io/js/pixel.min.js';
     script.async = true;
+    script.defer = true;
     script.setAttribute('data-affonso', cfg.affiliate_public_id);
+    script.setAttribute('data-cookie_duration', '30');
     script.dataset.affonsoPixel = 'true';
     document.head.appendChild(script);
   }
