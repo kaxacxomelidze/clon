@@ -24,6 +24,7 @@ import {
   insertAnnouncement, getAllAnnouncements,
   insertContactSubmission, getContactSubmissions,
   getCloneByOutDir, uploadCloneFile, downloadCloneFile, saveCloneTextFile, getCloneTextFile,
+  getAffiliateOwnerBySlug, saveAffiliateSlug, getAffiliateReferrals, addAffiliateReferral,
 } from './db.js';
 
 const _cjsRequire = createRequire(import.meta.url);
@@ -375,6 +376,10 @@ function localReferralLink(req, user) {
   const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(String(host));
   const base = isLocal ? `http://${host}` : publicAppUrl(req);
   return `${String(base).replace(/\/$/, '')}/?via=${encodeURIComponent(affiliateSlug(user))}`;
+}
+
+function cleanReferralCode(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 80);
 }
 
 async function createAffonsoEmbedToken(user, settings) {
@@ -1971,6 +1976,7 @@ async function handleRequest(req, res) {
     if (!checkRateLimit(`reg:${ip}`, 5, 3600000)) return json(res, { error: 'Too many accounts created from this address. Try again later.' }, 429);
     const body = await readJsonBody(req);
     const { name, email, password } = body;
+    const referralCode = cleanReferralCode(body.referral || body.via || '');
     if (!name || !email || !password) return json(res, { error: 'Name, email and password are required' }, 400);
     if (password.length < 8) return json(res, { error: 'Password must be at least 8 characters' }, 400);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, { error: 'Invalid email address' }, 400);
@@ -1983,6 +1989,20 @@ async function handleRequest(req, res) {
     };
     await insertUser(user);
     await updateUser(user.id, { email_verified: 1 });
+    await saveAffiliateSlug(affiliateSlug(user), user.id);
+    if (referralCode) {
+      const ownerId = await getAffiliateOwnerBySlug(referralCode);
+      if (ownerId && ownerId !== user.id) {
+        await addAffiliateReferral(ownerId, {
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          status: 'Signed up',
+          source: referralCode,
+          createdAt: user.createdAt,
+        });
+      }
+    }
     const token = randomUUID();
     await insertSession({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + 30*24*60*60*1000, impersonatedBy: null });
     audit(user.id, user.name, 'register', null, ip);
@@ -2972,6 +2992,8 @@ async function handleRequest(req, res) {
     const s = getCachedSettings();
     const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
     if (!enabled) return json(res, { error: 'Affiliate program is disabled.' }, 404);
+    await saveAffiliateSlug(affiliateSlug(user), user.id).catch(() => {});
+    const localReferrals = await getAffiliateReferrals(user.id).catch(() => []);
     if (!s.affiliate_api_key || !s.affiliate_program_id) {
       return json(res, {
         ok: true,
@@ -2980,8 +3002,8 @@ async function handleRequest(req, res) {
         data: {
           link: localReferralLink(req, user),
           referralLink: localReferralLink(req, user),
-          stats: { clicks: 0, referrals: 0, conversions: 0, rewards: 0 },
-          referrals: [],
+          stats: { clicks: 0, referrals: localReferrals.length, conversions: 0, rewards: 0 },
+          referrals: localReferrals,
           rewards: [],
         },
         message: 'Your referral link is ready. Affonso reporting will appear here after the API key and program ID are connected in Admin Settings.',
@@ -2992,6 +3014,7 @@ async function handleRequest(req, res) {
       if (!embed.token) return json(res, { error: 'Affonso did not return an embed token.' }, 502);
       const data = await getAffonsoEmbedData(embed.token);
       const link = data.link || data.referralLink || data.referral_link || data.partner?.referralLink || embed.link || localReferralLink(req, user);
+      const affonsoReferrals = Array.isArray(data.referrals) ? data.referrals : [];
       return json(res, {
         ok: true,
         configured: true,
@@ -3000,6 +3023,8 @@ async function handleRequest(req, res) {
           ...data,
           link,
           referralLink: link,
+          referrals: [...localReferrals, ...affonsoReferrals],
+          stats: { ...(data.stats || {}), referrals: Math.max(Number(data.stats?.referrals || 0), localReferrals.length + affonsoReferrals.length) },
           partner: { ...(data.partner || embed.partner || {}), referralLink: link },
         },
       });

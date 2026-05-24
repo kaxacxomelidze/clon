@@ -298,6 +298,36 @@ export async function saveSettings(obj) {
   if (error) throw new Error(error.message);
 }
 
+const affiliateReferralKey = (ownerId) => `affiliate_referrals:${ownerId}`;
+const affiliateSlugKey = (slug) => `affiliate_slug:${slug}`;
+
+export async function getAffiliateOwnerBySlug(slug) {
+  const clean = String(slug || '').trim().toLowerCase();
+  if (!clean) return null;
+  const { data } = await supabase.from('settings').select('value').eq('key', affiliateSlugKey(clean)).maybeSingle();
+  return data?.value || null;
+}
+
+export async function saveAffiliateSlug(slug, ownerId) {
+  const clean = String(slug || '').trim().toLowerCase();
+  if (!clean || !ownerId) return;
+  await supabase.from('settings').upsert({ key: affiliateSlugKey(clean), value: String(ownerId) }, { onConflict: 'key' });
+}
+
+export async function getAffiliateReferrals(ownerId) {
+  const { data } = await supabase.from('settings').select('value').eq('key', affiliateReferralKey(ownerId)).maybeSingle();
+  try { return JSON.parse(data?.value || '[]'); } catch { return []; }
+}
+
+export async function addAffiliateReferral(ownerId, referral) {
+  if (!ownerId || !referral?.userId || ownerId === referral.userId) return;
+  const rows = await getAffiliateReferrals(ownerId);
+  if (!rows.some(r => r.userId === referral.userId)) {
+    rows.unshift({ ...referral, createdAt: referral.createdAt || new Date().toISOString(), status: referral.status || 'Signed up' });
+    await supabase.from('settings').upsert({ key: affiliateReferralKey(ownerId), value: JSON.stringify(rows.slice(0, 500)) }, { onConflict: 'key' });
+  }
+}
+
 const blockedReasonKey = (userId) => `blocked_reason:${userId}`;
 
 export const getUserBlockReason = async (userId) => {

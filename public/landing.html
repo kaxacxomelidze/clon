@@ -1162,6 +1162,15 @@ const observer = new IntersectionObserver((entries) => {
 }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
 document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
 
+function captureReferralCode() {
+  const params = new URLSearchParams(location.search);
+  const via = (params.get('via') || params.get('ref') || '').trim();
+  if (via) {
+    try { localStorage.setItem('clonyfy_referral_code', via.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 80)); } catch {}
+  }
+}
+captureReferralCode();
+
 function applyAffiliateConfig(cfg = {}) {
   const enabled = cfg.affiliate_enabled !== false && cfg.affiliate_enabled !== 'false';
   const section = document.getElementById('affiliate');

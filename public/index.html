@@ -2246,17 +2246,21 @@ async function submitRegister(e) {
   const email = document.getElementById('auth-reg-email').value.trim();
   const password = document.getElementById('auth-reg-pass').value;
   const password2 = document.getElementById('auth-reg-pass2').value;
+  const referral = (() => {
+    try { return (localStorage.getItem('clonyfy_referral_code') || '').trim(); } catch { return ''; }
+  })();
   if (password !== password2) { showAuthError('Passwords do not match'); return; }
   setAuthLoading('auth-reg-btn', true);
   document.getElementById('auth-err').className = 'auth-err';
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, referral }),
     });
     const data = await readJsonBody(res, 'Register');
     if (!res.ok || data?.error || !data?.token) { showAuthError(data?.error || `HTTP ${res.status}`); return; }
     setAuthToken(data.token);
+    try { localStorage.removeItem('clonyfy_referral_code'); } catch {}
     onAuthSuccess(data.user);
   } catch (err) {
     showAuthError('Connection error — is the server running?');
