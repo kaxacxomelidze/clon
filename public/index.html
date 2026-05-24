@@ -586,13 +586,23 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .ed-page-actions{padding:10px;border-bottom:1px solid var(--builder-line);gap:8px}
 .ed-page-add{height:34px;border-radius:8px;background:#171b20;border-color:#2a3038;color:#cbd5e1}
 .ed-page-add:hover{background:#1e252c;border-color:rgba(20,184,166,.42);color:#fff}
+.ed-site-summary{padding:11px 12px;border-bottom:1px solid var(--builder-line);background:#0d1116;display:grid;gap:8px}
+.ed-site-name{font-size:12px;font-weight:850;color:#eef2f7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ed-site-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ed-meta-pill{font-size:10px;font-weight:800;color:#9aa5b3;background:#151a20;border:1px solid #29313a;border-radius:999px;padding:4px 7px}
+.ed-page-search{width:100%;height:32px;border:1px solid #29313a;background:#0f1318;color:#d7dde5;border-radius:8px;padding:0 10px;font-size:12px;outline:none}
+.ed-page-search:focus{border-color:rgba(20,184,166,.55);box-shadow:0 0 0 3px rgba(20,184,166,.1)}
+.ed-guide{padding:10px 12px;border-bottom:1px solid var(--builder-line);background:#11161b;color:#85909e;font-size:11px;line-height:1.5}
+.ed-guide strong{display:block;color:#d7dde5;font-size:11px;margin-bottom:3px}
 .ed-left-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;border-bottom:1px solid var(--builder-line)}
 .ed-left-tool{height:54px;border-radius:9px;border:1px solid #2a3038;background:#15191e;color:#edf2f7;text-align:left;padding:9px 10px;display:flex;flex-direction:column;justify-content:center;gap:2px}
 .ed-left-tool:hover{border-color:rgba(20,184,166,.45);background:#192127}
 .ed-left-tool span{font-size:12px;font-weight:800}
 .ed-left-tool small{font-size:10px;color:var(--builder-muted);font-weight:700}
 .ed-pages-list{padding:8px}
-.ed-page-btn{border:1px solid transparent;border-left:3px solid transparent;border-radius:8px;margin-bottom:4px;padding:9px 10px;color:var(--builder-soft);font-weight:650}
+.ed-page-btn{border:1px solid transparent;border-left:3px solid transparent;border-radius:8px;margin-bottom:4px;padding:9px 10px;color:var(--builder-soft);font-weight:650;display:grid;gap:3px}
+.ed-page-route{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ed-page-kind{font-size:10px;color:var(--builder-muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em}
 .ed-page-btn:hover{background:#171b20;color:#f8fafc;border-color:#252c34}
 .ed-page-btn.on{background:rgba(20,184,166,.12);border-color:rgba(20,184,166,.28);border-left-color:var(--builder-accent);color:#7dd3c7}
 .ed-center{
@@ -661,6 +671,14 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .act-btn{background:#151a20;border-color:#2a3038;border-radius:8px;color:#cbd5e1}
 .act-btn:hover{background:#1b2229;border-color:#475260;color:#fff}
 .p-empty{min-height:220px;color:var(--builder-muted)}
+.ed-selected-card{margin:10px;border:1px solid var(--builder-line);border-radius:10px;background:#12161b;overflow:hidden}
+.ed-selected-card-hd{padding:10px 12px;background:#171b20;color:#cbd5e1;font-size:12px;font-weight:850;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ed-selected-tag{font-size:10px;color:#5eead4;background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.25);border-radius:999px;padding:3px 7px;text-transform:uppercase;font-weight:900}
+.ed-selected-body{padding:10px 12px;display:grid;gap:8px}
+.ed-selected-title{font-size:13px;color:#f8fafc;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ed-selected-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ed-selected-meta span{background:#0f1318;border:1px solid #252c34;border-radius:7px;padding:7px 8px;color:#9aa5b3;font-size:10px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ed-selected-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 @media(max-width:900px){
   .editor-root,.editor-root.pages-collapsed,.editor-root.props-collapsed,.editor-root.pages-collapsed.props-collapsed{display:flex;flex-direction:column}
   .ed-studio-bar{min-height:48px;flex-wrap:wrap;padding:8px 10px;height:auto}
@@ -1612,10 +1630,19 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
     <!-- Page list -->
     <div class="ed-pages">
       <div class="ed-pages-hd"><span>Site pages</span><button class="ed-rail-toggle" type="button" id="collapsePagesBtn" title="Hide pages panel">&lt;</button></div>
+      <div class="ed-site-summary">
+        <div class="ed-site-name" id="edSiteName">No site selected</div>
+        <div class="ed-site-meta">
+          <span class="ed-meta-pill" id="edPageCount">0 pages</span>
+          <span class="ed-meta-pill" id="edEditState">Ready</span>
+        </div>
+        <input class="ed-page-search" id="edPageSearch" placeholder="Search pages..." autocomplete="off">
+      </div>
       <div class="ed-page-actions">
         <button class="ed-page-add" type="button" id="addLoginPageBtn" title="Create /login page">+ Login</button>
         <button class="ed-page-add" type="button" id="addRegisterPageBtn" title="Create /register page">+ Register</button>
       </div>
+      <div class="ed-guide"><strong>Fast edit flow</strong>Select a page, click text or media on the canvas, then change content and style in Inspector.</div>
       <div class="ed-left-tools">
         <button class="ed-left-tool" type="button" onclick="openSectionModal()"><span>Blocks</span><small>Sections</small></button>
         <button class="ed-left-tool" type="button" onclick="setMode('select')"><span>Select</span><small>Canvas</small></button>
@@ -1802,6 +1829,23 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <div class="p-empty" id="pEmpty">
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".2"><path d="M15 15l6 6M9.5 9.5a6.5 6.5 0 1 1 0 0z"/></svg>
         Click any element in the preview to edit
+      </div>
+      <div class="ed-selected-card" id="edSelectedCard" style="display:none">
+        <div class="ed-selected-card-hd">
+          <span>Selected element</span>
+          <span class="ed-selected-tag" id="edSelectedTag">None</span>
+        </div>
+        <div class="ed-selected-body">
+          <div class="ed-selected-title" id="edSelectedTitle">Nothing selected</div>
+          <div class="ed-selected-meta">
+            <span id="edSelectedSize">Size: -</span>
+            <span id="edSelectedPos">Position: -</span>
+          </div>
+          <div class="ed-selected-actions">
+            <button class="act-btn" type="button" onclick="document.getElementById('act-dup')?.click()">Duplicate</button>
+            <button class="act-btn" type="button" onclick="document.getElementById('act-del')?.click()">Delete</button>
+          </div>
+        </div>
       </div>
       <div class="p-body" id="pBody">
 
@@ -3096,6 +3140,7 @@ let allJobs = [];
 let currentTab = 'clone';
 let editorOutDir = '';
 let editorRoute = '/';
+let editorRoutes = [];
 let lastLogLen = 0;
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -4112,23 +4157,74 @@ if (!localStorage.getItem(FOLD_KEY)) {
   document.getElementById('grp-layout')?.classList.remove('cl');
 }
 
+function editorSiteLabel(outDir = editorOutDir) {
+  const job = allJobs.find(j => j.outDir === outDir);
+  if (job?.label) return job.label;
+  if (job?.url) {
+    try { return new URL(job.url).hostname.replace(/^www\./, ''); } catch { return job.url; }
+  }
+  return outDir ? (outDir.split(/[\\/]/).pop() || 'Clone') : 'No site selected';
+}
+
+function routeKind(route) {
+  if (route === '/') return 'Home';
+  if (/login|signin|register|signup/i.test(route)) return 'Auth';
+  if (/contact/i.test(route)) return 'Contact';
+  if (/about/i.test(route)) return 'Info';
+  if (/service/i.test(route)) return 'Services';
+  if (/catalog|shop|product/i.test(route)) return 'Catalog';
+  return 'Page';
+}
+
+function updateEditorSiteSummary(routes = editorRoutes) {
+  const site = document.getElementById('edSiteName');
+  const count = document.getElementById('edPageCount');
+  const state = document.getElementById('edEditState');
+  if (site) site.textContent = editorSiteLabel();
+  if (count) count.textContent = `${routes.length} page${routes.length === 1 ? '' : 's'}`;
+  if (state) state.textContent = editorRoute ? `Editing ${routeLabel(editorRoute)}` : 'Ready';
+}
+
+function renderEditorPageList(routes = editorRoutes) {
+  const list = document.getElementById('edPageList');
+  if (!list) return;
+  const query = String(document.getElementById('edPageSearch')?.value || '').trim().toLowerCase();
+  const shown = routes.filter(r => !query || r.toLowerCase().includes(query) || routeLabel(r).toLowerCase().includes(query));
+  if (!shown.length) {
+    list.innerHTML = `<div class="ed-no-site">No pages match<br><small>${escHtml(query)}</small></div>`;
+    return;
+  }
+  list.innerHTML = shown.map(r =>
+    `<button class="ed-page-btn" data-route="${encodedRouteValue(r)}" onclick="loadEditorPage(this.dataset.route)" title="${escHtml(r)}">
+      <span class="ed-page-route">${escHtml(routeLabel(r))}</span>
+      <span class="ed-page-kind">${escHtml(routeKind(r))} · ${escHtml(r)}</span>
+    </button>`
+  ).join('');
+  document.querySelectorAll('.ed-page-btn').forEach(b => b.classList.toggle('on', b.dataset.route === encodedRouteValue(editorRoute)));
+}
+
+document.getElementById('edPageSearch')?.addEventListener('input', () => renderEditorPageList());
+
 async function loadEditorPages(outDir, preferredRoute = '') {
   const list = document.getElementById('edPageList');
   if (!outDir) {
     if (list) list.innerHTML = '<div class="ed-no-site">Clone a site first</div>';
+    editorRoutes = [];
+    updateEditorSiteSummary([]);
     return;
   }
   editorOutDir = outDir;
+  updateEditorSiteSummary([]);
   if (list) list.innerHTML = '<div class="ed-no-site">LOADING...</div>';
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
     const payload = await readJsonResponse(res, 'Editor pages');
     if (!Array.isArray(payload)) throw new Error('Invalid pages response');
     const routes = sortRoutes(payload);
+    editorRoutes = routes;
+    updateEditorSiteSummary(routes);
     if (!routes.length) { list.innerHTML = '<div class="ed-no-site">No pages found</div>'; return; }
-    list.innerHTML = routes.map(r =>
-      `<button class="ed-page-btn" data-route="${encodedRouteValue(r)}" onclick="loadEditorPage(this.dataset.route)" title="${escHtml(r)}">${escHtml(routeLabel(r))}</button>`
-    ).join('');
+    renderEditorPageList(routes);
     const nextRoute = routes.includes(preferredRoute) ? preferredRoute : (routes.includes(editorRoute) ? editorRoute : routes[0]);
     loadEditorPage(encodedRouteValue(nextRoute));
   } catch(e) {
@@ -4166,6 +4262,7 @@ async function loadEditorPage(encodedRoute) {
   document.querySelectorAll('.ed-page-btn').forEach(b => b.classList.toggle('on', b.dataset.route === encodedRouteValue(route)));
   document.getElementById('edCurrentPage').textContent = route;
   document.getElementById('edBuilderRoute').textContent = route === '/' ? 'Home page' : route;
+  updateEditorSiteSummary();
   document.getElementById('edEmptyPreview').style.display = 'none';
   const fw = document.getElementById('frame-wrap');
   fw.style.display = 'flex';
@@ -4709,6 +4806,7 @@ function select(el) {
   ensureLayerId(el);
   syncPanel(el);
   updateSelBox();
+  updateSelectedSummary(el);
   renderLayers();
   document.getElementById('pEmpty').style.display = 'none';
   document.getElementById('pBody').style.display = 'block';
@@ -4721,6 +4819,7 @@ function deselect() {
   const box = document.getElementById('sel-box');
   if (box) box.style.display = 'none';
   updateHoverBox(null);
+  updateSelectedSummary(null);
   document.getElementById('pEmpty').style.display = '';
   document.getElementById('pBody').style.display = 'none';
   renderLayers();
@@ -4752,6 +4851,23 @@ function layerTitle(el) {
   const text = (el.getAttribute('aria-label') || el.getAttribute('alt') || el.textContent || '').trim().replace(/\s+/g, ' ');
   if (text) return text.slice(0, 34);
   return layerTag(el);
+}
+
+function updateSelectedSummary(el = edSelEl) {
+  const card = document.getElementById('edSelectedCard');
+  if (!card) return;
+  if (!el) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  const rect = el.getBoundingClientRect();
+  const cs = iframeGCS(el);
+  const tag = layerTag(el);
+  document.getElementById('edSelectedTag').textContent = tag;
+  document.getElementById('edSelectedTitle').textContent = layerTitle(el);
+  document.getElementById('edSelectedSize').textContent = `Size: ${Math.round(rect.width)} x ${Math.round(rect.height)}`;
+  document.getElementById('edSelectedPos').textContent = `Position: ${cs.position || 'static'}`;
 }
 
 function getLayerItems() {
@@ -4991,7 +5107,7 @@ function syncPanel(el) {
     const cssEl = document.getElementById('p-css');
     if (cssEl) cssEl.value = el.getAttribute('style') || '';
     // Update selection box position after syncing
-    setTimeout(updateSelBox, 0);
+    setTimeout(() => { updateSelBox(); updateSelectedSummary(el); }, 0);
   } catch {}
   edSyncing = false;
 }
@@ -5053,6 +5169,7 @@ function applyStyle(prop, val) {
   setInlineStyle(edSelEl, prop, val);
   pushUndo({type:'style', el:edSelEl, prop, old, val, priority:'important'});
   updateSelBox();
+  updateSelectedSummary(edSelEl);
   updateHoverBox(null);
 }
 
