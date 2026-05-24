@@ -47,10 +47,14 @@ const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job?.status);
 
 // ── Security constants ────────────────────────────────────────────────────────
 // Set PASSWORD_PEPPER and SHARE_PASSWORD_PEPPER in your .env file.
-// Defaults keep backward-compatibility with existing password hashes.
-const PASSWORD_PEPPER = process.env.PASSWORD_PEPPER || 'wc_secret_2025';
-const SHARE_PASSWORD_PEPPER = process.env.SHARE_PASSWORD_PEPPER || 'wc_share_2025';
-if (PASSWORD_PEPPER === 'wc_secret_2025') {
+// Legacy defaults stay accepted for old hashes/share links while new secrets can be rotated in.
+const LEGACY_PASSWORD_PEPPER = 'wc_secret_2025';
+const LEGACY_SHARE_PASSWORD_PEPPER = 'wc_share_2025';
+const PASSWORD_PEPPER = process.env.PASSWORD_PEPPER || LEGACY_PASSWORD_PEPPER;
+const SHARE_PASSWORD_PEPPER = process.env.SHARE_PASSWORD_PEPPER || LEGACY_SHARE_PASSWORD_PEPPER;
+const PASSWORD_PEPPER_FALLBACKS = [...new Set([PASSWORD_PEPPER, LEGACY_PASSWORD_PEPPER, ...(process.env.PASSWORD_PEPPER_FALLBACKS || '').split(',').map(s => s.trim()).filter(Boolean)])];
+const SHARE_PASSWORD_PEPPER_FALLBACKS = [...new Set([SHARE_PASSWORD_PEPPER, LEGACY_SHARE_PASSWORD_PEPPER, ...(process.env.SHARE_PASSWORD_PEPPER_FALLBACKS || '').split(',').map(s => s.trim()).filter(Boolean)])];
+if (!process.env.PASSWORD_PEPPER) {
   console.warn('[WARN] PASSWORD_PEPPER is not set — using insecure default. Add PASSWORD_PEPPER=<random> to .env');
 }
 
@@ -258,6 +262,9 @@ function stripeSubscriptionPlan(sub, fallbackPlan = 'free') {
 function hashPassword(password, salt) {
   return createHash('sha256').update(salt + password + PASSWORD_PEPPER).digest('hex');
 }
+function hashPasswordWithPepper(password, salt, pepper) {
+  return createHash('sha256').update(salt + password + pepper).digest('hex');
+}
 async function hashPw(password) {
   if (bcrypt) return { hash: await bcrypt.hash(password, 12), salt: null };
   const salt = randomUUID().replace(/-/g, '');
@@ -268,7 +275,8 @@ async function verifyPw(password, user) {
   if (h.startsWith('$2b$') || h.startsWith('$2a$')) {
     return bcrypt ? bcrypt.compare(password, h) : false;
   }
-  return h === hashPassword(password, user.salt || '');
+  const salt = user.salt || '';
+  return PASSWORD_PEPPER_FALLBACKS.some(pepper => h === hashPasswordWithPepper(password, salt, pepper));
 }
 
 // Cache validated sessions for 60 s — avoids 2 Supabase round-trips on every request.
@@ -2720,8 +2728,8 @@ async function handleRequest(req, res) {
       }
       if (!pw) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId)); return; }
       if (!checkRateLimit(`share_pw:${ip}:${shareId}`, 10, 300000)) { res.writeHead(429, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Too many attempts. Try again in 5 minutes.')); return; }
-      const hash = createHash('sha256').update(share.salt + pw + SHARE_PASSWORD_PEPPER).digest('hex');
-      if (hash !== share.password_hash) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.')); return; }
+      const ok = SHARE_PASSWORD_PEPPER_FALLBACKS.some(pepper => createHash('sha256').update(share.salt + pw + pepper).digest('hex') === share.password_hash);
+      if (!ok) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.')); return; }
     }
     const map = await loadRouteMapAsync(share.out_dir) || await inferRouteMapFromCapturedPages(share.out_dir);
     if (!map) { res.writeHead(404); res.end('Clone no longer exists'); return; }
