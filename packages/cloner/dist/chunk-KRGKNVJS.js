@@ -1666,6 +1666,11 @@ function isServerlessRuntime(env = process.env, cwd = process.cwd()) {
   return env.VERCEL === "1" || env.VERCEL === "true" || env.CLONYFY_SERVERLESS === "1" || !!env.VERCEL_ENV || !!env.AWS_LAMBDA_FUNCTION_NAME || !!env.LAMBDA_TASK_ROOT || cwd.startsWith("/var/task");
 }
 var IS_SERVERLESS2 = isServerlessRuntime();
+var envInt = (key, fallback, min, max) => {
+  const raw = Number.parseInt(process.env[key] ?? "", 10);
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.max(min, Math.min(max, raw));
+};
 var NON_PAGE_EXTS2 = /* @__PURE__ */ new Set([
   ".7z",
   ".aac",
@@ -1716,11 +1721,11 @@ var NON_PAGE_EXTS2 = /* @__PURE__ */ new Set([
   ".zip"
 ]);
 var NAV_DELAY_MS = IS_SERVERLESS2 ? 50 : 250;
-var PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS2 ? 35e3 : 18e4;
+var PAGE_CAPTURE_TIMEOUT = envInt("CLONYFY_PAGE_CAPTURE_TIMEOUT_MS", IS_SERVERLESS2 ? 55e3 : 18e4, 1e4, 24e4);
 var USER_AGENT3 = "Mozilla/5.0 (compatible; CLONYFY/0.1; +local archival)";
 var STATIC_ASSET_LIMIT = IS_SERVERLESS2 ? 80 : 250;
-var STATIC_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 1e4;
-var STATIC_PAGE_TIMEOUT = IS_SERVERLESS2 ? 12e3 : 15e3;
+var STATIC_ASSET_TIMEOUT = envInt("CLONYFY_STATIC_ASSET_TIMEOUT_MS", IS_SERVERLESS2 ? 6e3 : 1e4, 1e3, 6e4);
+var STATIC_PAGE_TIMEOUT = envInt("CLONYFY_STATIC_PAGE_TIMEOUT_MS", IS_SERVERLESS2 ? 2e4 : 15e3, 3e3, 6e4);
 var STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS2 ? 8 : 50) * 1024 * 1024;
 var STATIC_ASSET_CONCURRENCY = IS_SERVERLESS2 ? 6 : 12;
 var STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 6e4;
@@ -10945,4 +10950,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-F76FE6LH.js.map
+//# sourceMappingURL=chunk-KRGKNVJS.js.map

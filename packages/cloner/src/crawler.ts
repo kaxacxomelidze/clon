@@ -24,6 +24,11 @@ export function isServerlessRuntime(
 }
 
 const IS_SERVERLESS = isServerlessRuntime();
+const envInt = (key: string, fallback: number, min: number, max: number): number => {
+  const raw = Number.parseInt(process.env[key] ?? '', 10);
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.max(min, Math.min(max, raw));
+};
 
 const NON_PAGE_EXTS = new Set([
   '.7z','.aac','.avi','.avif','.bin','.bmp','.css','.csv','.doc','.docx',
@@ -33,11 +38,11 @@ const NON_PAGE_EXTS = new Set([
   '.webp','.woff','.woff2','.xls','.xlsx','.xml','.zip',
 ]);
 const NAV_DELAY_MS = IS_SERVERLESS ? 50 : 250;
-const PAGE_CAPTURE_TIMEOUT = IS_SERVERLESS ? 35_000 : 180_000;
+const PAGE_CAPTURE_TIMEOUT = envInt('CLONYFY_PAGE_CAPTURE_TIMEOUT_MS', IS_SERVERLESS ? 55_000 : 180_000, 10_000, 240_000);
 const USER_AGENT = 'Mozilla/5.0 (compatible; CLONYFY/0.1; +local archival)';
 const STATIC_ASSET_LIMIT = IS_SERVERLESS ? 80 : 250;
-const STATIC_ASSET_TIMEOUT = IS_SERVERLESS ? 4_000 : 10_000;
-const STATIC_PAGE_TIMEOUT = IS_SERVERLESS ? 12_000 : 15_000;
+const STATIC_ASSET_TIMEOUT = envInt('CLONYFY_STATIC_ASSET_TIMEOUT_MS', IS_SERVERLESS ? 6_000 : 10_000, 1_000, 60_000);
+const STATIC_PAGE_TIMEOUT = envInt('CLONYFY_STATIC_PAGE_TIMEOUT_MS', IS_SERVERLESS ? 20_000 : 15_000, 3_000, 60_000);
 const STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
 const STATIC_ASSET_CONCURRENCY = IS_SERVERLESS ? 6 : 12;
 const STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS ? 4_000 : 60_000;
