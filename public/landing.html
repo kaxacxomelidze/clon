@@ -944,7 +944,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
       <h2 class="s-title">Earn by recommending CLONYFY.</h2>
       <p class="s-sub">Give agencies, founders, and builders a faster way to clone and edit websites. Your affiliate workspace is managed through Affonso.</p>
       <div class="affiliate-actions">
-        <a class="affiliate-cta js-affiliate-link" href="/dashboard#affiliate-section">Join affiliate program</a>
+        <a class="affiliate-cta js-affiliate-link" href="/affiliate">Join affiliate program</a>
       </div>
       <p class="affiliate-note">The affiliate workspace is inside your CLONYFY dashboard. Tracking and rewards are powered by Affonso behind the scenes.</p>
     </div>
@@ -1166,7 +1166,7 @@ function applyAffiliateConfig(cfg = {}) {
   const enabled = cfg.affiliate_enabled !== false && cfg.affiliate_enabled !== 'false';
   const section = document.getElementById('affiliate');
   document.querySelectorAll('.js-affiliate-link').forEach(link => {
-    link.href = '/dashboard#affiliate-section';
+    link.href = '/affiliate';
     link.removeAttribute('target');
     link.removeAttribute('rel');
     link.style.display = enabled ? '' : 'none';

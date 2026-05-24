@@ -3215,6 +3215,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/dashboard') return serveFile(res, join(__dirname, 'public', 'dashboard.html'), 'text/html');
+  if (req.method === 'GET' && url.pathname === '/affiliate') return serveFile(res, join(__dirname, 'public', 'affiliate.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/reset-password') return serveFile(res, join(__dirname, 'public', 'reset-password.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/tos') return serveFile(res, join(__dirname, 'public', 'tos.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/privacy') return serveFile(res, join(__dirname, 'public', 'privacy.html'), 'text/html');
