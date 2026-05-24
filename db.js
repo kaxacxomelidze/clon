@@ -279,6 +279,7 @@ const SETTINGS_DEFAULTS = {
   smtp_secure:'false', app_url:(process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || 'http://localhost:5000').replace(/\/$/, ''),
   affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:'cmpj1i5tn00087mxngp80ddzy',
   affiliate_program_id:'', affiliate_group_id:'', affiliate_api_key:'',
+  github_client_id:'', github_client_secret:'',
 };
 
 export async function getSettings() {

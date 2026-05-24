@@ -15,7 +15,7 @@ import {
   getSession, insertSession, deleteSession, deleteUserSessions, cleanExpiredSessions,
   insertClone, updateCloneLabel, updateCloneStatus, getClonesByUser, getAllClones, deleteCloneById, deleteUserClones, getCloneCountThisMonth,
   getAllPayments, getPaymentsByUser, getPaymentById, insertPayment, updatePayment, getPendingPaymentByUserPlan, getAdminStats,
-  getSettings, saveSettings,
+  getSettings, saveSettings, getSetting, setSetting,
   getUserBlockReason, getUserBlockReasons, setUserBlockReason,
   getShare, insertShare,
   getAllPromoCodes, getPromoCode, insertPromoCode, incrementPromoUsed, deletePromoCode,
@@ -327,6 +327,7 @@ const SETTINGS_DEFAULTS = {
   smtp_secure: false, app_url: DEFAULT_APP_URL, support_email:'',
   affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:DEFAULT_AFFONSO_PUBLIC_ID,
   affiliate_program_id:'', affiliate_group_id:'', affiliate_api_key:'',
+  github_client_id:'', github_client_secret:'',
 };
 let _settingsCache = { ...SETTINGS_DEFAULTS };
 async function initSettings() { _settingsCache = await getSettings(); }
@@ -2952,6 +2953,7 @@ async function handleRequest(req, res) {
       stripe_error: stripeReason,
       stripe_publishable_key: s.stripe_publishable_key || '',
       google_oauth_enabled: !!s.google_client_id,
+      github_oauth_enabled: !!s.github_client_id,
     });
   }
 
@@ -3247,6 +3249,7 @@ async function handleRequest(req, res) {
       // secret fields — only overwrite when a real value is sent (not masked placeholder)
       'stripe_secret_key', 'stripe_webhook_secret',
       'google_client_id', 'google_client_secret',
+      'github_client_id', 'github_client_secret',
     ];
     for (const k of plainKeys) {
       if (body[k] !== undefined && !isMaskedSecret(body[k])) {
@@ -3644,6 +3647,112 @@ async function handleRequest(req, res) {
       res.end();
     } catch (err) {
       console.error('[Google OAuth]', err.message);
+      res.writeHead(302, { Location: `${appUrl}/app?oauth_error=server_error` });
+      res.end();
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/auth/github') {
+    const s = getCachedSettings();
+    if (!s.github_client_id) return json(res, { error: 'GitHub OAuth not configured' }, 503);
+    const state = randomUUID().replace(/-/g, '');
+    _oauthStates.set(state, Date.now() + 10 * 60 * 1000);
+    const appUrl = publicAppUrl(req);
+    const redirectUri = `${appUrl}/api/auth/github/callback`;
+    const params = new URLSearchParams({
+      client_id: s.github_client_id,
+      redirect_uri: redirectUri,
+      scope: 'read:user user:email',
+      state,
+      allow_signup: 'true',
+    });
+    res.writeHead(302, { Location: `https://github.com/login/oauth/authorize?${params}` });
+    res.end();
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/auth/github/callback') {
+    const s = getCachedSettings();
+    const appUrl = publicAppUrl(req);
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    const errParam = url.searchParams.get('error');
+    if (errParam || !code || !state) { res.writeHead(302, { Location: `${appUrl}/app?oauth_error=cancelled` }); res.end(); return; }
+    if (!_oauthStates.has(state)) { res.writeHead(302, { Location: `${appUrl}/app?oauth_error=invalid_state` }); res.end(); return; }
+    _oauthStates.delete(state);
+    try {
+      const redirectUri = `${appUrl}/api/auth/github/callback`;
+      const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        body: new URLSearchParams({
+          code,
+          client_id: s.github_client_id,
+          client_secret: s.github_client_secret || '',
+          redirect_uri: redirectUri,
+        }),
+      });
+      if (!tokenRes.ok) throw new Error('token exchange failed');
+      const tokenBody = await tokenRes.json();
+      if (!tokenBody.access_token) throw new Error(tokenBody.error_description || tokenBody.error || 'missing access token');
+
+      const ghHeaders = {
+        Authorization: `Bearer ${tokenBody.access_token}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'CLONYFY',
+      };
+      const userInfoRes = await fetch('https://api.github.com/user', { headers: ghHeaders });
+      if (!userInfoRes.ok) throw new Error('userinfo failed');
+      const ghUser = await userInfoRes.json();
+      const githubId = String(ghUser.id || '');
+      let githubEmail = String(ghUser.email || '').toLowerCase().trim();
+      if (!githubEmail) {
+        const emailsRes = await fetch('https://api.github.com/user/emails', { headers: ghHeaders });
+        if (emailsRes.ok) {
+          const emails = await emailsRes.json();
+          const primary = Array.isArray(emails)
+            ? (emails.find(e => e.primary && e.verified) || emails.find(e => e.verified) || emails[0])
+            : null;
+          githubEmail = String(primary?.email || '').toLowerCase().trim();
+        }
+      }
+      if (!githubId) throw new Error('missing github id');
+      if (!githubEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(githubEmail)) throw new Error('verified email missing');
+
+      const githubName = ghUser.name || ghUser.login || githubEmail.split('@')[0];
+      const mappingKey = `oauth_github:${githubId}`;
+      const mappedUserId = await getSetting(mappingKey);
+      let dbUser = mappedUserId ? await getUserById(mappedUserId) : null;
+      if (!dbUser) dbUser = await getUserByEmail(githubEmail);
+      if (!dbUser) {
+        const newId = randomUUID();
+        const createdAt = new Date().toISOString();
+        const user = { id: newId, name: githubName, email: githubEmail, hash: '', salt: null, verifyToken: null, verifyExpiry: null, createdAt };
+        await insertUser(user);
+        await updateUser(newId, { email_verified: 1 });
+        await saveAffiliateSlug(affiliateSlug(user), newId).catch(() => {});
+        dbUser = await getUserById(newId);
+        audit(newId, githubName, 'register_github', null, ip);
+      }
+
+      await setSetting(mappingKey, dbUser.id);
+      if (!dbUser.email_verified) await updateUser(dbUser.id, { email_verified: 1 });
+      if (dbUser.blocked) {
+        const reason = encodeURIComponent(await userBlockedReason(dbUser));
+        res.writeHead(302, { Location: `${appUrl}/app?oauth_error=blocked&ban_reason=${reason}` });
+        res.end();
+        return;
+      }
+
+      const sessionToken = randomUUID();
+      await insertSession({ token: sessionToken, userId: dbUser.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + 30*24*60*60*1000, impersonatedBy: null });
+      audit(dbUser.id, dbUser.name, 'login_github', null, ip);
+
+      res.writeHead(302, { Location: `${appUrl}/app?oauth_token=${sessionToken}` });
+      res.end();
+    } catch (err) {
+      console.error('[GitHub OAuth]', err.message);
       res.writeHead(302, { Location: `${appUrl}/app?oauth_error=server_error` });
       res.end();
     }

@@ -526,6 +526,17 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-google-client-secret" type="password" placeholder="GOCSPX-…">
           </div>
 
+          <div class="settings-section">GitHub OAuth</div>
+          <div class="settings-group">
+            <div class="settings-label">GitHub Client ID</div>
+            <input class="settings-input" id="s-github-client-id" placeholder="Ov23li...">
+            <div class="settings-hint">GitHub Developer Settings &rarr; OAuth Apps. Redirect URI: <code style="color:var(--blue)">{APP_URL}/api/auth/github/callback</code></div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">GitHub Client Secret</div>
+            <input class="settings-input" id="s-github-client-secret" type="password" placeholder="github client secret">
+          </div>
+
           <div class="settings-section">💳 Stripe</div>
           <div class="settings-group">
             <div class="settings-label">Secret Key</div>
@@ -1700,6 +1711,8 @@ async function loadAdminSettings() {
     document.getElementById('s-support-email').value = s.support_email || '';
     document.getElementById('s-google-client-id').value = s.google_client_id || '';
     document.getElementById('s-google-client-secret').value = s.google_client_secret ? '••••••••' : '';
+    document.getElementById('s-github-client-id').value = s.github_client_id || '';
+    document.getElementById('s-github-client-secret').value = s.github_client_secret ? '••••••••' : '';
     document.getElementById('s-stripe-secret').value = (s.stripe_secret_key || s.stripe_secret_key_configured) ? '••••••••' : '';
     document.getElementById('s-stripe-pub').value = s.stripe_publishable_key || '';
     document.getElementById('s-stripe-webhook').value = (s.stripe_webhook_secret || s.stripe_webhook_secret_configured) ? '••••••••' : '';
@@ -1747,6 +1760,10 @@ async function saveAdminSettings() {
   const googleClientId = document.getElementById('s-google-client-id').value;
   if (googleClientId) body.google_client_id = googleClientId;
   if (googleSecret && googleSecret !== '••••••••') body.google_client_secret = googleSecret;
+  const githubSecret = document.getElementById('s-github-client-secret').value;
+  const githubClientId = document.getElementById('s-github-client-id').value;
+  if (githubClientId) body.github_client_id = githubClientId;
+  if (githubSecret && githubSecret !== '••••••••') body.github_client_secret = githubSecret;
   const stripeSecret = document.getElementById('s-stripe-secret').value;
   if (stripeSecret && stripeSecret !== '••••••••') body.stripe_secret_key = stripeSecret;
   const stripeWebhook = document.getElementById('s-stripe-webhook').value;
