@@ -447,6 +447,41 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-note" placeholder="e.g. Maintenance on Saturday 2am–4am UTC" style="font-family:inherit">
           </div>
 
+          <div class="settings-section">Affiliate Program</div>
+          <div class="settings-group">
+            <div class="settings-label">Affiliate program enabled</div>
+            <select class="settings-input" id="s-affiliate-enabled" style="font-family:inherit">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+            <div class="settings-hint">Shows the affiliate section and dashboard CTA.</div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Affonso Program URL</div>
+            <input class="settings-input" id="s-affiliate-url" placeholder="https://affonso.io/" style="font-family:inherit">
+            <div class="settings-hint">Paste the public join URL from Affonso.</div>
+          </div>
+          <div class="settings-group settings-full" style="grid-column:1/-1">
+            <div class="settings-label">Affonso Public Program ID</div>
+            <input class="settings-input" id="s-affiliate-public-id" placeholder="pub_..." style="font-family:inherit">
+            <div class="settings-hint">Optional. Used to load the Affonso tracking pixel on the public site.</div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Affonso Program ID</div>
+            <input class="settings-input" id="s-affiliate-program-id" placeholder="program_..." style="font-family:inherit">
+            <div class="settings-hint">Used by the server to create affiliate dashboard tokens.</div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Affonso Group ID</div>
+            <input class="settings-input" id="s-affiliate-group-id" placeholder="group_..." style="font-family:inherit">
+            <div class="settings-hint">Optional group for new affiliate partners.</div>
+          </div>
+          <div class="settings-group settings-full" style="grid-column:1/-1">
+            <div class="settings-label">Affonso API Key</div>
+            <input class="settings-input" id="s-affiliate-api-key" type="password" placeholder="affonso_api_key" style="font-family:inherit">
+            <div class="settings-hint">Server-only key. Required for dashboard embed tokens.</div>
+          </div>
+
           <div class="settings-section">📧 SMTP Email (for verification & password reset)</div>
           <div class="settings-group">
             <div class="settings-label">SMTP Host</div>
@@ -1650,6 +1685,12 @@ async function loadAdminSettings() {
     document.getElementById('s-pp-email').value = s.paypal_email || '';
     document.getElementById('s-pp-me').value = s.paypal_me || '';
     document.getElementById('s-note').value = s.app_note || '';
+    document.getElementById('s-affiliate-enabled').value = String(s.affiliate_enabled ?? 'true');
+    document.getElementById('s-affiliate-url').value = s.affiliate_program_url || 'https://affonso.io/';
+    document.getElementById('s-affiliate-public-id').value = s.affiliate_public_id || '';
+    document.getElementById('s-affiliate-program-id').value = s.affiliate_program_id || '';
+    document.getElementById('s-affiliate-group-id').value = s.affiliate_group_id || '';
+    document.getElementById('s-affiliate-api-key').value = s.affiliate_api_key ? '••••••••' : '';
     document.getElementById('s-smtp-host').value = s.smtp_host || '';
     document.getElementById('s-smtp-port').value = s.smtp_port || '587';
     document.getElementById('s-smtp-user').value = s.smtp_user || '';
@@ -1678,6 +1719,11 @@ async function saveAdminSettings() {
     paypal_email: document.getElementById('s-pp-email').value,
     paypal_me: document.getElementById('s-pp-me').value,
     app_note: document.getElementById('s-note').value,
+    affiliate_enabled: document.getElementById('s-affiliate-enabled').value,
+    affiliate_program_url: document.getElementById('s-affiliate-url').value,
+    affiliate_public_id: document.getElementById('s-affiliate-public-id').value,
+    affiliate_program_id: document.getElementById('s-affiliate-program-id').value,
+    affiliate_group_id: document.getElementById('s-affiliate-group-id').value,
     smtp_host: document.getElementById('s-smtp-host').value,
     smtp_port: document.getElementById('s-smtp-port').value,
     smtp_user: document.getElementById('s-smtp-user').value,
@@ -1695,6 +1741,8 @@ async function saveAdminSettings() {
     stripe_price_unlimited_annual: document.getElementById('s-stripe-p-unlimited-annual').value,
   };
   if (passField && passField !== '••••••••') body.smtp_pass = passField;
+  const affiliateApiKey = document.getElementById('s-affiliate-api-key').value;
+  if (affiliateApiKey && affiliateApiKey !== '••••••••') body.affiliate_api_key = affiliateApiKey;
   const googleSecret = document.getElementById('s-google-client-secret').value;
   const googleClientId = document.getElementById('s-google-client-id').value;
   if (googleClientId) body.google_client_id = googleClientId;

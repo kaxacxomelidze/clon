@@ -300,6 +300,21 @@ h1.hero-h1{font-size:clamp(42px,6vw,82px);font-weight:900;line-height:1.02;lette
 .plan-cta.fill{background:var(--grad);color:#fff;box-shadow:0 4px 20px rgba(91,141,239,.2)}
 .plan-cta.fill:hover{opacity:.88;transform:translateY(-1px);box-shadow:0 6px 28px rgba(91,141,239,.35)}
 
+/* Affiliate */
+.affiliate-section{padding:96px 24px;border-top:1px solid var(--border);background:linear-gradient(180deg,var(--bg),var(--bg2))}
+.affiliate-inner{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(300px,.92fr);gap:42px;align-items:center}
+.affiliate-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:28px}
+.affiliate-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:12px 20px;border-radius:9px;background:var(--grad);color:#fff;font-size:13px;font-weight:800;box-shadow:0 12px 36px rgba(91,141,239,.18);transition:transform .15s,opacity .15s;text-decoration:none}
+.affiliate-cta:hover{transform:translateY(-1px);opacity:.9;text-decoration:none}
+.affiliate-note{font-size:12px;color:var(--text3);line-height:1.7;margin-top:16px;max-width:520px}
+.affiliate-card{background:var(--bg);border:1px solid var(--border2);border-radius:14px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.3)}
+.affiliate-card-title{font-size:14px;font-weight:800;margin-bottom:18px}
+.affiliate-steps{display:flex;flex-direction:column;gap:12px}
+.affiliate-step{display:grid;grid-template-columns:30px 1fr;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.02)}
+.affiliate-step span{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(91,141,239,.12);border:1px solid rgba(91,141,239,.28);color:var(--blue);font-size:12px;font-weight:900}
+.affiliate-step strong{display:block;font-size:13px;color:var(--text);margin-bottom:4px}
+.affiliate-step p{font-size:12.5px;line-height:1.65;color:var(--text2)}
+
 /* ─── FAQ ────────────────────────────────────────────── */
 .faq-section{padding:96px 24px;border-top:1px solid var(--border)}
 .faq-inner{max-width:720px;margin:0 auto}
@@ -385,6 +400,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   .how-steps::before{display:none}
   .how-step{align-items:flex-start;text-align:left}
   .contact-inner{grid-template-columns:1fr;gap:32px}
+  .affiliate-inner{grid-template-columns:1fr}
   .footer-grid{grid-template-columns:1fr 1fr;gap:36px}
   .app-mock{height:380px}
   .mock-editor{display:none}
@@ -424,6 +440,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
       <a href="#features" class="nav-a" role="listitem">Features</a>
       <a href="#product" class="nav-a" role="listitem">How it works</a>
       <a href="#pricing" class="nav-a" role="listitem">Pricing</a>
+      <a href="#affiliate" class="nav-a" role="listitem">Affiliate</a>
       <a href="#faq" class="nav-a" role="listitem">FAQ</a>
       <a href="#contact" class="nav-a" role="listitem">Contact</a>
     </div>
@@ -919,6 +936,38 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   </div>
 </section>
 
+<!-- Affiliate -->
+<section class="affiliate-section" id="affiliate" aria-label="Affiliate program">
+  <div class="affiliate-inner">
+    <div class="fade-up">
+      <div class="s-label">Affiliate Program</div>
+      <h2 class="s-title">Earn by recommending CLONYFY.</h2>
+      <p class="s-sub">Give agencies, founders, and builders a faster way to clone and edit websites. Your affiliate workspace is managed through Affonso.</p>
+      <div class="affiliate-actions">
+        <a class="affiliate-cta js-affiliate-link" href="https://affonso.io/" target="_blank" rel="noopener">Join affiliate program</a>
+      </div>
+      <p class="affiliate-note">Affiliate applications, tracking, referrals, and payouts are handled in Affonso. You can change the live program URL from the admin settings panel.</p>
+    </div>
+    <div class="affiliate-card fade-up fade-up-d1">
+      <div class="affiliate-card-title">Program flow</div>
+      <div class="affiliate-steps">
+        <div class="affiliate-step">
+          <span>1</span>
+          <div><strong>Apply</strong><p>Partners join from the public Affonso program link.</p></div>
+        </div>
+        <div class="affiliate-step">
+          <span>2</span>
+          <div><strong>Share</strong><p>Affonso gives each affiliate their own tracked referral link.</p></div>
+        </div>
+        <div class="affiliate-step">
+          <span>3</span>
+          <div><strong>Earn</strong><p>Referrals and payout reporting stay in one affiliate dashboard.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── FAQ ── -->
 <section class="faq-section" id="faq" aria-label="Frequently asked questions">
   <div class="faq-inner">
@@ -1073,6 +1122,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
       <h4>Product</h4>
       <a href="#features">Features</a>
       <a href="#pricing">Pricing</a>
+      <a href="#affiliate">Affiliate Program</a>
       <a href="#product">How it works</a>
       <a href="#faq">FAQ</a>
       <a href="/app">Dashboard</a>
@@ -1081,6 +1131,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
     <div class="footer-col">
       <h4>Resources</h4>
       <a href="#faq">FAQ</a>
+      <a href="#affiliate">Affiliate</a>
       <a href="/privacy">Privacy Policy</a>
       <a href="/tos">Terms of Service</a>
       <a href="#contact">Support</a>
@@ -1110,6 +1161,29 @@ const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
 }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
 document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+function applyAffiliateConfig(cfg = {}) {
+  const enabled = cfg.affiliate_enabled !== false && cfg.affiliate_enabled !== 'false';
+  const programUrl = cfg.affiliate_program_url || 'https://affonso.io/';
+  const section = document.getElementById('affiliate');
+  document.querySelectorAll('.js-affiliate-link').forEach(link => {
+    link.href = programUrl;
+    link.style.display = enabled ? '' : 'none';
+  });
+  if (section) section.style.display = enabled ? '' : 'none';
+  if (!enabled || !cfg.affiliate_public_id || document.querySelector('script[data-affonso-pixel]')) return;
+  const script = document.createElement('script');
+  script.src = 'https://cdn.affonso.io/js/pixel.min.js';
+  script.async = true;
+  script.setAttribute('data-affonso', cfg.affiliate_public_id);
+  script.dataset.affonsoPixel = 'true';
+  document.head.appendChild(script);
+}
+
+fetch('/api/public-config')
+  .then(res => res.ok ? res.json() : Promise.reject(new Error('config unavailable')))
+  .then(applyAffiliateConfig)
+  .catch(() => applyAffiliateConfig({ affiliate_enabled: true, affiliate_program_url: 'https://affonso.io/' }));
 
 /* ── Terminal typewriter ── */
 async function submitContactForm(event) {

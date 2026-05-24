@@ -90,6 +90,12 @@ a:hover{text-decoration:underline}
 .section-hd{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .section-title{font-size:13px;font-weight:700}
 .section-action{font-size:12px;color:var(--blue);font-weight:600}
+.affiliate-panel{padding:20px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}
+.affiliate-title{font-size:18px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px}
+.affiliate-copy{font-size:13px;color:var(--text2);line-height:1.7;max-width:620px}
+.affiliate-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 18px;border-radius:9px;background:var(--grad);color:#fff;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap}
+.affiliate-btn:hover{opacity:.88;text-decoration:none}
+.affiliate-mini{font-size:11px;color:var(--text3);margin-top:8px}
 
 /* ── Table ── */
 table{width:100%;border-collapse:collapse}
@@ -201,6 +207,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 @media(max-width:640px){
   .stats-grid{grid-template-columns:1fr 1fr}
   .plan-hero{flex-direction:column;align-items:flex-start}
+  .affiliate-panel{grid-template-columns:1fr}
   thead th:nth-child(n+4){display:none}
   tbody td:nth-child(n+4){display:none}
   .plan-grid{padding:12px 16px}
@@ -264,6 +271,22 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     <div class="stat-card">
       <div class="stat-val yellow" id="stat-total-pages">—</div>
       <div class="stat-lbl">Pages captured</div>
+    </div>
+  </div>
+
+  <!-- Affiliate program -->
+  <div class="section" id="affiliate-section">
+    <div class="section-hd">
+      <div class="section-title">Affiliate Program</div>
+      <a id="affiliate-header-link" class="section-action" href="https://affonso.io/" target="_blank" rel="noopener">Open Affonso -></a>
+    </div>
+    <div class="affiliate-panel">
+      <div>
+        <div class="affiliate-title">Earn by sharing CLONYFY</div>
+        <div class="affiliate-copy">Join the affiliate program, get your tracked referral link, and manage referrals and payouts in Affonso.</div>
+        <div class="affiliate-mini">The program link is controlled from Admin Settings.</div>
+      </div>
+      <a id="affiliate-main-link" class="affiliate-btn" href="https://affonso.io/" target="_blank" rel="noopener" onclick="openAffiliateDashboard(event)">Join program</a>
     </div>
   </div>
 
@@ -431,6 +454,8 @@ let dashPaySettings = { stripe_ready: false, stripe_error: 'Payment system is no
 let currentBillingInterval = 'monthly';
 let currentPlan = 'free';
 let checkoutInProgress = false;
+let affiliateProgramUrl = 'https://affonso.io/';
+let affiliateDashboardEnabled = false;
 let slowLoadingCount = 0;
 let slowLoadingTimer = null;
 function beginSlowLoading(delay = 900) {
@@ -485,6 +510,63 @@ async function syncStripeAfterCheckout(sessionId) {
   return true;
 }
 
+function renderAffiliateConfig(cfg = {}) {
+  const section = document.getElementById('affiliate-section');
+  if (!section) return;
+  const enabled = cfg.affiliate_enabled !== false && cfg.affiliate_enabled !== 'false';
+  if (!enabled) {
+    section.classList.add('hidden');
+    return;
+  }
+  const programUrl = cfg.affiliate_program_url || 'https://affonso.io/';
+  affiliateProgramUrl = programUrl;
+  affiliateDashboardEnabled = !!cfg.affiliate_dashboard_enabled;
+  section.classList.remove('hidden');
+  ['affiliate-header-link', 'affiliate-main-link'].forEach(id => {
+    const link = document.getElementById(id);
+    if (link) link.href = programUrl;
+  });
+  const mainLink = document.getElementById('affiliate-main-link');
+  if (mainLink) mainLink.textContent = affiliateDashboardEnabled ? 'Open affiliate dashboard' : 'Join program';
+  if (cfg.affiliate_public_id && !document.querySelector('script[data-affonso-pixel]')) {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.affonso.io/js/pixel.min.js';
+    script.async = true;
+    script.setAttribute('data-affonso', cfg.affiliate_public_id);
+    script.dataset.affonsoPixel = 'true';
+    document.head.appendChild(script);
+  }
+}
+
+async function openAffiliateDashboard(event) {
+  if (!affiliateDashboardEnabled) return;
+  event.preventDefault();
+  const link = event.currentTarget;
+  const oldText = link.textContent;
+  link.textContent = 'LOADING...';
+  try {
+    const r = await apiFetch('POST', '/api/affiliate/embed-token', {}, { silentLoading: true, timeoutMs: 20000 });
+    if (r.url) {
+      window.open(r.url, '_blank', 'noopener');
+      return;
+    }
+    if (r.token) {
+      toast('Affiliate dashboard token created, but Affonso did not return a URL. Check embed settings.', 'inf');
+      return;
+    }
+    if (r.program_url) {
+      window.open(r.program_url, '_blank', 'noopener');
+      return;
+    }
+    if (r.error) throw new Error(r.error);
+    window.open(affiliateProgramUrl, '_blank', 'noopener');
+  } catch (e) {
+    toast(e.message || 'Affiliate dashboard failed to open.', 'err');
+  } finally {
+    link.textContent = oldText;
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const urlParams = new URLSearchParams(location.search);
@@ -512,6 +594,7 @@ async function init() {
     }
     const settingsPromise = apiFetch('GET', '/api/payments/settings', null, { silentLoading: true });
     const billingPromise = apiFetch('GET', '/api/user/billing', null, { silentLoading: true });
+    const affiliatePromise = apiFetch('GET', '/api/public-config', null, { silentLoading: true });
     dashData = await apiFetch('GET', '/api/user/dashboard');
     if (dashData.error) throw new Error(dashData.error);
     try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(dashData)); } catch {}
@@ -525,7 +608,7 @@ async function init() {
 
     renderDashboard(dashData);
 
-    const [settingsResult, billingResult] = await Promise.allSettled([settingsPromise, billingPromise]);
+    const [settingsResult, billingResult, affiliateResult] = await Promise.allSettled([settingsPromise, billingPromise, affiliatePromise]);
     if (settingsResult.status === 'fulfilled' && settingsResult.value && !settingsResult.value.error) {
       dashPaySettings = settingsResult.value;
     }
@@ -533,6 +616,9 @@ async function init() {
       renderBilling(billingResult.value.payments || []);
     } else {
       renderBilling([]);
+    }
+    if (affiliateResult.status === 'fulfilled' && affiliateResult.value && !affiliateResult.value.error) {
+      renderAffiliateConfig(affiliateResult.value);
     }
 
     document.getElementById('field-name').value = dashData.user.name || '';

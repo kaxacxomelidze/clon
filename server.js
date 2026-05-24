@@ -323,6 +323,8 @@ const SETTINGS_DEFAULTS = {
   btc:'', eth:'', usdt_trc20:'', paypal_email:'', paypal_me:'', app_note:'',
   smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
   smtp_secure: false, app_url: DEFAULT_APP_URL, support_email:'',
+  affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:'',
+  affiliate_program_id:'', affiliate_group_id:'', affiliate_api_key:'',
 };
 let _settingsCache = { ...SETTINGS_DEFAULTS };
 async function initSettings() { _settingsCache = await getSettings(); }
@@ -331,6 +333,25 @@ const invalidateSettingsCache = async () => {
   _settingsCache = await getSettings();
   _emailTemplateCache.clear(); // templates may reference APP_URL / SUPPORT_EMAIL from settings
 };
+
+function normalizeAffiliateUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  let parsed;
+  try {
+    parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+  return parsed.toString();
+}
+
+function cleanAffiliatePublicId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return /^[A-Za-z0-9_-]{3,180}$/.test(raw) ? raw : null;
+}
 
 function publicAppUrl(req = null) {
   const configured = String(getCachedSettings().app_url || '').replace(/\/$/, '');
@@ -1700,7 +1721,7 @@ function contentSecurityPolicyForPath(pathname) {
   }
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' https://cdn.affonso.io",
     "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
     "font-src 'self' fonts.gstatic.com data:",
     "img-src 'self' data: blob: https:",
@@ -2832,6 +2853,57 @@ async function handleRequest(req, res) {
     });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/public-config') {
+    const s = getCachedSettings();
+    const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
+    return json(res, {
+      affiliate_enabled: enabled,
+      affiliate_program_url: s.affiliate_program_url || 'https://affonso.io/',
+      affiliate_public_id: enabled ? (s.affiliate_public_id || '') : '',
+      affiliate_dashboard_enabled: enabled && !!(s.affiliate_api_key && s.affiliate_program_id),
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/affiliate/embed-token') {
+    const user = await getSessionUser(req);
+    if (!user) return json(res, { error: 'Sign in to open the affiliate dashboard.' }, 401);
+    if (!checkRateLimit(`affiliate_embed:${user.id}`, 10, 600000)) return json(res, { error: 'Too many requests.' }, 429);
+    const s = getCachedSettings();
+    const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
+    if (!enabled) return json(res, { error: 'Affiliate program is disabled.' }, 404);
+    if (!s.affiliate_api_key || !s.affiliate_program_id) {
+      return json(res, { error: 'Affiliate dashboard is not configured yet.', program_url: s.affiliate_program_url || 'https://affonso.io/' }, 503);
+    }
+    try {
+      const payload = {
+        programId: s.affiliate_program_id,
+        email: user.email,
+        name: user.name || user.email,
+      };
+      if (s.affiliate_group_id) payload.groupId = s.affiliate_group_id;
+      const affonsoRes = await fetch('https://api.affonso.io/v1/embed/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${s.affiliate_api_key}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await affonsoRes.json().catch(() => ({}));
+      if (!affonsoRes.ok) {
+        return json(res, { error: data?.message || data?.error || 'Affonso could not create an embed token.' }, 502);
+      }
+      return json(res, {
+        ok: true,
+        token: data.token || data.embedToken || data.publicToken || '',
+        url: data.url || data.embedUrl || data.dashboardUrl || data.link || '',
+        raw: data,
+      });
+    } catch (err) {
+      return json(res, { error: 'Affonso request failed. Check the API key and program ID.' }, 502);
+    }
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/payments/plans') {
     const limits = Object.fromEntries(Object.keys(PLAN_LIMITS).map(plan => [plan, getEffectivePlanLimits(plan)]));
     return json(res, {
@@ -3009,6 +3081,8 @@ async function handleRequest(req, res) {
       'btc', 'eth', 'usdt_trc20', 'paypal_email', 'paypal_me', 'app_note',
       'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'app_url',
       'support_email',
+      'affiliate_enabled', 'affiliate_program_url', 'affiliate_public_id',
+      'affiliate_program_id', 'affiliate_group_id', 'affiliate_api_key',
       'stripe_publishable_key',
       'stripe_price_starter_monthly', 'stripe_price_starter_annual',
       'stripe_price_popular_monthly', 'stripe_price_popular_annual',
@@ -3023,6 +3097,22 @@ async function handleRequest(req, res) {
     for (const k of plainKeys) {
       if (body[k] !== undefined && !isMaskedSecret(body[k])) {
         const value = String(body[k] || '').trim();
+        if (k === 'affiliate_enabled') {
+          current[k] = value === 'true' || value === '1' || value === 'yes' ? 'true' : 'false';
+          continue;
+        }
+        if (k === 'affiliate_program_url') {
+          const cleanUrl = normalizeAffiliateUrl(value);
+          if (cleanUrl === null) return json(res, { error: 'Affiliate program URL must be a valid http(s) URL.' }, 400);
+          current[k] = cleanUrl;
+          continue;
+        }
+        if (['affiliate_public_id', 'affiliate_program_id', 'affiliate_group_id'].includes(k)) {
+          const publicId = cleanAffiliatePublicId(value);
+          if (publicId === null) return json(res, { error: 'Affonso IDs can only contain letters, numbers, underscores, and dashes.' }, 400);
+          current[k] = publicId;
+          continue;
+        }
         const stripeError = validateStripeSetting(k, value);
         if (stripeError) return json(res, { error: stripeError }, 400);
         current[k] = value;
