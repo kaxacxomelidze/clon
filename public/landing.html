@@ -136,15 +136,15 @@ h1.hero-h1{font-size:clamp(42px,6vw,78px);font-weight:900;line-height:1.02;lette
 /* ─── Typing cursor ──────────────────────────────────── */
 #typing-cursor{display:inline-block;width:3px;height:.85em;background:var(--blue);border-radius:1px;vertical-align:middle;margin-left:2px;animation:blink .85s step-end infinite}
 
-/* ─── Terminal ───────────────────────────────────────── */
-.terminal-outer{width:100%;max-width:820px;margin:64px auto 0;padding:0 24px;position:relative;z-index:2}
-.terminal-glow{position:absolute;inset:-40px;background:radial-gradient(ellipse at 50% 50%,rgba(91,141,239,.12),transparent 70%);pointer-events:none;border-radius:50%}
-.terminal{background:#0c0c0c;border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.04),0 40px 100px rgba(0,0,0,.8),0 0 80px rgba(91,141,239,.06)}
-.terminal-titlebar{display:flex;align-items:center;gap:7px;padding:13px 18px;border-bottom:1px solid var(--border);background:rgba(20,20,20,.8)}
+/* ─── Counter ───────────────────────────────────────── */
+.Counter-outer{width:100%;max-width:820px;margin:64px auto 0;padding:0 24px;position:relative;z-index:2}
+.Counter-glow{position:absolute;inset:-40px;background:radial-gradient(ellipse at 50% 50%,rgba(91,141,239,.12),transparent 70%);pointer-events:none;border-radius:50%}
+.Counter{background:#0c0c0c;border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.04),0 40px 100px rgba(0,0,0,.8),0 0 80px rgba(91,141,239,.06)}
+.Counter-titlebar{display:flex;align-items:center;gap:7px;padding:13px 18px;border-bottom:1px solid var(--border);background:rgba(20,20,20,.8)}
 .tdot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
 .tdot.r{background:#ff5f57}.tdot.y{background:#febc2e}.tdot.g{background:#28c840}
-.terminal-title{flex:1;text-align:center;font-size:11px;font-family:var(--mono);color:var(--text3);user-select:none}
-.terminal-body{padding:24px 28px;font-family:var(--mono);font-size:13px;line-height:2;min-height:260px}
+.Counter-title{flex:1;text-align:center;font-size:11px;font-family:var(--mono);color:var(--text3);user-select:none}
+.Counter-body{padding:24px 28px;font-family:var(--mono);font-size:13px;line-height:2;min-height:260px}
 .tc-dim{color:var(--text3)}
 .tc-blue{color:#79b8ff}
 .tc-green{color:var(--green)}
@@ -160,7 +160,7 @@ h1.hero-h1{font-size:clamp(42px,6vw,78px);font-weight:900;line-height:1.02;lette
 .stats-inner{display:flex;max-width:960px;margin:0 auto;flex-wrap:wrap}
 .stat{flex:1;min-width:160px;padding:28px 32px;text-align:center;border-right:1px solid var(--border);position:relative}
 .stat:last-child{border-right:none}
-.stat-wide{display:flex;align-items:center;justify-content:center;gap:24px;min-width:100%;border-right:none;padding:34px 24px}
+.stat-wide{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-width:100%;border-right:none;padding:36px 24px}
 .stat-n{font-size:34px;font-weight:900;letter-spacing:-.05em;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1}
 .stat-l{font-size:12px;color:var(--text3);margin-top:5px;font-weight:500}
 .stat-wide .stat-l{margin-top:0;font-size:17px;font-weight:800;color:var(--text);letter-spacing:0}
@@ -202,9 +202,10 @@ h1.hero-h1{font-size:clamp(42px,6vw,78px);font-weight:900;line-height:1.02;lette
 .feat-card:hover .feat-arrow{opacity:1;transform:translateX(0)}
 
 /* ─── App preview mockup ─────────────────────────────── */
-.preview-section{padding:96px 24px;border-top:1px solid var(--border)}
-.preview-inner{max-width:1160px;margin:0 auto}
-.preview-frame{position:relative;margin-top:56px;border-radius:18px;overflow:hidden;border:1px solid var(--border2);background:linear-gradient(180deg,#08080b,var(--bg2));box-shadow:0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04),0 0 90px rgba(91,141,239,.08)}
+.preview-section{padding:96px 0;border-top:1px solid var(--border)}
+.preview-inner{max-width:100%;margin:0 auto}
+.preview-inner>.s-label,.preview-inner>.s-title,.preview-inner>.s-sub{max-width:1160px;margin-left:auto;margin-right:auto;padding-left:24px;padding-right:24px}
+.preview-frame{position:relative;margin-top:56px;border-radius:0;overflow:hidden;border-top:1px solid var(--border2);border-bottom:1px solid var(--border2);background:linear-gradient(180deg,#08080b,var(--bg2));box-shadow:0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04),0 0 90px rgba(91,141,239,.08)}
 .preview-bar{display:flex;align-items:center;gap:7px;padding:13px 18px;border-bottom:1px solid var(--border);background:var(--bg3)}
 .preview-bar .tdot{width:10px;height:10px}
 .preview-addr{flex:1;margin:0 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;font-family:var(--mono);color:var(--text3);text-align:center}
@@ -236,8 +237,8 @@ h1.hero-h1{font-size:clamp(42px,6vw,78px);font-weight:900;line-height:1.02;lette
 .mock-prop-bar-fill{height:100%;border-radius:2px;background:var(--grad)}
 .preview-glow{position:absolute;bottom:-60px;left:50%;transform:translateX(-50%);width:600px;height:200px;background:radial-gradient(ellipse,rgba(91,141,239,.18),transparent 70%);pointer-events:none}
 .preview-frame .app-mock{display:none}
-.demo-simulator{display:grid;grid-template-columns:minmax(240px,.42fr) minmax(0,1fr);gap:0;min-height:520px}
-.demo-steps{display:flex;flex-direction:column;justify-content:center;gap:10px;padding:26px;border-right:1px solid var(--border);background:rgba(255,255,255,.015)}
+.demo-simulator{display:block;min-height:520px}
+.demo-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:18px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.015)}
 .demo-step{position:relative;text-align:left;border:1px solid transparent;border-radius:12px;padding:16px 16px 16px 48px;background:transparent;color:var(--text2);transition:background .2s,border-color .2s,color .2s}
 .demo-step:hover,.demo-step.active{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.09);color:var(--text)}
 .demo-step::before{content:attr(data-step);position:absolute;left:14px;top:16px;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--text3)}
@@ -245,7 +246,7 @@ h1.hero-h1{font-size:clamp(42px,6vw,78px);font-weight:900;line-height:1.02;lette
 .demo-step strong{display:block;font-size:13px;color:inherit;margin-bottom:4px}
 .demo-step span{display:block;font-size:12px;line-height:1.55;color:var(--text3)}
 .demo-step.active span{color:var(--text2)}
-.demo-play{margin:10px auto 0 22px;display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--green)}
+.demo-play{grid-column:1/-1;margin:4px auto 0;display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--green)}
 .demo-play i{display:block;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(62,207,142,.08)}
 .demo-stage{position:relative;display:flex;align-items:center;justify-content:center;min-height:520px;padding:34px;background:radial-gradient(ellipse at 50% 20%,rgba(91,141,239,.1),transparent 48%),#050507;overflow:hidden}
 .demo-screen{width:100%;max-width:610px;min-height:330px;border:1px solid rgba(255,255,255,.09);border-radius:20px;background:rgba(255,255,255,.035);box-shadow:0 28px 80px rgba(0,0,0,.45);padding:24px;position:relative;overflow:hidden}
@@ -505,8 +506,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   .contact-inner{grid-template-columns:1fr;gap:32px}
   .affiliate-inner{grid-template-columns:1fr}
   .comparison-grid,.audience-grid,.benefit-grid{grid-template-columns:1fr}
-  .demo-simulator{grid-template-columns:1fr}
-  .demo-steps{border-right:none;border-bottom:1px solid var(--border)}
+  .demo-steps{grid-template-columns:repeat(2,1fr)}
   .footer-grid{grid-template-columns:1fr 1fr;gap:36px}
   .app-mock{height:380px}
   .mock-editor{display:none}
@@ -533,7 +533,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   .mock-sidebar{width:140px}
   .app-mock{height:320px}
   .demo-simulator{min-height:0}
-  .demo-steps{padding:18px}
+  .demo-steps{grid-template-columns:1fr;padding:18px}
   .demo-step{padding:13px 13px 13px 44px}
   .demo-stage{min-height:390px;padding:18px}
   .demo-screen{min-height:280px;padding:18px}
@@ -636,28 +636,12 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   <p class="hero-note fade-up fade-up-d4">No credit card required · <a href="#pricing">Free plan</a> includes 3 clones/month</p>
 </section>
 
-<!-- ── Terminal ── -->
+<!-- ── Counter ── -->
 <div class="stats-wrap" style="margin-top:0">
   <div class="stats-inner">
     <div class="stat stat-wide fade-up">
       <div class="stat-l">Website Cloned with Clonyfy</div>
       <div class="stat-n">+<span id="count-sites">0</span></div>
-    </div>
-  </div>
-</div>
-
-<div class="terminal-outer fade-up">
-  <div class="terminal-glow" aria-hidden="true"></div>
-  <div class="terminal" role="img" aria-label="CLONYFY terminal demo">
-    <div class="terminal-titlebar">
-      <div class="tdot r" aria-hidden="true"></div>
-      <div class="tdot y" aria-hidden="true"></div>
-      <div class="tdot g" aria-hidden="true"></div>
-      <div class="terminal-title">clonyfy — bash — 120×32</div>
-    </div>
-    <div class="terminal-body" id="terminal-body">
-      <div><span class="tc-dim">~/projects</span> <span class="tc-blue">❯</span> <span class="tc-white">clonyfy clone </span><span class="tc-blue">https://example.com</span> <span class="tc-dim">--max-pages 50</span></div>
-      <div id="t-lines" style="min-height:200px"></div>
     </div>
   </div>
 </div>
@@ -1069,7 +1053,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
 <section class="ca-section" id="problem-solution" aria-label="Problem and solution">
   <div class="ca-inner">
     <div class="ca-head fade-up">
-      <div class="ca-kicker">The problem</div>
+      <div class="ca-kicker">Problem</div>
       <h2 class="ca-title">Stop doing it <span class="grad-text">the hard way.</span></h2>
     </div>
     <div class="comparison-grid">
@@ -1084,7 +1068,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
         </div>
       </div>
       <div class="compare-col fade-up fade-up-d1">
-        <h3>The Clonyfy Way <span aria-hidden="true">✓</span></h3>
+        <h3>Clonyfy Way <span aria-hidden="true">✓</span></h3>
         <div class="compare-list">
           <div class="compare-item good"><i>✓</i>Clone any site in minutes, with code you own</div>
           <div class="compare-item good"><i>✓</i>Redesign it visually, no coding required</div>
@@ -1106,7 +1090,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   <div class="ca-inner">
     <div class="ca-head fade-up">
       <div class="ca-kicker">What you gain</div>
-      <h2 class="ca-title">The fastest way to rebuild, redesign, and ship any website.</h2>
+      <h2 class="ca-title"><span class="grad-text">Fastest way</span> to rebuild, redesign, and ship any website.</h2>
       <p class="ca-muted">We turn a website rebuild from days of work into a clean starting point in minutes.</p>
     </div>
     <div class="benefit-grid">
@@ -1532,7 +1516,7 @@ fetch('/api/public-config')
   .then(applyAffiliateConfig)
   .catch(() => applyAffiliateConfig({ affiliate_enabled: true }));
 
-/* ── Terminal typewriter ── */
+/* ── Counter typewriter ── */
 function initHeroCanvas() {
   const canvas = document.getElementById('hero-canvas');
   if (!canvas) return;
@@ -1671,7 +1655,8 @@ const lines = [
 ];
 const tBody = document.getElementById('t-lines');
 let started = false;
-const startTerminal = () => {
+const startCounter = () => {
+  if (!tBody) return;
   if (started) return; started = true;
   lines.forEach(({ delay, html }) => {
     setTimeout(() => {
@@ -1682,9 +1667,10 @@ const startTerminal = () => {
   });
 };
 const termObs = new IntersectionObserver(entries => {
-  if (entries[0].isIntersecting) { startTerminal(); termObs.disconnect(); }
+  if (entries[0].isIntersecting) { startCounter(); termObs.disconnect(); }
 }, { threshold: 0.3 });
-termObs.observe(document.getElementById('terminal-body'));
+const terminalBody = document.getElementById('terminal-body');
+if (terminalBody) termObs.observe(terminalBody);
 
 /* ── Animated counters ── */
 function animateCount(id, target, suffix = '', duration = 1800) {
@@ -1844,7 +1830,7 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
 const SB_BOT = [
   {
     id: 'howwork',
-    label: 'How does it work?',
+    label: 'Process',
     keywords: ['how','work','does','what','explain','tell'],
     reply: `CLONYFY visits any public URL with a real browser, captures every page, image, font, CSS file, and network request — then generates a fully runnable <strong>Next.js app</strong> you can edit and deploy.<br><br>Just paste a URL, hit Clone, and your editable copy is ready in seconds.`,
   },
