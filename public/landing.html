@@ -57,6 +57,8 @@ img{display:block;max-width:100%}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 @keyframes hero-float{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(0,-16px,0)}}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes marquee-reverse{from{transform:translateX(-50%)}to{transform:translateX(0)}}
 @keyframes pulse-ring{0%{transform:scale(.95);opacity:.7}100%{transform:scale(1.1);opacity:0}}
 @keyframes fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -285,6 +287,43 @@ h1.hero-h1{font-size:clamp(42px,6vw,78px);font-weight:900;line-height:1.02;lette
 .freedom-node{position:absolute;width:46px;height:46px;border-radius:15px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;font-size:18px;animation:float 4s ease-in-out infinite}
 .freedom-node.n1{left:10%;top:17%;animation-delay:-.4s}.freedom-node.n2{right:11%;top:18%;animation-delay:-1.2s}.freedom-node.n3{left:13%;bottom:16%;animation-delay:-2s}.freedom-node.n4{right:13%;bottom:17%;animation-delay:-2.8s}
 
+/* CloneAI reference sections */
+.ca-section{position:relative;overflow:hidden;padding:112px 24px;border-top:1px solid var(--border);background:#080808}
+.ca-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 70% 50% at 50% 28%,rgba(255,255,255,.045),transparent 64%);pointer-events:none}
+.ca-inner{position:relative;z-index:1;max-width:1160px;margin:0 auto}
+.ca-head{max-width:760px;margin:0 auto 64px;text-align:center}
+.ca-kicker{display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);border-radius:999px;padding:8px 15px;margin-bottom:18px;font-size:10px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.ca-title{font-size:clamp(34px,5vw,68px);font-weight:950;letter-spacing:0;line-height:1.02;color:#fff}
+.ca-muted{margin-top:18px;font-size:16px;line-height:1.75;color:var(--text2)}
+.comparison-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.compare-col h3{display:flex;align-items:center;gap:10px;font-size:22px;margin-bottom:18px;color:#fff}
+.compare-list{display:grid;gap:12px}
+.compare-item{display:flex;align-items:flex-start;gap:12px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(255,255,255,.025);padding:15px 16px;font-size:14px;color:var(--text2);line-height:1.55}
+.compare-item i{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-style:normal;font-size:13px;font-weight:900}
+.compare-item.bad i{background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.22);color:#f87171}
+.compare-item.good{border-color:rgba(62,207,142,.12);background:rgba(62,207,142,.035);color:rgba(232,232,232,.86)}
+.compare-item.good i{background:rgba(62,207,142,.1);border:1px solid rgba(62,207,142,.24);color:var(--green)}
+.audience-grid,.benefit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:42px}
+.benefit-grid{grid-template-columns:repeat(4,1fr)}
+.ca-card{border:1px solid rgba(255,255,255,.08);border-radius:18px;background:rgba(255,255,255,.035);padding:24px;transition:transform .2s,border-color .2s,background .2s}
+.ca-card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.055)}
+.ca-card-icon{width:44px;height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:18px}
+.ca-card h3{font-size:17px;color:#fff;margin-bottom:8px}
+.ca-card p{font-size:13.5px;line-height:1.7;color:var(--text2)}
+.no-excuse-box{position:relative;max-width:980px;margin:0 auto;border:1px solid rgba(255,255,255,.09);border-radius:22px;background:rgba(255,255,255,.035);overflow:hidden;padding:88px 28px;text-align:center}
+.no-excuse-pill{position:absolute;border:1px solid rgba(168,85,247,.25);background:linear-gradient(135deg,rgba(168,85,247,.13),rgba(236,72,153,.11));border-radius:999px;padding:9px 14px;font-size:12px;font-weight:800;color:rgba(255,255,255,.82);animation:float 5s ease-in-out infinite}
+.no-excuse-pill.p1{left:32px;top:34px;transform:rotate(-9deg)}.no-excuse-pill.p2{right:34px;top:42px;transform:rotate(9deg);animation-delay:-1s}.no-excuse-pill.p3{left:36px;bottom:34px;transform:rotate(8deg);animation-delay:-2s}.no-excuse-pill.p4{right:38px;bottom:40px;transform:rotate(-8deg);animation-delay:-3s}
+.testimonial-lanes{display:grid;gap:14px}
+.testimonial-row{position:relative;overflow:hidden}
+.testimonial-track{display:flex;width:max-content;animation:marquee 46s linear infinite}
+.testimonial-row.reverse .testimonial-track{animation:marquee-reverse 42s linear infinite}
+.testimonial-card{width:320px;flex-shrink:0;margin:0 7px;border:1px solid rgba(255,255,255,.08);border-radius:16px;background:rgba(255,255,255,.04);padding:22px}
+.testimonial-card .stars{color:rgba(255,255,255,.42);font-size:12px;margin-bottom:14px;letter-spacing:2px}
+.testimonial-card p{font-size:13px;line-height:1.7;color:var(--text2);min-height:112px}
+.testimonial-person{display:flex;align-items:center;gap:10px;margin-top:16px}
+.testimonial-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);font-size:11px;font-weight:900;color:#fff}
+.testimonial-name{font-size:13px;font-weight:800;color:#fff}.testimonial-role{font-size:11px;color:var(--text3);margin-top:2px}
+
 /* ─── Split sections ─────────────────────────────────── */
 .split-wrap{padding:0 24px}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;padding:96px 0;max-width:1160px;margin:0 auto}
@@ -465,6 +504,7 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   .how-step{align-items:flex-start;text-align:left}
   .contact-inner{grid-template-columns:1fr;gap:32px}
   .affiliate-inner{grid-template-columns:1fr}
+  .comparison-grid,.audience-grid,.benefit-grid{grid-template-columns:1fr}
   .demo-simulator{grid-template-columns:1fr}
   .demo-steps{border-right:none;border-bottom:1px solid var(--border)}
   .footer-grid{grid-template-columns:1fr 1fr;gap:36px}
@@ -500,6 +540,10 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
   .demo-export-grid{grid-template-columns:1fr}
   .freedom-visual{padding:28px 14px}
   .freedom-node{width:38px;height:38px;border-radius:12px;font-size:15px}
+  .ca-section{padding:82px 18px}
+  .no-excuse-box{padding:126px 20px}
+  .no-excuse-pill{font-size:10px;padding:7px 10px}
+  .no-excuse-pill.p1{left:12px;top:18px}.no-excuse-pill.p2{right:12px;top:54px}.no-excuse-pill.p3{left:12px;bottom:52px}.no-excuse-pill.p4{right:12px;bottom:18px}
   .hero{min-height:calc(100vh - 58px);padding:58px 18px 46px}
   h1.hero-h1{font-size:clamp(34px,14vw,48px);white-space:normal;max-width:360px}
   .hero-h1 .line1,.hero-h1 .line2{display:block}
@@ -1022,6 +1066,113 @@ footer{border-top:1px solid var(--border);padding:64px 24px 40px;background:var(
 <div class="hl"></div>
 
 <!-- ── Pricing ── -->
+<section class="ca-section" id="problem-solution" aria-label="Problem and solution">
+  <div class="ca-inner">
+    <div class="ca-head fade-up">
+      <div class="ca-kicker">The problem</div>
+      <h2 class="ca-title">Stop doing it <span class="grad-text">the hard way.</span></h2>
+    </div>
+    <div class="comparison-grid">
+      <div class="compare-col fade-up">
+        <h3>Traditional Way <span aria-hidden="true">×</span></h3>
+        <div class="compare-list">
+          <div class="compare-item bad"><i>×</i>Paying thousands for a website</div>
+          <div class="compare-item bad"><i>×</i>Spending weeks rebuilding something that already exists</div>
+          <div class="compare-item bad"><i>×</i>Learning design just to launch a product</div>
+          <div class="compare-item bad"><i>×</i>Waiting on a freelancer who delivers late and over budget</div>
+          <div class="compare-item bad"><i>×</i>Starting from a blank page every single time</div>
+        </div>
+      </div>
+      <div class="compare-col fade-up fade-up-d1">
+        <h3>The Clonyfy Way <span aria-hidden="true">✓</span></h3>
+        <div class="compare-list">
+          <div class="compare-item good"><i>✓</i>Clone any site in minutes, with code you own</div>
+          <div class="compare-item good"><i>✓</i>Redesign it visually, no coding required</div>
+          <div class="compare-item good"><i>✓</i>Export to ZIP, GitHub, or your host</div>
+          <div class="compare-item good"><i>✓</i>Launch today, not next month</div>
+          <div class="compare-item good"><i>✓</i>Complete code ownership, no lock-in</div>
+        </div>
+      </div>
+    </div>
+    <div class="audience-grid">
+      <div class="ca-card fade-up"><div class="ca-card-icon">🌐</div><h3>Online hustlers</h3><p>See a site that works. Clone it, make it yours, launch it today.</p></div>
+      <div class="ca-card fade-up fade-up-d1"><div class="ca-card-icon">⌘</div><h3>Developers</h3><p>Speed up frontend development and skip repetitive rebuilds.</p></div>
+      <div class="ca-card fade-up fade-up-d2"><div class="ca-card-icon">🏢</div><h3>Agencies</h3><p>Deliver client websites faster and increase margins.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="ca-section" id="benefits" aria-label="Benefits">
+  <div class="ca-inner">
+    <div class="ca-head fade-up">
+      <div class="ca-kicker">What you gain</div>
+      <h2 class="ca-title">The fastest way to rebuild, redesign, and ship any website.</h2>
+      <p class="ca-muted">We turn a website rebuild from days of work into a clean starting point in minutes.</p>
+    </div>
+    <div class="benefit-grid">
+      <div class="ca-card fade-up"><div class="ca-card-icon">⏱</div><h3>Days to minutes</h3><p>Stop rebuilding what already exists. Clone it, adapt it, ship it.</p></div>
+      <div class="ca-card fade-up fade-up-d1"><div class="ca-card-icon">✦</div><h3>Edit without coding</h3><p>The visual editor lets you modify captured pages directly in the browser.</p></div>
+      <div class="ca-card fade-up fade-up-d2"><div class="ca-card-icon">▣</div><h3>Figma-ready workflow</h3><p>Use captured structure as a design reference and keep clients aligned faster.</p></div>
+      <div class="ca-card fade-up fade-up-d3"><div class="ca-card-icon">↗</div><h3>Deploy in one click</h3><p>Next.js output, ZIP export, GitHub, Vercel, Netlify, Railway, or your own VPS.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="ca-section" aria-label="No excuses">
+  <div class="ca-inner">
+    <div class="no-excuse-box fade-up">
+      <div class="no-excuse-pill p1">I can't afford a developer</div>
+      <div class="no-excuse-pill p2">I saw the perfect website</div>
+      <div class="no-excuse-pill p3">Builders are too limiting</div>
+      <div class="no-excuse-pill p4">I don't have time to learn</div>
+      <h2 class="ca-title">You don't need excuses, <span class="grad-text">you need Clonyfy.</span></h2>
+      <p class="ca-muted" style="max-width:720px;margin-left:auto;margin-right:auto">We are not building another website builder. CLONYFY is a website production accelerator that plugs into real workflows and reduces site creation from days to minutes.</p>
+    </div>
+  </div>
+</section>
+
+<section class="ca-section" id="for-who" aria-label="Built for people who ship">
+  <div class="ca-inner">
+    <div class="ca-head fade-up">
+      <div class="ca-kicker">For who?</div>
+      <h2 class="ca-title">Built for people who ship.</h2>
+    </div>
+    <div class="audience-grid">
+      <div class="ca-card fade-up"><div class="ca-card-icon">🏢</div><h3>Agencies</h3><p>Clone a client's inspiration site in seconds. Redesign it, export clean code, deliver faster.</p></div>
+      <div class="ca-card fade-up fade-up-d1"><div class="ca-card-icon">✎</div><h3>Freelancers</h3><p>Stop rebuilding from scratch. Clone the structure, make it yours, ship it tonight.</p></div>
+      <div class="ca-card fade-up fade-up-d2"><div class="ca-card-icon">🚀</div><h3>Entrepreneurs</h3><p>See a site that converts. Clone the layout, swap the content, launch your offer.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="ca-section" aria-label="Testimonials">
+  <div class="ca-inner">
+    <div class="ca-head fade-up">
+      <div class="ca-kicker">Social proof</div>
+      <h2 class="ca-title">Loved by builders everywhere.</h2>
+      <p class="ca-muted">Developers, agencies, and founders use CLONYFY to move from reference to reality faster.</p>
+    </div>
+  </div>
+  <div class="testimonial-lanes">
+    <div class="testimonial-row"><div class="testimonial-track">
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"CLONYFY saved us weeks of work. We cloned a pricing page, tweaked it to match our brand, and shipped the same day."</p><div class="testimonial-person"><div class="testimonial-avatar">SC</div><div><div class="testimonial-name">Sarah Chen</div><div class="testimonial-role">Head of Growth</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"The code output is clean enough to actually use. It gave us a production starting point instead of a screenshot."</p><div class="testimonial-person"><div class="testimonial-avatar">MO</div><div><div class="testimonial-name">Marcus O.</div><div class="testimonial-role">Senior Engineer</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"As a freelancer, I quote clients faster and deliver prototypes the same afternoon. It feels like a second developer."</p><div class="testimonial-person"><div class="testimonial-avatar">PN</div><div><div class="testimonial-name">Priya Nair</div><div class="testimonial-role">Product Designer</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"We use it before sprints to turn strong reference designs into something editable and shippable."</p><div class="testimonial-person"><div class="testimonial-avatar">JM</div><div><div class="testimonial-name">Jake M.</div><div class="testimonial-role">Design Lead</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"CLONYFY saved us weeks of work. We cloned a pricing page, tweaked it to match our brand, and shipped the same day."</p><div class="testimonial-person"><div class="testimonial-avatar">SC</div><div><div class="testimonial-name">Sarah Chen</div><div class="testimonial-role">Head of Growth</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"The code output is clean enough to actually use. It gave us a production starting point instead of a screenshot."</p><div class="testimonial-person"><div class="testimonial-avatar">MO</div><div><div class="testimonial-name">Marcus O.</div><div class="testimonial-role">Senior Engineer</div></div></div></div>
+    </div></div>
+    <div class="testimonial-row reverse"><div class="testimonial-track">
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"The visual editor alone is worth it. Clone, edit, share, export. It removes the slowest part of client work."</p><div class="testimonial-person"><div class="testimonial-avatar">MP</div><div><div class="testimonial-name">Maya Patel</div><div class="testimonial-role">UX Director</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"Exported clean Next.js on the first try. I swapped in real data and it was basically ready."</p><div class="testimonial-person"><div class="testimonial-avatar">BH</div><div><div class="testimonial-name">Ben Hartley</div><div class="testimonial-role">Full-stack Dev</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"The share links make client review much easier. Nobody waits for a full deploy just to inspect pages."</p><div class="testimonial-person"><div class="testimonial-avatar">AW</div><div><div class="testimonial-name">Aiko W.</div><div class="testimonial-role">Product Manager</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"Paste URL, wait, done. The workflow is simple enough for non-technical teammates too."</p><div class="testimonial-person"><div class="testimonial-avatar">DV</div><div><div class="testimonial-name">Dmitri V.</div><div class="testimonial-role">CTO</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"The visual editor alone is worth it. Clone, edit, share, export. It removes the slowest part of client work."</p><div class="testimonial-person"><div class="testimonial-avatar">MP</div><div><div class="testimonial-name">Maya Patel</div><div class="testimonial-role">UX Director</div></div></div></div>
+      <div class="testimonial-card"><div class="stars">★★★★★</div><p>"Exported clean Next.js on the first try. I swapped in real data and it was basically ready."</p><div class="testimonial-person"><div class="testimonial-avatar">BH</div><div><div class="testimonial-name">Ben Hartley</div><div class="testimonial-role">Full-stack Dev</div></div></div></div>
+    </div></div>
+  </div>
+</section>
+
 <section class="pricing-section" id="pricing" aria-label="Pricing">
   <div class="pricing-inner">
     <div class="s-label fade-up">Pricing</div>
