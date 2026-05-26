@@ -191,6 +191,20 @@ tbody tr:last-child td{border-bottom:none}
 const AUTH_TOKEN_KEY = 'wc_auth_token';
 let slowLoadingTimer = null;
 let currentReferralLink = '';
+function getAuthToken() {
+  const localToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  if (localToken) return localToken;
+  const cookieToken = document.cookie
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${AUTH_TOKEN_KEY}=`));
+  return cookieToken ? decodeURIComponent(cookieToken.slice(AUTH_TOKEN_KEY.length + 1)) : '';
+}
+function clearAuthSession() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem('wc_auth_user');
+  document.cookie = `${AUTH_TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
 
 function beginLoading(delay = 700) {
   const el = document.getElementById('slow-loading');
@@ -211,7 +225,7 @@ function toast(msg, type = 'inf') {
 }
 
 async function apiFetch(method, path, body, options = {}) {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  const token = getAuthToken();
   const done = options.silentLoading ? () => {} : beginLoading();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
@@ -225,7 +239,7 @@ async function apiFetch(method, path, body, options = {}) {
     const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
     data._status = res.status;
     if (res.status === 401 || res.status === 403) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+      clearAuthSession();
       location.href = '/';
       throw new Error(data.error || 'Not authenticated');
     }
@@ -371,14 +385,13 @@ async function copyShareText(kind) {
 }
 
 async function logout() {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getAuthToken();
   if (token) { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }); } catch {} }
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem('wc_auth_user');
+  clearAuthSession();
   location.href = '/';
 }
 
-if (!localStorage.getItem(AUTH_TOKEN_KEY)) location.href = '/';
+if (!getAuthToken()) location.href = '/';
 else loadAffiliate();
 </script>
 </body>

@@ -2166,6 +2166,15 @@ function setAuthToken(token) {
   const secure = location.protocol === 'https:' ? '; Secure' : '';
   document.cookie = `wc_auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secure}`;
 }
+function getAuthToken() {
+  const localToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  if (localToken) return localToken;
+  const cookieToken = document.cookie
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${AUTH_TOKEN_KEY}=`));
+  return cookieToken ? decodeURIComponent(cookieToken.slice(AUTH_TOKEN_KEY.length + 1)) : '';
+}
 function clearAuthToken() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
@@ -2205,7 +2214,7 @@ function apiFetch(path, init) {
   delete next.timeoutMs;
   next.headers = Object.assign({}, next.headers || {});
   if (API_TOKEN) next.headers['X-CLONYFY-Token'] = API_TOKEN;
-  const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+  const authToken = getAuthToken();
   if (authToken) next.headers['X-Auth-Token'] = authToken;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs);
@@ -2491,7 +2500,7 @@ async function submitForgot(e) {
 }
 
 async function logout() {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getAuthToken();
   if (token) {
     try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }); } catch {}
   }
@@ -3119,7 +3128,7 @@ async function checkExistingSession() {
     return false;
   }
 
-  const token = oauthToken || localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = oauthToken || getAuthToken();
   if (!token) {
     revealForm();
     const storedAuthError = sessionStorage.getItem('wc_auth_error');
@@ -3871,7 +3880,7 @@ async function exportZip() {
   }
   try {
     toast('Building ZIP…', 'inf');
-    const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+    const token = getAuthToken();
     const dlRes = await fetch(`/api/download-zip?outDir=${encodeURIComponent(job.outDir)}`, {
       headers: token ? { 'X-Auth-Token': token } : {},
     });

@@ -1216,6 +1216,62 @@ function previewReplayPatch(assetMap, targetOrigin = '') {
 </script>`;
 }
 
+function previewNavigationPatch(outDir, targetOrigin = '') {
+  const apiBase = `/api/page?outDir=${encodeURIComponent(outDir)}&route=`;
+  return `<script data-clonyfy-preview-nav>
+(() => {
+  const apiBase = ${JSON.stringify(apiBase)};
+  const targetOrigin = ${JSON.stringify(String(targetOrigin || '').replace(/\/$/, ''))};
+  const previewUrl = (value) => {
+    if (!value || /^#/.test(String(value))) return value;
+    try {
+      const url = new URL(value, location.href);
+      if (url.pathname === '/api/page' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/_assets/')) return value;
+      if (url.origin === location.origin || (targetOrigin && url.origin === targetOrigin)) {
+        const route = (url.pathname || '/') + url.search;
+        return apiBase + encodeURIComponent(route === '' ? '/' : route) + url.hash;
+      }
+    } catch {}
+    return value;
+  };
+  document.addEventListener('click', (event) => {
+    const a = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+    if (!a || a.target || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const next = previewUrl(a.getAttribute('href'));
+    if (next && next !== a.getAttribute('href')) {
+      event.preventDefault();
+      location.href = next;
+    }
+  }, true);
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!form || !form.getAttribute) return;
+    const next = previewUrl(form.getAttribute('action') || location.href);
+    if (next && next !== form.getAttribute('action')) form.setAttribute('action', next);
+  }, true);
+  for (const name of ['pushState', 'replaceState']) {
+    const native = history[name];
+    history[name] = function(state, title, url) {
+      if (url != null) url = previewUrl(url);
+      return native.call(this, state, title, url);
+    };
+  }
+  try {
+    const nativeOpen = window.open;
+    window.open = function(url, target, features) {
+      return nativeOpen.call(window, previewUrl(url), target, features);
+    };
+  } catch {}
+  try {
+    const nativeAssign = Location.prototype.assign;
+    const nativeReplace = Location.prototype.replace;
+    Location.prototype.assign = function(url) { return nativeAssign.call(this, previewUrl(url)); };
+    Location.prototype.replace = function(url) { return nativeReplace.call(this, previewUrl(url)); };
+  } catch {}
+})();
+</script>`;
+}
+
 async function previewOutDirFromReferer(req) {
   const raw = String(req.headers.referer || '');
   if (!raw) return '';
@@ -1234,17 +1290,28 @@ async function previewOutDirFromReferer(req) {
 async function rewritePreviewAssetUrls(html, outDir) {
   const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   let out = String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
+  let targetOrigin = '';
   if (!out.includes('data-clonyfy-preview-replay')) {
-    const { map, targetOrigin } = await buildPreviewAssetContext(outDir);
+    const context = await buildPreviewAssetContext(outDir);
+    targetOrigin = context.targetOrigin;
     if (targetOrigin) {
       out = out
         .replace(/([("'=\s,])\/_next\/image\?/g, `$1${targetOrigin}/_next/image?`)
         .replace(/([("'=\s,])\/media\//g, `$1${targetOrigin}/_next/static/media/`);
     }
-    const patch = previewReplayPatch(map, targetOrigin);
+    const patch = previewReplayPatch(context.map, targetOrigin);
     if (out.includes('<head>')) out = out.replace('<head>', `<head>${patch}`);
     else if (out.includes('<head ')) out = out.replace(/(<head[^>]*>)/, `$1${patch}`);
     else out = patch + out;
+  }
+  if (!out.includes('data-clonyfy-preview-nav')) {
+    if (!targetOrigin) {
+      const context = await buildPreviewAssetContext(outDir);
+      targetOrigin = context.targetOrigin;
+    }
+    const navPatch = previewNavigationPatch(outDir, targetOrigin);
+    if (out.includes('</body>')) out = out.replace('</body>', `${navPatch}</body>`);
+    else out += navPatch;
   }
   return out;
 }
@@ -1328,6 +1395,18 @@ function sharedNavigationPatch(shareId, targetOrigin = '') {
       return native.call(this, state, title, url);
     };
   }
+  try {
+    const nativeOpen = window.open;
+    window.open = function(url, target, features) {
+      return nativeOpen.call(window, shareUrl(url), target, features);
+    };
+  } catch {}
+  try {
+    const nativeAssign = Location.prototype.assign;
+    const nativeReplace = Location.prototype.replace;
+    Location.prototype.assign = function(url) { return nativeAssign.call(this, shareUrl(url)); };
+    Location.prototype.replace = function(url) { return nativeReplace.call(this, shareUrl(url)); };
+  } catch {}
 })();
 </script>`;
 }
@@ -2072,7 +2151,12 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/auth/logout') {
-    const token = req.headers['x-auth-token'] || '';
+    const cookieToken = String(req.headers.cookie || '')
+      .split(';')
+      .map(part => part.trim())
+      .find(part => part.startsWith('wc_auth_token='))
+      ?.slice('wc_auth_token='.length);
+    const token = req.headers['x-auth-token'] || (cookieToken ? decodeURIComponent(cookieToken) : '');
     if (token) {
       const session = await getSession(token);
       const user = session ? await getUserById(session.user_id) : null;

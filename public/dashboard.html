@@ -473,6 +473,20 @@ let affiliateDashboardEnabled = false;
 let affiliateDashboardLoaded = false;
 let slowLoadingCount = 0;
 let slowLoadingTimer = null;
+function getAuthToken() {
+  const localToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  if (localToken) return localToken;
+  const cookieToken = document.cookie
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${AUTH_TOKEN_KEY}=`));
+  return cookieToken ? decodeURIComponent(cookieToken.slice(AUTH_TOKEN_KEY.length + 1)) : '';
+}
+function clearAuthSession() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(DASH_CACHE_KEY);
+  document.cookie = `${AUTH_TOKEN_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
 function beginSlowLoading(delay = 900) {
   slowLoadingCount++;
   const el = document.getElementById('slow-loading');
@@ -494,7 +508,7 @@ function beginSlowLoading(delay = 900) {
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body, options = {}) {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  const token = getAuthToken();
   const doneLoading = options.silentLoading ? () => {} : beginSlowLoading();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
@@ -631,7 +645,7 @@ async function init() {
   const stripeSessionId = urlParams.get('session_id');
   if (stripeResult) history.replaceState(null, '', '/dashboard');
 
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getAuthToken();
   if (!token) { location.href = '/'; return; }
 
   try {
@@ -679,8 +693,7 @@ async function init() {
   } catch(e) {
     if (e.status === 401 || e.status === 403) {
       if (e.status === 403) sessionStorage.setItem('wc_auth_error', e.message || 'Your account has been suspended. Contact support.');
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      localStorage.removeItem(DASH_CACHE_KEY);
+      clearAuthSession();
       location.href = '/';
       return;
     }
@@ -977,7 +990,7 @@ async function saveProfile() {
 
 // ── GDPR ──────────────────────────────────────────────────────────────────────
 function exportMyData() {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  const token = getAuthToken();
   fetch('/api/user/export', { headers: { 'X-Auth-Token': token } })
     .then(r => r.blob())
     .then(blob => {
@@ -1000,7 +1013,7 @@ function confirmDeleteAccount() {
       const pw = document.getElementById('del-account-pw')?.value || '';
       if (!pw) { toast('Password is required', 'err'); return; }
       try {
-        const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+        const token = getAuthToken();
         const res = await fetch('/api/user/account', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
@@ -1008,8 +1021,7 @@ function confirmDeleteAccount() {
         });
         const r = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         if (r.error) throw new Error(r.error);
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        localStorage.removeItem(DASH_CACHE_KEY);
+        clearAuthSession();
         toast('Account deleted', 'ok');
         setTimeout(() => { location.href = '/'; }, 1800);
       } catch(e) { toast(e.message, 'err'); }
@@ -1020,10 +1032,9 @@ function confirmDeleteAccount() {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function logout() {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getAuthToken();
   if (token) fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }).catch(() => {});
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(DASH_CACHE_KEY);
+  clearAuthSession();
   location.href = '/';
 }
 
