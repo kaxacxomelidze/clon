@@ -11,12 +11,12 @@
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"></noscript>
 <style>
 :root{
-  --bg:#000;--bg2:#080808;--bg3:#0f0f0f;--bg4:#161616;
-  --border:#181818;--border2:#222;--border3:#2e2e2e;
-  --text:#f2f2f2;--text2:#8a8a8a;--text3:#4a4a4a;
-  --blue:#5b8def;--green:#1fd17a;--red:#ff4560;--yellow:#f5a623;--purple:#a855f7;
-  --green-bg:rgba(31,209,122,.07);--blue-bg:rgba(91,141,239,.08);--yellow-bg:rgba(245,166,35,.07);--red-bg:rgba(255,69,96,.07);
-  --grad:linear-gradient(135deg,#5b8def 0%,#a855f7 100%);
+  --bg:#000;--bg2:rgba(255,255,255,.03);--bg3:rgba(255,255,255,.045);--bg4:rgba(255,255,255,.07);
+  --border:rgba(255,255,255,.06);--border2:rgba(255,255,255,.08);--border3:rgba(255,255,255,.16);
+  --text:#fff;--text2:rgba(255,255,255,.48);--text3:rgba(255,255,255,.3);
+  --blue:#fff;--green:#34d399;--red:#fb7185;--yellow:#fbbf24;--purple:#fff;
+  --green-bg:rgba(31,209,122,.07);--blue-bg:rgba(255,255,255,.07);--yellow-bg:rgba(251,191,36,.08);--red-bg:rgba(255,69,96,.07);
+  --button-bg:#fff;--button-text:#000;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
@@ -25,7 +25,7 @@ button{cursor:pointer;background:none;border:none}
 a{color:var(--blue);text-decoration:none}
 a:hover{text-decoration:underline}
 .hidden{display:none!important}
-.topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:14px;position:sticky;top:0;z-index:10}
+.topbar{height:52px;background:rgba(0,0,0,.78);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:14px;position:sticky;top:0;z-index:10;backdrop-filter:blur(18px)}
 .topbar-logo{display:flex;align-items:center;text-decoration:none}
 .topbar-wordmark{width:128px;height:auto;display:block}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
@@ -34,7 +34,7 @@ a:hover{text-decoration:underline}
 .logout-btn{color:var(--red);font-size:12px;font-weight:700;padding:6px 11px;border:1px solid rgba(255,69,96,.22);border-radius:7px;background:rgba(255,69,96,.05)}
 .wrap{max-width:1120px;margin:0 auto;padding:28px 24px 80px}
 .hero{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:26px 28px;margin-bottom:16px;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;inset:0;background:var(--grad);opacity:.045;pointer-events:none}
+.hero::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.025);pointer-events:none}
 .hero>*{position:relative}
 .eyebrow{font-size:10px;font-weight:900;color:var(--blue);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
 .title{font-size:28px;font-weight:900;letter-spacing:-.7px;margin-bottom:6px}
@@ -42,8 +42,8 @@ a:hover{text-decoration:underline}
 .hero-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 16px;border-radius:9px;font-size:13px;font-weight:800;text-decoration:none;border:1px solid var(--border2);color:var(--text);background:var(--bg3)}
 .btn:hover{text-decoration:none;border-color:var(--border3)}
-.btn.primary{background:var(--grad);border:none;color:#fff}
-.btn.blue{background:var(--blue-bg);border-color:rgba(91,141,239,.25);color:var(--blue)}
+.btn.primary{background:var(--button-bg);border:none;color:var(--button-text)}
+.btn.blue{background:var(--blue-bg);border-color:var(--border2);color:var(--text)}
 .status{margin-bottom:16px;padding:13px 15px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text2);line-height:1.7}
 .status.warn{background:var(--yellow-bg);border-color:rgba(245,166,35,.22);color:var(--yellow)}
 .status.err{background:var(--red-bg);border-color:rgba(255,69,96,.22);color:#ff9bad}
@@ -51,7 +51,7 @@ a:hover{text-decoration:underline}
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
 .metric{padding:18px 20px;min-width:0}
 .metric-val{font-size:30px;font-weight:900;letter-spacing:-.6px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.metric-val.blue{color:var(--blue)}.metric-val.green{color:var(--green)}.metric-val.yellow{color:var(--yellow)}.metric-val.purple{color:var(--purple)}
+.metric-val.blue,.metric-val.purple{color:var(--text)}.metric-val.green{color:var(--green)}.metric-val.yellow{color:var(--yellow)}
 .metric-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:900;margin-top:7px}
 .section{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
 .section-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -60,7 +60,7 @@ a:hover{text-decoration:underline}
 .section-body{padding:18px}
 .link-box{display:grid;grid-template-columns:1fr auto;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:12px}
 .link-input{min-width:0;background:transparent;border:none;color:var(--text);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;outline:none}
-.copy-btn{padding:8px 13px;border-radius:8px;background:var(--blue-bg);border:1px solid rgba(91,141,239,.25);color:var(--blue);font-size:12px;font-weight:900}
+.copy-btn{padding:8px 13px;border-radius:8px;background:var(--blue-bg);border:1px solid var(--border2);color:var(--text);font-size:12px;font-weight:900}
 .share-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .share-btn{padding:8px 12px;border-radius:8px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-size:12px;font-weight:800}
 .share-btn:hover{color:var(--text);border-color:var(--border3)}
@@ -74,14 +74,14 @@ tbody tr:last-child td{border-bottom:none}
 .pill.warn{border-color:rgba(245,166,35,.24);background:var(--yellow-bg);color:var(--yellow)}
 .how{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .step{background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:14px}
-.step-num{width:28px;height:28px;border-radius:8px;background:rgba(91,141,239,.12);border:1px solid rgba(91,141,239,.28);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:900;margin-bottom:10px}
+.step-num{width:28px;height:28px;border-radius:8px;background:#fff;border:1px solid #fff;color:#000;display:flex;align-items:center;justify-content:center;font-weight:900;margin-bottom:10px}
 .step-title{font-size:13px;font-weight:800;margin-bottom:5px}
 .step-copy{font-size:12px;color:var(--text2);line-height:1.65}
 #toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column-reverse;gap:6px;z-index:100}
-.toast{padding:10px 14px;border-radius:9px;background:#0d2035;color:#93c5fd;border:1px solid #1d4ed8;font-weight:700;box-shadow:0 12px 34px rgba(0,0,0,.45)}
+.toast{padding:10px 14px;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;border:1px solid var(--border2);font-weight:700;box-shadow:0 12px 34px rgba(0,0,0,.45)}
 .toast.ok{background:#0d2218;color:#86efac;border-color:#166534}
 .toast.err{background:#1a0d0d;color:#fca5a5;border-color:#991b1b}
-.slow-loading{position:fixed;right:18px;bottom:18px;z-index:120;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,10,10,.94);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:var(--text);font-size:12px;font-weight:900;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:120;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(0,0,0,.9);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--text);font-size:12px;font-weight:900;box-shadow:0 18px 44px rgba(0,0,0,.35)}
 .slow-loading.show{display:flex}
 .slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
