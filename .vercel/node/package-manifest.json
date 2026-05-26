@@ -1,0 +1,239 @@
+{
+  "version": "20260304",
+  "runtime": "node",
+  "runtimeVersion": {
+    "resolved": "22",
+    "requested": "22.x",
+    "requestedSource": "package.json"
+  },
+  "dependencies": [
+    {
+      "name": "@supabase/supabase-js",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^2.105.4",
+      "resolved": "2.105.4",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "bcryptjs",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^3.0.3",
+      "resolved": "3.0.3",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "dotenv",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^17.4.2",
+      "resolved": "17.4.2",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "handlebars",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^4.7.8",
+      "resolved": "4.7.9",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "mime-types",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^2.1.35",
+      "resolved": "2.1.35",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "nodemailer",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^8.0.7",
+      "resolved": "8.0.7",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "playwright-core",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^1.44.0",
+      "resolved": "1.59.1",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "stripe",
+      "type": "direct",
+      "scopes": [
+        "prod"
+      ],
+      "requested": "^22.1.1",
+      "resolved": "22.1.1",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "@supabase/auth-js",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "2.105.4",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "@supabase/functions-js",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "2.105.4",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "@supabase/phoenix",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "0.4.2",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "@supabase/postgrest-js",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "2.105.4",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "@supabase/realtime-js",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "2.105.4",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "@supabase/storage-js",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "2.105.4",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "iceberg-js",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "0.8.1",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "mime-db",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "1.52.0",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "minimist",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "1.2.8",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "neo-async",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "2.6.2",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "source-map",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "0.6.1",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "tslib",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "2.8.1",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "uglify-js",
+      "type": "transitive",
+      "scopes": [
+        "optional"
+      ],
+      "resolved": "3.19.3",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    },
+    {
+      "name": "wordwrap",
+      "type": "transitive",
+      "scopes": [
+        "prod"
+      ],
+      "resolved": "1.0.0",
+      "source": "registry",
+      "sourceUrl": "https://registry.npmjs.org"
+    }
+  ]
+}
