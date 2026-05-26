@@ -1850,6 +1850,8 @@ async function handleRequest(req, res) {
     return serveFile(res, join(__dirname, 'public', 'landing.html'), 'text/html');
   }
   if (req.method === 'GET' && url.pathname === '/app') {
+    const user = await getSessionUser(req);
+    if (!user) return res.writeHead(302, { Location: '/sign-in' }), res.end();
     return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
   }
   if (req.method === 'GET' && url.pathname === '/sign-in') {
