@@ -713,6 +713,9 @@ function serveFile(res, filePath, contentType, cacheSecs = 0) {
       data = Buffer.from(injectAffonsoPixel(data.toString('utf8')), 'utf8');
     }
     const headers = { 'Content-Type': contentType };
+    if (String(contentType || '').toLowerCase().includes('text/html')) {
+      headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0';
+    }
     if (cacheSecs > 0) headers['Cache-Control'] = `public, max-age=${cacheSecs}`;
     res.writeHead(200, headers);
     res.end(data);
