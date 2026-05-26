@@ -70,13 +70,13 @@ export function Navbar() {
 
               {/* Right CTA */}
               <div className="hidden lg:flex items-center gap-3">
-               
-                <Link href="/sign-in">
+
+                <Link href="/app">
                   <button className="text-[13px] font-medium text-white/60 hover:text-white transition-colors px-3 py-2">
                     Log in
                   </button>
                 </Link>
-                <Link href="/sign-up">
+                <Link href="/app">
                   <button className="relative h-9 px-5 text-[13px] font-semibold text-black bg-white rounded-full hover:bg-white/90 transition-all duration-200 shadow-[0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(255,255,255,0.25)]">
                     Get started
                   </button>
@@ -127,10 +127,10 @@ export function Navbar() {
                     )
                   )}
                   <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.08]">
-                    <Link href="/sign-in" className="flex-1">
+                    <Link href="/app" className="flex-1">
                       <Button variant="ghost" size="sm" className="w-full text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-xl">Sign in</Button>
                     </Link>
-                    <Link href="/sign-up" className="flex-1">
+                    <Link href="/app" className="flex-1">
                       <Button size="sm" className="w-full text-sm bg-white text-black hover:bg-white/90 rounded-xl font-semibold">
                         Get started
                       </Button>
