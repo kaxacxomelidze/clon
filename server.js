@@ -1846,17 +1846,38 @@ async function handleRequest(req, res) {
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   // Static UI files
-  if (req.method === 'GET' && url.pathname === '/') {
+  const isPageRead = req.method === 'GET' || req.method === 'HEAD';
+
+  if (isPageRead && url.pathname === '/') {
     return serveFile(res, join(__dirname, 'public', 'landing.html'), 'text/html');
   }
-  if (req.method === 'GET' && url.pathname === '/app') {
-    return serveFile(res, join(__dirname, 'public', 'app.html'), 'text/html');
+  if (isPageRead && url.pathname === '/app') {
+    return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
+  }
+  if (isPageRead && url.pathname === '/dashboard') {
+    return serveFile(res, join(__dirname, 'public', 'dashboard.html'), 'text/html');
+  }
+  if (isPageRead && url.pathname === '/affiliate') {
+    return serveFile(res, join(__dirname, 'public', 'affiliate.html'), 'text/html');
+  }
+  if (isPageRead && url.pathname === '/reset-password') {
+    return serveFile(res, join(__dirname, 'public', 'reset-password.html'), 'text/html');
+  }
+  if (isPageRead && url.pathname === '/tos') {
+    return serveFile(res, join(__dirname, 'public', 'tos.html'), 'text/html');
+  }
+  if (isPageRead && url.pathname === '/privacy') {
+    return serveFile(res, join(__dirname, 'public', 'privacy.html'), 'text/html');
   }
   if (req.method === 'GET' && url.pathname === '/login') {
     return res.writeHead(302, { Location: '/app' }), res.end();
   }
   if (req.method === 'GET' && url.pathname === '/register') {
     return res.writeHead(302, { Location: '/app' }), res.end();
+  }
+  if (isPageRead && /\/__next\.[^/]+\.txt$/.test(url.pathname)) {
+    const name = url.pathname.split('/').pop();
+    return serveFile(res, join(__dirname, 'public', name), 'text/plain', 60);
   }
   if (req.method === 'GET' && url.pathname.startsWith('/media/')) {
     const outDir = await previewOutDirFromReferer(req);
@@ -1876,7 +1897,16 @@ async function handleRequest(req, res) {
       }
     }
   }
-  const staticExts = { '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
+  const staticExts = {
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.png': 'image/png',
+    '.ico': 'image/x-icon',
+    '.svg': 'image/svg+xml',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.txt': 'text/plain',
+  };
   const ext = url.pathname.match(/\.\w+$/)?.[0];
   if (ext && staticExts[ext] && !url.pathname.startsWith('/_assets/')) {
     let staticRel;
@@ -3305,12 +3335,6 @@ async function handleRequest(req, res) {
       return json(res, { ok: false, error: err.message }, 502);
     }
   }
-
-  if (req.method === 'GET' && url.pathname === '/dashboard') return serveFile(res, join(__dirname, 'public', 'dashboard.html'), 'text/html');
-  if (req.method === 'GET' && url.pathname === '/affiliate') return serveFile(res, join(__dirname, 'public', 'affiliate.html'), 'text/html');
-  if (req.method === 'GET' && url.pathname === '/reset-password') return serveFile(res, join(__dirname, 'public', 'reset-password.html'), 'text/html');
-  if (req.method === 'GET' && url.pathname === '/tos') return serveFile(res, join(__dirname, 'public', 'tos.html'), 'text/html');
-  if (req.method === 'GET' && url.pathname === '/privacy') return serveFile(res, join(__dirname, 'public', 'privacy.html'), 'text/html');
 
   if (req.method === 'POST' && url.pathname === '/api/auth/resend-verification') {
     const user = await getSessionUser(req);
