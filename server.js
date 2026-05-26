@@ -1850,7 +1850,7 @@ async function handleRequest(req, res) {
     return serveFile(res, join(__dirname, 'public', 'landing.html'), 'text/html');
   }
   if (req.method === 'GET' && url.pathname === '/app') {
-    return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
+    return serveFile(res, join(__dirname, 'public', 'app.html'), 'text/html');
   }
   if (req.method === 'GET' && url.pathname === '/login') {
     return res.writeHead(302, { Location: '/app' }), res.end();
