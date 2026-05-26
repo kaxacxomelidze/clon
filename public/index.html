@@ -991,6 +991,96 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,13,28,.92);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:#eef2ff;font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
 .slow-loading.show{display:flex}
 .slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#7fb3ff;border-radius:50%;animation:spin .7s linear infinite}
+
+/* CloneAI-inspired auth shell for /app */
+#auth-screen{background:#000;display:grid;grid-template-columns:minmax(420px,520px) minmax(0,1fr);color:#fff}
+.auth-left{background:#000;border-right:1px solid rgba(255,255,255,.08);align-items:center;padding:48px;justify-content:center}
+.auth-left::before{content:'';position:absolute;inset:auto -140px -180px -140px;height:440px;background:radial-gradient(circle,rgba(255,255,255,.11),transparent 62%);filter:blur(50px);pointer-events:none}
+.auth-orb{display:none}
+.auth-left-dots,.auth-right::after{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:48px 48px;opacity:.55;mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),transparent 85%);pointer-events:none}
+.auth-brand{justify-content:center;margin-bottom:34px;width:100%}
+.auth-brand-wordmark{width:154px;filter:brightness(1.15)}
+.auth-hero{text-align:center;margin-bottom:28px;max-width:360px}
+.auth-hero h1{font-size:30px;font-weight:800;color:#fff;letter-spacing:0;line-height:1.12;margin-bottom:12px}
+.auth-hero h1 em{font-style:normal;color:rgba(255,255,255,.58);background:none;-webkit-text-fill-color:currentColor}
+.auth-hero p{font-size:14px;color:rgba(255,255,255,.46);line-height:1.65;margin:0 auto;max-width:330px}
+.auth-preview{width:100%;max-width:360px;margin-bottom:26px;animation:none}
+.auth-preview-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.11);border-radius:20px;box-shadow:0 32px 90px rgba(0,0,0,.62)}
+.auth-preview-titlebar{gap:7px;padding:13px 16px;background:rgba(255,255,255,.035);border-bottom:1px solid rgba(255,255,255,.08)}
+.auth-prev-urlbar{background:rgba(0,0,0,.36);border:1px solid rgba(255,255,255,.06);border-radius:999px;padding:6px 12px;color:rgba(255,255,255,.48);margin-left:8px}
+.auth-preview-body{padding:20px}
+.auth-prev-prog-wrap{background:rgba(255,255,255,.08);border-radius:999px;height:5px;margin-bottom:16px}
+.auth-prev-prog{border-radius:999px;background:#fff}
+.auth-prev-lines{display:grid;gap:9px}
+.auth-prev-line{height:9px;border-radius:999px;background:rgba(255,255,255,.1)}
+.auth-stats{gap:10px;width:100%;max-width:360px;margin-bottom:26px}
+.auth-stat{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:13px 8px}
+.auth-stat-n{font-size:18px;font-weight:800;color:#fff;letter-spacing:0}
+.auth-stat-l{color:rgba(255,255,255,.38)}
+.auth-feats{display:grid;gap:10px;width:100%;max-width:360px}
+.auth-feat{font-size:13px;color:rgba(255,255,255,.52)}
+.auth-feat-icon{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#fff}
+.auth-right{display:flex;flex-direction:column;background:#000;padding:84px 44px 56px;position:relative}
+.auth-right::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.075),transparent 34%);pointer-events:none;filter:none;width:auto;height:auto;border-radius:0}
+.auth-right::after{content:''}
+.auth-topbar{position:absolute;top:24px;left:32px;right:32px;z-index:2;display:flex;align-items:center;justify-content:flex-end;gap:16px;color:rgba(255,255,255,.42);font-size:14px;font-weight:500}
+.auth-topbar-logo{display:none;width:132px;height:auto}
+.auth-topbar p{margin:0}
+.auth-topbar-copy.hidden{display:none}
+.auth-link-btn{background:none;border:none;color:#fff;font:inherit;font-weight:700;padding:0 0 0 4px;cursor:pointer;text-decoration:none}
+.auth-link-btn:hover{text-decoration:underline}
+.auth-card{width:min(520px,100%);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:32px;box-shadow:0 32px 80px rgba(0,0,0,.55)}
+.auth-card::before{display:none}
+.auth-card-heading{margin-bottom:24px;text-align:left}
+.auth-card-heading h2{font-size:24px;font-weight:800;color:#fff;letter-spacing:0;margin-bottom:6px}
+.auth-card-heading p{font-size:14px;color:rgba(255,255,255,.42)}
+.auth-switcher{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);margin-bottom:22px}
+.auth-sw-indicator{background:rgba(255,255,255,.1);box-shadow:0 1px 5px rgba(0,0,0,.35)}
+.auth-sw-btn{font-weight:650;color:rgba(255,255,255,.42)}
+.auth-sw-btn.on{color:#fff}
+.auth-field label{font-size:12px;font-weight:650;color:rgba(255,255,255,.62);text-transform:none;letter-spacing:0}
+.auth-input-icon{color:rgba(255,255,255,.28)}
+.auth-input{height:44px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:12px;color:#fff;font-size:14px;padding:0 16px 0 40px}
+.auth-input:focus{border-color:rgba(255,255,255,.34);box-shadow:0 0 0 3px rgba(255,255,255,.08);background:rgba(255,255,255,.07)}
+.auth-input::placeholder{color:rgba(255,255,255,.22)}
+.auth-pw-toggle{color:rgba(255,255,255,.3)}
+.auth-pw-toggle:hover{color:rgba(255,255,255,.75)}
+.auth-pw-strength{height:4px;border-radius:999px;background:rgba(255,255,255,.08)}
+.auth-pw-strength-bar{border-radius:999px}
+.auth-pw-hint{font-size:11px;letter-spacing:0}
+.auth-remember{color:rgba(255,255,255,.42)}
+.auth-remember input[type=checkbox]{accent-color:#fff}
+.auth-submit{height:44px;background:#fff;color:#000;border-radius:12px;padding:0 14px;font-size:14px;font-weight:800;box-shadow:none;letter-spacing:0}
+.auth-submit::after{display:none}
+.auth-submit:hover:not(:disabled){background:rgba(255,255,255,.9);box-shadow:none}
+.auth-err{background:rgba(255,69,96,.08);border:1px solid rgba(255,69,96,.24);border-radius:12px;color:#ff6b88;margin-bottom:2px}
+.auth-oauth-row{display:none;flex-direction:column;gap:10px;margin-top:8px}
+.auth-divider{display:flex;align-items:center;gap:10px;color:rgba(255,255,255,.24);font-size:11px}
+.auth-divider span{flex:1;height:1px;background:rgba(255,255,255,.08)}
+.auth-oauth-btn{display:flex;align-items:center;justify-content:center;gap:9px;height:42px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:12px;color:rgba(255,255,255,.82);font-size:13px;font-weight:700;text-decoration:none;transition:all .15s}
+.auth-oauth-btn:hover{background:rgba(255,255,255,.09)}
+.auth-footer,.auth-legal{font-size:12px;color:rgba(255,255,255,.26);margin-top:20px;text-align:center;font-weight:500}
+.auth-footer a,.auth-legal a{color:rgba(255,255,255,.42)!important;text-decoration:none}
+.auth-footer a:hover,.auth-legal a:hover{color:#fff!important}
+.auth-legal{position:absolute;bottom:24px;left:32px;right:32px;z-index:2;margin:0}
+@media(max-width:900px){
+  #auth-screen{display:flex}
+  .auth-left{display:none}
+  .auth-right{width:100%;min-height:100vh;padding:96px 28px 64px;align-items:center;justify-content:flex-start}
+  .auth-topbar{left:22px;right:22px;justify-content:space-between}
+  .auth-topbar-logo{display:block}
+  .auth-card{width:min(520px,100%);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);box-shadow:0 32px 80px rgba(0,0,0,.55);padding:32px}
+  .auth-card-logo{display:flex}
+  .auth-card-heading{text-align:center}
+}
+@media(max-width:480px){
+  .auth-right{padding:88px 18px 64px}
+  .auth-card{padding:24px 18px;border-radius:20px}
+  .auth-topbar{font-size:12px}
+  .auth-topbar-logo{width:118px}
+  .auth-card-heading h2{font-size:22px}
+  .auth-form-row{align-items:flex-start}
+}
 </style>
 </head>
 <body>
@@ -1008,8 +1098,8 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <img class="auth-brand-wordmark" src="/brand-wordmark.svg" alt="CLONYFY">
     </div>
     <div class="auth-hero">
-      <h1>Clone any website<br><em>in seconds</em></h1>
-      <p>Turn any website into a fully editable Next.js project — assets, API routes, and deploy included.</p>
+      <h1>Clone. Edit.<br><em>Ship.</em></h1>
+      <p>Turn any website into an editable project, redesign it in the browser, and export production-ready code.</p>
     </div>
     <!-- Fake browser preview -->
     <div class="auth-preview">
@@ -1018,7 +1108,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
           <span class="auth-prev-dot" style="background:#ff5f57"></span>
           <span class="auth-prev-dot" style="background:#febc2e"></span>
           <span class="auth-prev-dot" style="background:#28c840"></span>
-          <div class="auth-prev-urlbar">https://stripe.com → cloning…</div>
+          <div class="auth-prev-urlbar">https://example.com -> cloning...</div>
         </div>
         <div class="auth-preview-body">
           <div class="auth-prev-prog-wrap"><div class="auth-prev-prog"></div></div>
@@ -1034,7 +1124,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
     <div class="auth-stats">
       <div class="auth-stat"><span class="auth-stat-n">2,400+</span><span class="auth-stat-l">Sites Cloned</span></div>
       <div class="auth-stat"><span class="auth-stat-n">850+</span><span class="auth-stat-l">Developers</span></div>
-      <div class="auth-stat"><span class="auth-stat-n">4.9★</span><span class="auth-stat-l">Rating</span></div>
+      <div class="auth-stat"><span class="auth-stat-n">4.9</span><span class="auth-stat-l">Rating</span></div>
     </div>
     <!-- Features -->
     <div class="auth-feats">
@@ -1058,6 +1148,11 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   </div>
   <!-- Right: form panel -->
   <div class="auth-right">
+    <div class="auth-topbar">
+      <img class="auth-topbar-logo" src="/brand-wordmark.svg" alt="CLONYFY">
+      <p class="auth-topbar-copy" id="auth-top-login-copy">New to Clonyfy? <button class="auth-link-btn" type="button" onclick="switchAuthTab('register')">Create account</button></p>
+      <p class="auth-topbar-copy hidden" id="auth-top-register-copy">Already have an account? <button class="auth-link-btn" type="button" onclick="switchAuthTab('login')">Sign in</button></p>
+    </div>
     <div id="auth-boot-spinner">
       <div class="auth-boot-ring"></div>
       <div class="auth-boot-txt">LOADING...</div>
@@ -1069,11 +1164,11 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       </div>
       <div class="auth-card-heading">
         <h2 id="auth-form-title">Welcome back</h2>
-        <p id="auth-form-sub">Sign in to continue to CLONYFY</p>
+        <p id="auth-form-sub">Sign in to your Clonyfy account</p>
       </div>
       <div class="auth-switcher" id="auth-switcher">
         <div class="auth-sw-indicator" id="auth-sw-ind"></div>
-        <button class="auth-sw-btn on" id="auth-tab-login" onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-sw-btn on" id="auth-tab-login" onclick="switchAuthTab('login')">Sign in</button>
         <button class="auth-sw-btn" id="auth-tab-register" onclick="switchAuthTab('register')">Create Account</button>
       </div>
       <div id="auth-err" class="auth-err"></div>
@@ -1090,7 +1185,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
           <label>Password</label>
           <div class="auth-input-wrap">
             <span class="auth-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-            <input class="auth-input has-toggle" type="password" id="auth-login-pass" placeholder="••••••••" autocomplete="current-password" required>
+            <input class="auth-input has-toggle" type="password" id="auth-login-pass" placeholder="Password" autocomplete="current-password" required>
             <button type="button" class="auth-pw-toggle" onclick="togglePw('auth-login-pass',this)" tabindex="-1" aria-label="Show password">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
@@ -1100,7 +1195,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
           <label class="auth-remember"><input type="checkbox" id="auth-remember-me"> Remember me</label>
           <button type="button" onclick="showForgotPassword()" style="background:none;border:none;color:rgba(255,255,255,.3);font-size:12px;cursor:pointer;font-family:inherit;padding:2px;font-weight:600;transition:color .15s" onmouseover="this.style.color='rgba(255,255,255,.55)'" onmouseout="this.style.color='rgba(255,255,255,.3)'">Forgot password?</button>
         </div>
-        <button class="auth-submit" id="auth-login-btn" type="submit">Sign In</button>
+        <button class="auth-submit" id="auth-login-btn" type="submit">Sign in</button>
       </form>
       <!-- Register form -->
       <form class="auth-form" id="auth-register-form" style="display:none" onsubmit="submitRegister(event)">
@@ -1122,7 +1217,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
           <label>Password</label>
           <div class="auth-input-wrap">
             <span class="auth-input-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-            <input class="auth-input has-toggle" type="password" id="auth-reg-pass" placeholder="Min. 6 characters" autocomplete="new-password" required minlength="6" oninput="updatePwStrength(this.value)">
+            <input class="auth-input has-toggle" type="password" id="auth-reg-pass" placeholder="Min. 8 characters" autocomplete="new-password" required minlength="8" oninput="updatePwStrength(this.value)">
             <button type="button" class="auth-pw-toggle" onclick="togglePw('auth-reg-pass',this)" tabindex="-1" aria-label="Show password">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
@@ -1140,7 +1235,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
             </button>
           </div>
         </div>
-        <button class="auth-submit" id="auth-reg-btn" type="submit">Create Account</button>
+        <button class="auth-submit" id="auth-reg-btn" type="submit">Create free account</button>
       </form>
       <!-- Forgot password form -->
       <form class="auth-form" id="auth-forgot-form" style="display:none" onsubmit="submitForgot(event)">
@@ -1152,18 +1247,19 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
           </div>
         </div>
         <button class="auth-submit" id="auth-forgot-btn" type="submit">Send Reset Link</button>
-        <button type="button" onclick="showForgotPassword(false)" style="margin-top:6px;background:none;border:none;color:rgba(255,255,255,.25);font-size:12px;cursor:pointer;font-family:inherit;padding:4px">← Back to sign in</button>
+        <button type="button" onclick="showForgotPassword(false)" style="margin-top:6px;background:none;border:none;color:rgba(255,255,255,.25);font-size:12px;cursor:pointer;font-family:inherit;padding:4px">Back to sign in</button>
       </form>
       <!-- Google OAuth -->
-      <div id="google-oauth-row" style="display:none;flex-direction:column;gap:10px;margin-top:8px">
-        <div style="display:flex;align-items:center;gap:10px;color:rgba(255,255,255,.15);font-size:11px"><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>or<div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div></div>
-        <a href="/api/auth/google" style="display:flex;align-items:center;justify-content:center;gap:9px;padding:11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:rgba(255,255,255,.75);font-size:13px;font-weight:600;text-decoration:none;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='rgba(255,255,255,.04)'">
+      <div id="google-oauth-row" class="auth-oauth-row">
+        <div class="auth-divider"><span></span>or continue with Google<span></span></div>
+        <a href="/api/auth/google" class="auth-oauth-btn">
           <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
           Continue with Google
         </a>
       </div>
-      <div class="auth-footer">Your data stays on this device · <a href="/tos" target="_blank" style="color:rgba(255,255,255,.25);text-decoration:none">Terms</a> · <a href="/privacy" target="_blank" style="color:rgba(255,255,255,.25);text-decoration:none">Privacy</a></div>
+      <div class="auth-footer">Secure access for your Clonyfy workspace</div>
     </div>
+    <div class="auth-legal">(c) 2025 Clonyfy, Inc. | <a href="/privacy" target="_blank">Privacy</a> | <a href="/tos" target="_blank">Terms</a></div>
   </div>
 </div>
 
@@ -2206,8 +2302,10 @@ function switchAuthTab(tab) {
   const loginForm = document.getElementById('auth-login-form');
   const regForm = document.getElementById('auth-register-form');
   document.getElementById('auth-err').className = 'auth-err';
-  document.getElementById('auth-form-title').textContent = tab === 'login' ? 'Welcome back' : 'Create account';
-  document.getElementById('auth-form-sub').textContent = tab === 'login' ? 'Sign in to your workspace' : 'Try 3 clones free. Upgrade to unlock everything.';
+  document.getElementById('auth-form-title').textContent = tab === 'login' ? 'Welcome back' : 'Create your account';
+  document.getElementById('auth-form-sub').textContent = tab === 'login' ? 'Sign in to your Clonyfy account' : 'Start cloning in seconds. Free plan, no card required.';
+  document.getElementById('auth-top-login-copy')?.classList.toggle('hidden', tab !== 'login');
+  document.getElementById('auth-top-register-copy')?.classList.toggle('hidden', tab !== 'register');
   if (tab === 'register') { updatePwStrength(''); document.getElementById('auth-reg-pass').value = ''; }
   // Swap forms without a forced synchronous layout
   loginForm.style.display = 'none';
@@ -2234,7 +2332,7 @@ function showAuthError(msg) {
 function setAuthLoading(btnId, loading) {
   const btn = document.getElementById(btnId);
   btn.disabled = loading;
-  btn.textContent = loading ? 'LOADING...' : (btnId === 'auth-login-btn' ? 'Sign In' : 'Create Account');
+  btn.textContent = loading ? 'LOADING...' : (btnId === 'auth-login-btn' ? 'Sign in' : 'Create free account');
 }
 
 async function submitLogin(e) {
@@ -2367,7 +2465,7 @@ function showForgotPassword(show = true) {
   const sw = document.getElementById('auth-switcher');
   if (sw) sw.style.display = show ? 'none' : '';
   document.getElementById('auth-form-title').textContent = show ? 'Reset password' : 'Welcome back';
-  document.getElementById('auth-form-sub').textContent = show ? 'Enter your email to receive a reset link' : 'Sign in to your workspace';
+  document.getElementById('auth-form-sub').textContent = show ? 'Enter your email to receive a reset link' : 'Sign in to your Clonyfy account';
   document.getElementById('auth-err').className = 'auth-err';
 }
 
