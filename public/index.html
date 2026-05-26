@@ -2496,25 +2496,7 @@ async function logout() {
     try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }); } catch {}
   }
   clearAuthToken();
-  currentUser = null;
-  allJobs = [];
-  activeJobId = null;
-  editorOutDir = '';
-  editorRoute = '/';
-  edSelEl = null;
-  edHovEl = null;
-  edUndo = [];
-  edUndoIdx = -1;
-  clearPolling();
-  clearTimer();
-  renderSidebar();
-  document.getElementById('emptyState').style.display = 'flex';
-  document.getElementById('jobView').style.display = 'none';
-  document.getElementById('titlebarUser').style.display = 'none';
-  document.getElementById('auth-screen').classList.remove('hidden');
-  switchAuthTab('login');
-  document.getElementById('auth-login-email').value = '';
-  document.getElementById('auth-login-pass').value = '';
+  window.location.replace('/');
 }
 
 function isPaidUser() {
