@@ -83,11 +83,11 @@ export function DemoSection() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] rounded-full bg-white/[0.01] blur-[140px] pointer-events-none" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6">
-        
+
         {/* Header */}
         <div className="max-w-3xl mx-auto text-center mb-16">
           <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.25em] px-4.5 py-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-white/50 backdrop-blur-md mb-6">
-            HOW IT WORKS
+            PROCESS
           </span>
           <h2 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-tight">
             See the cloning process in action
@@ -98,17 +98,17 @@ export function DemoSection() {
         </div>
 
         {/* main container */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-          
-          {/* Left panel - Steps list */}
-          <div className="lg:col-span-5 flex flex-col justify-center gap-3">
+        <div className="flex flex-col gap-8">
+
+          {/* Steps row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {steps.map((step) => {
               const isActive = activeStep === step.id;
               return (
                 <button
                   key={step.id}
                   onClick={() => handleStepSelect(step.id)}
-                  className={`group text-left p-6 rounded-2xl border transition-all duration-300 relative overflow-hidden flex items-start gap-4 ${
+                  className={`group text-left p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden flex items-start gap-4 min-h-[132px] ${
                     isActive
                       ? "bg-white/[0.03] border-white/[0.08]"
                       : "bg-transparent border-transparent hover:bg-white/[0.01]"
@@ -154,8 +154,10 @@ export function DemoSection() {
               );
             })}
 
-            {/* Play/Pause controls */}
-            <div className="mt-4 flex items-center justify-center lg:justify-start gap-4 px-6">
+          </div>
+
+          {/* Play/Pause controls */}
+          <div className="flex items-center justify-center gap-4">
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
                 className="flex items-center gap-2 text-xs font-semibold text-white/40 hover:text-white/80 transition-colors py-2"
@@ -172,13 +174,12 @@ export function DemoSection() {
                   </>
                 )}
               </button>
-            </div>
           </div>
 
-          {/* Right panel - Visual Simulator Browser */}
-          <div className="lg:col-span-7 flex items-center justify-center">
-            <div className="w-full rounded-3xl border border-white/[0.08] bg-[#07070b]/60 overflow-hidden shadow-2xl relative aspect-[16/10] flex flex-col">
-              
+          {/* Full-width visual simulator browser */}
+          <div className="flex items-center justify-center">
+            <div className="w-full rounded-3xl border border-white/[0.08] bg-[#07070b]/60 overflow-hidden shadow-2xl relative min-h-[520px] flex flex-col">
+
               {/* Browser chrome header */}
               <div className="h-11 px-4 border-b border-white/[0.06] bg-black/40 flex items-center gap-4 shrink-0">
                 <div className="flex gap-1.5 shrink-0">
@@ -203,7 +204,7 @@ export function DemoSection() {
 
               {/* Browser viewport */}
               <div className="flex-1 bg-black p-6 relative overflow-hidden flex flex-col justify-center">
-                
+
                 <AnimatePresence mode="wait">
                   {/* STEP 1: PASTE URL */}
                   {activeStep === 1 && (
@@ -230,7 +231,7 @@ export function DemoSection() {
                           <ArrowRight size={12} className="stroke-[2.5]" />
                         </button>
                       </div>
-                      
+
                       {/* Fake typing cursor simulation */}
                       <div className="flex items-center justify-center gap-2 text-[10px] text-white/25">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
@@ -314,10 +315,10 @@ export function DemoSection() {
 
                       {/* Visual canvas */}
                       <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
-                        
+
                         {/* Simulated landing page layout */}
                         <div className="relative p-6 rounded-2xl border border-dashed border-white/20 bg-white/[0.01] max-w-sm group">
-                          
+
                           {/* Element selector box (Hover ring) */}
                           <div className="absolute -inset-1 border border-sky-500 rounded-2xl pointer-events-none">
                             <span className="absolute -top-3.5 left-2 px-1.5 py-0.5 rounded bg-sky-500 text-[8px] font-mono font-bold text-white">

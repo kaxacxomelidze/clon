@@ -8,7 +8,6 @@ import { ProblemSection } from "@/components/landing/problem-section";
 import { FeaturesSection } from "@/components/landing/features-section";
 import { FreedomSection } from "@/components/landing/freedom-section";
 import { BenefitsSection } from "@/components/landing/benefits-section";
-import { NoExcuseSection } from "@/components/landing/no-excuse-section";
 import { ForWhoSection } from "@/components/landing/for-who-section";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
@@ -29,7 +28,6 @@ export default function LandingPage() {
         <FeaturesSection />
         <FreedomSection />
         <BenefitsSection />
-        <NoExcuseSection />
         <ForWhoSection />
         <TestimonialsSection />
         <PricingSection />

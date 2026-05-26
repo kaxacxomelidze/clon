@@ -3,23 +3,23 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-function AnimatedCounter({ initialValue = 14600 }: { initialValue?: number }) {
-  const [count, setCount] = useState(initialValue);
+function AnimatedCounter({ target = 14600 }: { target?: number }) {
+  const [count, setCount] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
 
   useEffect(() => {
-    if (!hasStarted) {
-      setHasStarted(true);
-      let current = initialValue;
-      
-      const liveTimer = setInterval(() => {
-        current += Math.floor(Math.random() * 2) + 1;
-        setCount(current);
-      }, 5000);
-
-      return () => clearInterval(liveTimer);
-    }
-  }, [initialValue, hasStarted]);
+    if (hasStarted) return;
+    setHasStarted(true);
+    let frame = 0;
+    const totalFrames = 90;
+    const timer = window.setInterval(() => {
+      frame += 1;
+      const progress = 1 - Math.pow(1 - frame / totalFrames, 3);
+      setCount(Math.min(target, Math.round(target * progress)));
+      if (frame >= totalFrames) window.clearInterval(timer);
+    }, 18);
+    return () => window.clearInterval(timer);
+  }, [target, hasStarted]);
 
   return <span>+{count.toLocaleString()}</span>;
 }
@@ -52,7 +52,7 @@ export function StatsSection() {
               className="mb-4"
             >
               <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/30">
-                Milestone
+                Websites Cloned with Clonyfy
               </span>
             </motion.div>
 
@@ -63,7 +63,7 @@ export function StatsSection() {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="text-5xl sm:text-7xl lg:text-8xl font-black text-white tracking-tight leading-tight"
             >
-              <AnimatedCounter initialValue={14600} />
+              <AnimatedCounter target={14600} />
             </motion.h2>
 
             <motion.p
@@ -73,7 +73,7 @@ export function StatsSection() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="mt-4 text-xl sm:text-2xl font-medium text-white/45"
             >
-              Websites Cloned with Clonyfy
+              builders already started from reality, not from scratch.
             </motion.p>
           </div>
         </motion.div>

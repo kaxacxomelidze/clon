@@ -6,7 +6,7 @@ import { Logo } from "./logo";
 import { ArrowRight } from "lucide-react";
 
 const footerLinks = {
-  Product: [{ label: "Features", href: "#features" }, { label: "Pricing", href: "#pricing" }, { label: "Changelog", href: "#" }, { label: "Roadmap", href: "#" }],
+  Product: [{ label: "Features", href: "#demo" }, { label: "Pricing", href: "#pricing" }, { label: "Changelog", href: "#" }, { label: "Roadmap", href: "#" }],
   Developers: [{ label: "Documentation", href: "#" }, { label: "API Reference", href: "#" }, { label: "GitHub", href: "#" }, { label: "Status", href: "#" }],
   Company: [{ label: "About", href: "#" }, { label: "Blog", href: "#" }, { label: "Careers", href: "#" }, { label: "Contact", href: "#" }],
   Legal: [{ label: "Privacy", href: "#" }, { label: "Terms", href: "#" }, { label: "Cookies", href: "#" }, { label: "Security", href: "#" }],

@@ -71,7 +71,7 @@ export function BenefitsSection() {
             className="inline-flex items-center justify-center mb-6"
           >
             <span className="text-[10px] font-bold uppercase tracking-[0.25em] px-4.5 py-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-white/50 backdrop-blur-md">
-              WHAT YOU GAIN
+              WHAT YOU ACTUALLY GAIN
             </span>
           </motion.div>
 
@@ -82,7 +82,9 @@ export function BenefitsSection() {
             transition={{ duration: 0.8, delay: 0.08 }}
             className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight text-balance"
           >
-            The fastest way to rebuild, redesign and ship any website.
+            <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
+              The fastest way to rebuild, redesign and ship any website.
+            </span>
           </motion.h2>
 
           <motion.p

@@ -38,14 +38,16 @@ export function JoinSection() {
               initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.18 }}
               className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight max-w-2xl mx-auto text-balance"
             >
-              Join +9000 entrepreneurs
+              <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
+                Stop Thinking. Build what works.
+              </span>
             </motion.h2>
 
             <motion.p
               initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.26 }}
               className="mt-6 text-lg sm:text-xl leading-relaxed text-white/45 max-w-xl mx-auto"
             >
-              Get instant access to Clonyfy and ship faster with pixel-perfect clones.
+              Join +9000 entrepreneurs.
             </motion.p>
 
             <motion.div

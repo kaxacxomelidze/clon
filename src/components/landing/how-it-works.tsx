@@ -209,14 +209,14 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="relative overflow-hidden bg-black border-b border-white/[0.06]">
+    <section id="process" className="relative overflow-hidden bg-black border-b border-white/[0.06]">
       {/* Header */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-32 pb-24 text-center">
         <motion.p
           initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
           className="text-[10px] font-semibold uppercase tracking-[0.28em] mb-6 text-white/30"
         >
-          How It Works
+          Process
         </motion.p>
         <motion.h2
           initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }}
