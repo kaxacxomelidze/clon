@@ -63,6 +63,7 @@ const socials = [
 export function Footer() {
   const ref = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -70,6 +71,11 @@ export function Footer() {
     const obs = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) setVisible(true); }, { threshold: 0.05 });
     obs.observe(el);
     return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
+    setIsAuthenticated(!!token);
   }, []);
 
   return (
@@ -93,10 +99,10 @@ export function Footer() {
         </div>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.22em] mb-3">Ready to build?</p>
+            <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.22em] mb-3">{isAuthenticated ? "Ready to continue?" : "Ready to build?"}</p>
             <Link href="/app">
               <button className="group h-10 px-6 rounded-full gap-2 font-semibold text-sm text-black bg-white hover:bg-white/90 transition-all duration-200 flex items-center shadow-[0_0_20px_rgba(255,255,255,0.12)]">
-                Start for free
+                {isAuthenticated ? "Go to Dashboard" : "Start for free"}
                 <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
               </button>
             </Link>
