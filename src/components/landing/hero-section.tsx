@@ -188,7 +188,7 @@ export function HeroSection() {
           custom={3} variants={fadeUp} initial="hidden" animate="show"
           className="mt-12 flex flex-col sm:flex-row items-center gap-3"
         >
-          <Link href="/sign-up">
+          <Link href="/app">
             <button className="group h-[52px] px-9 text-[15px] font-semibold text-black bg-white rounded-full hover:bg-white/92 transition-all duration-200 flex items-center gap-2.5 shadow-[0_0_40px_rgba(167,139,250,0.35)]">
               Start Cloning
               <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform duration-200" />

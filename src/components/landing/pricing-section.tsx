@@ -164,7 +164,7 @@ export function PricingSection() {
                 )}
                 <p className={`text-sm ${plan.featured ? "text-black/55" : "text-white/35"}`}>{plan.description}</p>
               </div>
-              <Link href="/sign-up" className="mb-6">
+              <Link href="/app" className="mb-6">
                 <Button
                   className={`w-full h-11 font-semibold rounded-xl gap-2 group border-none ${plan.featured ? "bg-black text-white hover:bg-black/85" : "bg-white text-black hover:bg-white/90"}`}
                 >

@@ -103,7 +103,7 @@ export function FaqSection() {
               <p className="mt-1 text-xs text-white/45 leading-relaxed">
                 Get instant access to Clonyfy and ship faster with pixel-perfect clones.
               </p>
-              <Link href="/sign-up" className="inline-flex mt-4">
+              <Link href="/app" className="inline-flex mt-4">
                 <button className="group h-9 px-4 rounded-full bg-white text-black text-[13px] font-semibold hover:bg-white/90 transition-all flex items-center gap-2">
                   Get instant access
                   <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />

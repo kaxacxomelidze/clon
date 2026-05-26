@@ -52,7 +52,7 @@ export function CtaSection() {
               initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.34 }}
               className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4"
             >
-              <Link href="/sign-up">
+              <Link href="/app">
                 <button className="group h-12 px-8 text-[15px] font-semibold text-black bg-white hover:bg-white/90 rounded-full transition-all duration-200 flex items-center gap-2 shadow-[0_0_40px_rgba(255,255,255,0.15)]">
                   Start for free
                   <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
