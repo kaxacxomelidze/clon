@@ -1850,21 +1850,13 @@ async function handleRequest(req, res) {
     return serveFile(res, join(__dirname, 'public', 'landing.html'), 'text/html');
   }
   if (req.method === 'GET' && url.pathname === '/app') {
-    const user = await getSessionUser(req);
-    if (!user) return res.writeHead(302, { Location: '/sign-in' }), res.end();
     return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
   }
-  if (req.method === 'GET' && url.pathname === '/sign-in') {
-    return serveFile(res, join(__dirname, 'public', 'sign-in.html'), 'text/html');
-  }
-  if (req.method === 'GET' && url.pathname === '/sign-up') {
-    return serveFile(res, join(__dirname, 'public', 'sign-up.html'), 'text/html');
-  }
   if (req.method === 'GET' && url.pathname === '/login') {
-    return res.writeHead(302, { Location: '/sign-in' }), res.end();
+    return res.writeHead(302, { Location: '/app' }), res.end();
   }
   if (req.method === 'GET' && url.pathname === '/register') {
-    return res.writeHead(302, { Location: '/sign-up' }), res.end();
+    return res.writeHead(302, { Location: '/app' }), res.end();
   }
   if (req.method === 'GET' && url.pathname.startsWith('/media/')) {
     const outDir = await previewOutDirFromReferer(req);
