@@ -10,3 +10,5 @@ dist-electron/
 .claude/
 browsers/
 .admin-sessions.json
+
+.vercel

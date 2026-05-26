@@ -3,7 +3,8 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,packages/cloner/node_modules/@sparticuz/chromium/**,db.js"
+      "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,db.js",
+      "excludeFiles": "output/**,packages/cloner/node_modules/**"
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]

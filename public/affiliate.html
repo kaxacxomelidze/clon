@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Affiliate Dashboard · CLONYFY</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"></noscript>
+<style>
+:root{
+  --bg:#000;--bg2:#080808;--bg3:#0f0f0f;--bg4:#161616;
+  --border:#181818;--border2:#222;--border3:#2e2e2e;
+  --text:#f2f2f2;--text2:#8a8a8a;--text3:#4a4a4a;
+  --blue:#5b8def;--green:#1fd17a;--red:#ff4560;--yellow:#f5a623;--purple:#a855f7;
+  --green-bg:rgba(31,209,122,.07);--blue-bg:rgba(91,141,239,.08);--yellow-bg:rgba(245,166,35,.07);--red-bg:rgba(255,69,96,.07);
+  --grad:linear-gradient(135deg,#5b8def 0%,#a855f7 100%);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
+button,input{font:inherit}
+button{cursor:pointer;background:none;border:none}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.hidden{display:none!important}
+.topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:14px;position:sticky;top:0;z-index:10}
+.topbar-logo{display:flex;align-items:center;text-decoration:none}
+.topbar-wordmark{width:128px;height:auto;display:block}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.topbar-btn{color:var(--text2);font-size:12px;font-weight:700;padding:6px 11px;border:1px solid var(--border2);border-radius:7px;background:var(--bg3);text-decoration:none}
+.topbar-btn:hover{color:var(--text);border-color:var(--border3);text-decoration:none}
+.logout-btn{color:var(--red);font-size:12px;font-weight:700;padding:6px 11px;border:1px solid rgba(255,69,96,.22);border-radius:7px;background:rgba(255,69,96,.05)}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 24px 80px}
+.hero{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:26px 28px;margin-bottom:16px;display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:var(--grad);opacity:.045;pointer-events:none}
+.hero>*{position:relative}
+.eyebrow{font-size:10px;font-weight:900;color:var(--blue);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
+.title{font-size:28px;font-weight:900;letter-spacing:-.7px;margin-bottom:6px}
+.sub{font-size:13px;color:var(--text2);line-height:1.7;max-width:700px}
+.hero-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 16px;border-radius:9px;font-size:13px;font-weight:800;text-decoration:none;border:1px solid var(--border2);color:var(--text);background:var(--bg3)}
+.btn:hover{text-decoration:none;border-color:var(--border3)}
+.btn.primary{background:var(--grad);border:none;color:#fff}
+.btn.blue{background:var(--blue-bg);border-color:rgba(91,141,239,.25);color:var(--blue)}
+.status{margin-bottom:16px;padding:13px 15px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text2);line-height:1.7}
+.status.warn{background:var(--yellow-bg);border-color:rgba(245,166,35,.22);color:var(--yellow)}
+.status.err{background:var(--red-bg);border-color:rgba(255,69,96,.22);color:#ff9bad}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.metric{padding:18px 20px;min-width:0}
+.metric-val{font-size:30px;font-weight:900;letter-spacing:-.6px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.metric-val.blue{color:var(--blue)}.metric-val.green{color:var(--green)}.metric-val.yellow{color:var(--yellow)}.metric-val.purple{color:var(--purple)}
+.metric-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:900;margin-top:7px}
+.section{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.section-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.section-title{font-size:13px;font-weight:800}
+.section-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.section-body{padding:18px}
+.link-box{display:grid;grid-template-columns:1fr auto;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:12px}
+.link-input{min-width:0;background:transparent;border:none;color:var(--text);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;outline:none}
+.copy-btn{padding:8px 13px;border-radius:8px;background:var(--blue-bg);border:1px solid rgba(91,141,239,.25);color:var(--blue);font-size:12px;font-weight:900}
+.share-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.share-btn{padding:8px 12px;border-radius:8px;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-size:12px;font-weight:800}
+.share-btn:hover{color:var(--text);border-color:var(--border3)}
+table{width:100%;border-collapse:collapse}
+thead th{padding:9px 14px;text-align:left;font-size:10px;font-weight:900;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);background:var(--bg3)}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)}
+tbody tr:last-child td{border-bottom:none}
+.empty{padding:26px!important;text-align:center;color:var(--text3)}
+.pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:900;border:1px solid var(--border2);color:var(--text2);background:var(--bg3)}
+.pill.ok{border-color:rgba(31,209,122,.24);background:var(--green-bg);color:var(--green)}
+.pill.warn{border-color:rgba(245,166,35,.24);background:var(--yellow-bg);color:var(--yellow)}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.step{background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:14px}
+.step-num{width:28px;height:28px;border-radius:8px;background:rgba(91,141,239,.12);border:1px solid rgba(91,141,239,.28);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:900;margin-bottom:10px}
+.step-title{font-size:13px;font-weight:800;margin-bottom:5px}
+.step-copy{font-size:12px;color:var(--text2);line-height:1.65}
+#toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column-reverse;gap:6px;z-index:100}
+.toast{padding:10px 14px;border-radius:9px;background:#0d2035;color:#93c5fd;border:1px solid #1d4ed8;font-weight:700;box-shadow:0 12px 34px rgba(0,0,0,.45)}
+.toast.ok{background:#0d2218;color:#86efac;border-color:#166534}
+.toast.err{background:#1a0d0d;color:#fca5a5;border-color:#991b1b}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:120;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,10,10,.94);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:var(--text);font-size:12px;font-weight:900;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:780px){
+  .hero{grid-template-columns:1fr}
+  .hero-actions{justify-content:flex-start}
+  .grid{grid-template-columns:1fr 1fr}
+  .link-box{grid-template-columns:1fr}
+  .how{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="topbar-logo" href="/"><img class="topbar-wordmark" src="/brand-wordmark.svg" alt="CLONYFY"></a>
+  <div class="topbar-right">
+    <a href="/" class="topbar-btn">App</a>
+    <a href="/dashboard" class="topbar-btn">Dashboard</a>
+    <button class="logout-btn" onclick="logout()">Sign out</button>
+  </div>
+</div>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Affiliate Program</div>
+      <h1 class="title">Your CLONYFY affiliate workspace</h1>
+      <p class="sub">Share CLONYFY, track performance, and see rewards in one place. Affonso runs the tracking behind the scenes; this page keeps the experience inside your website.</p>
+    </div>
+    <div class="hero-actions">
+      <button class="btn primary" onclick="loadAffiliate(true)">Refresh dashboard</button>
+      <a class="btn" href="/dashboard">Account dashboard</a>
+    </div>
+  </section>
+
+  <div id="status" class="status">LOADING...</div>
+
+  <section class="grid" id="metrics">
+    <div class="card metric"><div class="metric-val blue" id="m-clicks">0</div><div class="metric-lbl">Clicks</div></div>
+    <div class="card metric"><div class="metric-val green" id="m-referrals">0</div><div class="metric-lbl">Referrals</div></div>
+    <div class="card metric"><div class="metric-val yellow" id="m-conversions">0</div><div class="metric-lbl">Conversions</div></div>
+    <div class="card metric"><div class="metric-val purple" id="m-rewards">$0</div><div class="metric-lbl">Rewards</div></div>
+  </section>
+
+  <section class="section">
+    <div class="section-hd">
+      <div>
+        <div class="section-title">Referral Link</div>
+        <div class="section-sub">Use this link anywhere you promote CLONYFY.</div>
+      </div>
+      <span class="pill" id="partner-status">Not loaded</span>
+    </div>
+    <div class="section-body">
+      <div class="link-box">
+        <input id="ref-link" class="link-input" value="LOADING..." readonly>
+        <button class="copy-btn" onclick="copyReferralLink()">Copy link</button>
+      </div>
+      <div class="share-row">
+        <button class="share-btn" onclick="copyShareText('short')">Copy short pitch</button>
+        <button class="share-btn" onclick="copyShareText('agency')">Copy agency pitch</button>
+        <button class="share-btn" onclick="copyShareText('email')">Copy email pitch</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-hd">
+      <div>
+        <div class="section-title">How It Works</div>
+        <div class="section-sub">Simple flow for partners.</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="how">
+        <div class="step"><div class="step-num">1</div><div class="step-title">Copy your link</div><div class="step-copy">Use the tracked referral link from this page in posts, videos, communities, and client messages.</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-title">Send traffic</div><div class="step-copy">Affonso records clicks and conversions while CLONYFY keeps the dashboard in-app.</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-title">Track rewards</div><div class="step-copy">Monitor referrals, rewards, and payout status from the tables below.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-hd"><div><div class="section-title">Recent Referrals</div><div class="section-sub">People and accounts attributed to your link.</div></div></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody id="referrals-body"><tr><td class="empty" colspan="4">LOADING...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-hd"><div><div class="section-title">Rewards & Payouts</div><div class="section-sub">Commission and payout activity.</div></div></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody id="rewards-body"><tr><td class="empty" colspan="4">LOADING...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div id="toasts"></div>
+<div id="slow-loading" class="slow-loading">LOADING...</div>
+
+<script>
+const AUTH_TOKEN_KEY = 'wc_auth_token';
+let slowLoadingTimer = null;
+let currentReferralLink = '';
+
+function beginLoading(delay = 700) {
+  const el = document.getElementById('slow-loading');
+  slowLoadingTimer = setTimeout(() => el.classList.add('show'), delay);
+  return () => {
+    clearTimeout(slowLoadingTimer);
+    slowLoadingTimer = null;
+    el.classList.remove('show');
+  };
+}
+
+function toast(msg, type = 'inf') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+async function apiFetch(method, path, body, options = {}) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  const done = options.silentLoading ? () => {} : beginLoading();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    data._status = res.status;
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      location.href = '/';
+      throw new Error(data.error || 'Not authenticated');
+    }
+    return data;
+  } finally {
+    clearTimeout(timeout);
+    done();
+  }
+}
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function pick(obj, keys, fallback = '') {
+  for (const key of keys) {
+    const value = key.split('.').reduce((acc, part) => acc && acc[part], obj);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return fallback;
+}
+
+function asArray(...values) {
+  for (const value of values) {
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+
+function money(value) {
+  if (typeof value === 'string' && /[$€£]/.test(value)) return value;
+  const num = Number(value || 0);
+  return `$${num.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function dateText(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
+}
+
+function normalize(data = {}) {
+  const partner = data.partner || data.affiliate || data;
+  const stats = data.stats || data.analytics || partner.stats || {};
+  const referrals = asArray(data.referrals, data.customers, data.leads, partner.referrals);
+  const rewards = asArray(data.rewards, data.commissions, data.payouts, partner.rewards, partner.payouts);
+  return {
+    partner,
+    stats: {
+      clicks: pick(stats, ['clicks','visits','totalClicks','total_clicks'], 0),
+      referrals: pick(stats, ['referrals','leads','customers','partners'], referrals.length || 0),
+      conversions: pick(stats, ['conversions','sales','paidReferrals','paid_referrals'], 0),
+      rewards: pick(stats, ['rewards','commission','commissions','earnings','totalRewards','total_rewards'], 0),
+    },
+    link: pick(data, ['referralLink','referral_link','link','partner.referralLink','partner.referral_link','affiliate.referralLink'], ''),
+    status: pick(partner, ['status','state'], 'Active'),
+    referrals,
+    rewards,
+  };
+}
+
+function renderRows(tbodyId, rows, type) {
+  const body = document.getElementById(tbodyId);
+  if (!rows.length) {
+    body.innerHTML = `<tr><td class="empty" colspan="4">No ${type} yet</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.slice(0, 12).map(row => {
+    if (type === 'referrals') {
+      const name = pick(row, ['name','customerName','leadName','partnerName'], '—');
+      const email = pick(row, ['email','customerEmail','leadEmail'], '—');
+      const status = pick(row, ['status','state'], 'Pending');
+      const date = pick(row, ['createdAt','created_at','date','signedUpAt'], '');
+      return `<tr><td>${esc(name)}</td><td>${esc(email)}</td><td><span class="pill ${/paid|active|converted/i.test(status) ? 'ok' : 'warn'}">${esc(status)}</span></td><td>${esc(dateText(date))}</td></tr>`;
+    }
+    const kind = pick(row, ['type','kind','description','name'], 'Reward');
+    const amount = pick(row, ['amount','commission','reward','value'], 0);
+    const status = pick(row, ['status','state'], 'Pending');
+    const date = pick(row, ['createdAt','created_at','date','paidAt'], '');
+    return `<tr><td>${esc(kind)}</td><td>${esc(money(amount))}</td><td><span class="pill ${/paid|approved|complete/i.test(status) ? 'ok' : 'warn'}">${esc(status)}</span></td><td>${esc(dateText(date))}</td></tr>`;
+  }).join('');
+}
+
+function renderAffiliate(data) {
+  const model = normalize(data);
+  document.getElementById('m-clicks').textContent = model.stats.clicks;
+  document.getElementById('m-referrals').textContent = model.stats.referrals;
+  document.getElementById('m-conversions').textContent = model.stats.conversions;
+  document.getElementById('m-rewards').textContent = money(model.stats.rewards);
+  currentReferralLink = model.link || '';
+  document.getElementById('ref-link').value = currentReferralLink || 'Referral link is being prepared by Affonso';
+  const status = document.getElementById('partner-status');
+  status.textContent = model.status || 'Active';
+  status.className = `pill ${/active|approved/i.test(model.status) ? 'ok' : 'warn'}`;
+  renderRows('referrals-body', model.referrals, 'referrals');
+  renderRows('rewards-body', model.rewards, 'rewards');
+  document.getElementById('status').className = 'status';
+  document.getElementById('status').textContent = currentReferralLink
+    ? 'Affiliate dashboard loaded. Your link, performance, rewards, and referrals are available here.'
+    : 'Affiliate account loaded, but Affonso has not returned a referral link yet. Refresh again in a moment.';
+}
+
+async function loadAffiliate(manual = false) {
+  const status = document.getElementById('status');
+  status.className = 'status';
+  status.textContent = 'LOADING...';
+  try {
+    const config = await apiFetch('GET', '/api/public-config', null, { silentLoading: true });
+    if (!config.affiliate_enabled) {
+      status.className = 'status warn';
+      status.textContent = 'Affiliate program is disabled right now.';
+      return;
+    }
+    const res = await apiFetch('GET', '/api/affiliate/dashboard', null, { timeoutMs: 25000 });
+    if (res.error) throw new Error(res.error);
+    renderAffiliate(res.data || {});
+    if (res.configured === false && res.message) {
+      status.className = 'status';
+      status.textContent = res.message;
+    }
+    if (manual) toast('Affiliate dashboard refreshed', 'ok');
+  } catch (err) {
+    status.className = 'status err';
+    status.textContent = err.message || 'Affiliate dashboard failed to load.';
+  }
+}
+
+async function copyReferralLink() {
+  if (!currentReferralLink) return toast('Referral link is loading. Refresh the dashboard.', 'err');
+  await navigator.clipboard.writeText(currentReferralLink);
+  toast('Referral link copied', 'ok');
+}
+
+async function copyShareText(kind) {
+  if (!currentReferralLink) return toast('Referral link is loading. Refresh the dashboard.', 'err');
+  const pitches = {
+    short: `Try CLONYFY: clone and edit websites fast. ${currentReferralLink}`,
+    agency: `For agencies and builders: CLONYFY turns live websites into editable projects with previews, editor, and ZIP export. ${currentReferralLink}`,
+    email: `Subject: Try CLONYFY\n\nI thought you might like CLONYFY. It helps clone, edit, preview, and export websites much faster.\n\n${currentReferralLink}`,
+  };
+  await navigator.clipboard.writeText(pitches[kind] || pitches.short);
+  toast('Share text copied', 'ok');
+}
+
+async function logout() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) { try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }); } catch {} }
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem('wc_auth_user');
+  location.href = '/';
+}
+
+if (!localStorage.getItem(AUTH_TOKEN_KEY)) location.href = '/';
+else loadAffiliate();
+</script>
+</body>
+</html>

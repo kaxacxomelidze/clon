@@ -6,7 +6,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ['playwright', 'mime-types', 'handlebars', 'commander', 'robots-parser'],
+  external: ['playwright-core', 'mime-types', 'handlebars', 'commander', 'robots-parser'],
   noExternal: [
     'p-queue',
     'parse5',

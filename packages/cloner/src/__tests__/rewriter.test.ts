@@ -112,6 +112,34 @@ describe('rewriteHtml — asset URL rewriting', () => {
     expect(out).toContain('/_assets/img2.jpg 2x');
   });
 
+  it('rewrites imagesrcset preload attributes', () => {
+    const html = `<html><head><link rel="preload" as="image" imagesrcset="/_next/image?url=%2Fhero.jpg&amp;w=750&amp;q=75 750w"></head><body></body></html>`;
+    const out = rewriteHtml(record({
+      html,
+      assets: [
+        { originalUrl: 'https://example.com/_next/image?url=%2Fhero.jpg&w=750&q=75', localPath: '/_assets/hero.avif' },
+      ],
+    }), ORIGIN);
+    expect(out).toContain('/_assets/hero.avif 750w');
+    expect(out).not.toContain('/_next/image');
+  });
+
+  it('rewrites captured asset paths inside inline scripts', () => {
+    const html = `<html><head><script>self.__next_f.push(["/_next/static/chunks/app.js","\\/_next\\/static\\/chunks\\/lazy.js","\\u002F_next\\u002Fstatic\\u002Fchunks\\u002Fmore.js"])</script></head><body></body></html>`;
+    const out = rewriteHtml(record({
+      html,
+      assets: [
+        { originalUrl: 'https://example.com/_next/static/chunks/app.js', localPath: '/_assets/app.js' },
+        { originalUrl: 'https://example.com/_next/static/chunks/lazy.js', localPath: '/_assets/lazy.js' },
+        { originalUrl: 'https://example.com/_next/static/chunks/more.js', localPath: '/_assets/more.js' },
+      ],
+    }), ORIGIN);
+    expect(out).toContain('/_assets/app.js');
+    expect(out).toContain('\\/_assets\\/lazy.js');
+    expect(out).toContain('\\u002F_assets\\u002Fmore.js');
+    expect(out).not.toContain('/_next/static/chunks');
+  });
+
   it('strips src for known-failed assets', () => {
     const html = `<html><head></head><body><img src="https://example.com/broken.jpg"></body></html>`;
     const out = rewriteHtml(record({

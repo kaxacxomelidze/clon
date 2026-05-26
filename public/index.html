@@ -673,6 +673,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 
 #auth-screen{position:fixed;inset:0;z-index:10000;background:#06061a;display:flex;align-items:stretch;overflow:hidden;animation:authIn .3s ease}
 #auth-screen.hidden{display:none!important;animation:none}
+#auth-screen.auth-resuming{opacity:0;pointer-events:none}
 /* Boot state: show spinner, hide the card until session check resolves */
 .auth-card{transition:opacity .28s ease,transform .28s ease}
 #auth-screen.auth-checking .auth-card{opacity:0;pointer-events:none;transform:translateY(10px)}
@@ -987,9 +988,13 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .mpay-empty-sub{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px}
 .mpay-contact-btn{padding:10px 24px;background:rgba(91,141,239,.1);border:1px solid rgba(91,141,239,.2);border-radius:9px;color:var(--blue);font-size:13px;font-weight:700;transition:all .15s}
 .mpay-contact-btn:hover{background:rgba(91,141,239,.18)}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,13,28,.92);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:#eef2ff;font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#7fb3ff;border-radius:50%;animation:spin .7s linear infinite}
 </style>
 </head>
 <body>
+<div id="slow-loading" class="slow-loading" role="status" aria-live="polite">LOADING...</div>
 
 <!-- Auth screen -->
 <div id="auth-screen" class="auth-checking">
@@ -1055,7 +1060,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   <div class="auth-right">
     <div id="auth-boot-spinner">
       <div class="auth-boot-ring"></div>
-      <div class="auth-boot-txt">Signing you in…</div>
+      <div class="auth-boot-txt">LOADING...</div>
     </div>
     <div class="auth-card">
       <!-- Mobile-only logo -->
@@ -1175,6 +1180,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   </div>
   <div class="titlebar-user" id="titlebarUser" style="display:none">
     <a href="/dashboard" style="-webkit-app-region:no-drag;color:rgba(255,255,255,.3);font-size:12px;font-weight:600;padding:4px 10px;border:1px solid rgba(255,255,255,.06);border-radius:6px;background:rgba(255,255,255,.03);text-decoration:none;transition:all .15s" onmouseover="this.style.color='rgba(255,255,255,.6)'" onmouseout="this.style.color='rgba(255,255,255,.3)'">Dashboard</a>
+    <a href="/affiliate" style="-webkit-app-region:no-drag;color:rgba(255,255,255,.3);font-size:12px;font-weight:600;padding:4px 10px;border:1px solid rgba(255,255,255,.06);border-radius:6px;background:rgba(255,255,255,.03);text-decoration:none;transition:all .15s" onmouseover="this.style.color='rgba(255,255,255,.6)'" onmouseout="this.style.color='rgba(255,255,255,.3)'">Affiliate</a>
     <button onclick="openPricing()" style="-webkit-app-region:no-drag;background:linear-gradient(135deg,rgba(91,141,239,.18),rgba(168,85,247,.14));border:1px solid rgba(91,141,239,.28);color:#9abcf0;font-size:12px;font-weight:700;padding:4px 13px;border-radius:20px;cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:.01em" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">✦ Upgrade</button>
     <div class="user-chip" onclick="openProfile()" title="View profile">
       <div class="user-avatar" id="userAvatar">?</div>
@@ -1206,60 +1212,49 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   <div class="pricing-cards">
     <div class="plan-card" id="plan-card-starter">
       <div class="plan-name">Starter</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-starter">9.99</span><span class="plan-period" id="period-starter">/mo</span></div>
-      <div class="plan-desc">For individuals cloning occasional sites.</div>
+      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-starter">19.99</span><span class="plan-period" id="period-starter">/mo</span></div>
+      <div class="plan-desc">For solo builders cloning and editing live sites.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>15 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>30 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Asset capture and CSS rewriting</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>10 website clones</strong> per month</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
         <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Next.js export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>6 days/week support</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Cancel anytime</span></div>
       </div>
       <button class="plan-btn soft" id="plan-btn-starter" onclick="handleBuy('starter')">Get Starter</button>
     </div>
-    <div class="plan-card featured" id="plan-card-popular">
+    <div class="plan-card featured" id="plan-card-growth">
       <div class="plan-badge">Most Popular</div>
-      <div class="plan-name">Most Popular</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-popular">19.99</span><span class="plan-period" id="period-popular">/mo</span></div>
-      <div class="plan-desc">For builders who clone and edit every week.</div>
-      <div class="plan-divider"></div>
-      <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>50 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>100 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Starter features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Priority processing</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Email support</span></div>
-      </div>
-      <button class="plan-btn grad" id="plan-btn-popular" onclick="handleBuy('popular')">Get Most Popular</button>
-    </div>
-    <div class="plan-card" id="plan-card-growth">
       <div class="plan-name">Growth</div>
-      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-growth">34.99</span><span class="plan-period" id="period-growth">/mo</span></div>
-      <div class="plan-desc">For agencies and power users shipping client work.</div>
+      <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-growth">29.99</span><span class="plan-period" id="period-growth">/mo</span></div>
+      <div class="plan-desc">For builders and agencies that need more output.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>100 clones</strong> per month</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>200 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Most Popular features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>API route detection + fixtures</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Docker + compose export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span><strong>25 website clones</strong> per month</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Figma export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor and templates</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>API access</span></div>
       </div>
-      <button class="plan-btn soft" id="plan-btn-growth" onclick="handleBuy('growth')">Get Growth</button>
+      <button class="plan-btn grad" id="plan-btn-growth" onclick="handleBuy('growth')">Get Growth</button>
     </div>
     <div class="plan-card" id="plan-card-unlimited">
-      <div class="plan-name">Unlimited</div>
+      <div class="plan-name">Scale</div>
       <div class="plan-price"><span class="plan-currency">$</span><span class="plan-amount" id="price-unlimited">59.99</span><span class="plan-period" id="period-unlimited">/mo</span></div>
       <div class="plan-desc">For teams that need maximum scale.</div>
       <div class="plan-divider"></div>
       <div class="plan-features">
-        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited clones</strong></span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Up to <strong>500 pages</strong> per clone</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>All Growth features</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Dedicated support</span></div>
-        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Custom crawl rules</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited website clones</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck inf">&infin;</div><span><strong>Unlimited screens</strong></span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Code and ZIP export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Figma export</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>Visual editor, templates, and API access</span></div>
+        <div class="plan-feat"><div class="plan-feat-ck yes">&check;</div><span>7 days/week priority support</span></div>
       </div>
-      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Unlimited</button>
+      <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Scale</button>
     </div>
   </div>
 </div>
@@ -1431,7 +1426,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <div class="profile-section" style="border-bottom:none">
         <div class="profile-section-title">Clone History</div>
         <div id="profileHistBody">
-          <div class="hist-empty">Loading…</div>
+          <div class="hist-empty">LOADING...</div>
         </div>
       </div>
     </div>
@@ -1588,7 +1583,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
       <button class="done-action-btn secondary" onclick="runPreview()">Open in Browser</button>
     </div>
     <div class="preview-empty" id="previewEmpty">Clone a site first</div>
-    <iframe class="preview-frame" id="previewFrame" sandbox="allow-same-origin allow-forms" style="display:none"></iframe>
+    <iframe class="preview-frame" id="previewFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads" style="display:none"></iframe>
   </div>
 
   <!-- Editor tab -->
@@ -2021,7 +2016,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
     </div>
     <div class="build-body" id="buildBody" style="display:flex;flex-direction:column;overflow-y:auto">
       <div id="buildTemplatePane">
-        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px">Loading templates…</div>
+        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px">LOADING...</div>
       </div>
       <div id="buildSectionsPane" style="display:none"></div>
     </div>
@@ -2046,14 +2041,125 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 <script>
 const isElectron = typeof window.electronAPI !== 'undefined';
 const API_TOKEN = window.__CLONYFY_TOKEN || '';
+const AUTH_TOKEN_KEY = 'wc_auth_token';
+const AUTH_USER_KEY = 'wc_auth_user';
+function captureReferralCode() {
+  const params = new URLSearchParams(location.search);
+  const via = (params.get('via') || params.get('ref') || '').trim();
+  if (!via) return;
+  const clean = via.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 80);
+  try {
+    localStorage.setItem('clonyfy_referral_code', clean);
+    let visitorId = localStorage.getItem('clonyfy_referral_visitor');
+    if (!visitorId) {
+      visitorId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      localStorage.setItem('clonyfy_referral_visitor', visitorId);
+    }
+    fetch('/api/affiliate/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ referral: clean, visitorId, path: location.pathname + location.search }),
+    }).catch(() => {});
+  } catch {}
+}
+captureReferralCode();
 function apiUrl(path) { return path; }
+function setAuthToken(token) {
+  if (!token) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `wc_auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=2592000; SameSite=Lax${secure}`;
+}
+function clearAuthToken() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+  document.cookie = 'wc_auth_token=; Path=/; Max-Age=0; SameSite=Lax';
+}
+function getCachedAuthUser() {
+  try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY) || 'null'); } catch { return null; }
+}
+function setCachedAuthUser(user) {
+  try { if (user) localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); } catch {}
+}
+let slowLoadingCount = 0;
+let slowLoadingTimer = null;
+function beginSlowLoading(delay = 900) {
+  slowLoadingCount++;
+  const el = document.getElementById('slow-loading');
+  if (!el) return () => {};
+  if (!slowLoadingTimer && !el.classList.contains('show')) {
+    slowLoadingTimer = setTimeout(() => {
+      slowLoadingTimer = null;
+      if (slowLoadingCount > 0) el.classList.add('show');
+    }, delay);
+  }
+  return () => {
+    slowLoadingCount = Math.max(0, slowLoadingCount - 1);
+    if (slowLoadingCount === 0) {
+      if (slowLoadingTimer) { clearTimeout(slowLoadingTimer); slowLoadingTimer = null; }
+      el.classList.remove('show');
+    }
+  };
+}
 function apiFetch(path, init) {
   const next = Object.assign({}, init || {});
+  const showLoading = next.silentLoading !== true;
+  const timeoutMs = next.timeoutMs || 30000;
+  delete next.silentLoading;
+  delete next.timeoutMs;
   next.headers = Object.assign({}, next.headers || {});
   if (API_TOKEN) next.headers['X-CLONYFY-Token'] = API_TOKEN;
-  const authToken = localStorage.getItem('wc_auth_token');
+  const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
   if (authToken) next.headers['X-Auth-Token'] = authToken;
-  return fetch(apiUrl(path), next);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs);
+  next.signal = next.signal || controller.signal;
+  const doneLoading = showLoading ? beginSlowLoading() : () => {};
+  return fetch(apiUrl(path), next).finally(() => {
+    clearTimeout(timeout);
+    doneLoading();
+  });
+}
+
+function friendlyFetchError(err) {
+  const name = err?.name || '';
+  const msg = String(err?.message || err || '');
+  if (name === 'AbortError' || name === 'TimeoutError' || /aborted|abort|timed out/i.test(msg)) {
+    return 'Request timed out. Please try again; if a clone started, it will appear in your history in a moment.';
+  }
+  return msg || 'Network request failed';
+}
+async function readJsonResponse(res, label = 'Request') {
+  const text = await res.text();
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    const clean = text.trim();
+    if (/^<!doctype html|^<html[\s>]/i.test(clean)) {
+      throw new Error(`${label} returned HTML instead of JSON. Please refresh and sign in again.`);
+    }
+    throw new Error(`${label} returned invalid JSON.`);
+  }
+  if (!res.ok || payload?.error) throw new Error(payload?.error || `HTTP ${res.status}`);
+  return payload;
+}
+async function readJsonBody(res, label = 'Request') {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    const clean = text.trim();
+    if (/^<!doctype html|^<html[\s>]/i.test(clean)) {
+      throw new Error(`${label} returned HTML instead of JSON. Please refresh and try again.`);
+    }
+    throw new Error(`${label} returned invalid JSON.`);
+  }
+}
+function deferAppWork(fn, delay = 0) {
+  const run = () => { try { fn(); } catch {} };
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1200 });
+  else setTimeout(run, delay);
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -2128,7 +2234,7 @@ function showAuthError(msg) {
 function setAuthLoading(btnId, loading) {
   const btn = document.getElementById(btnId);
   btn.disabled = loading;
-  btn.textContent = loading ? 'Please wait…' : (btnId === 'auth-login-btn' ? 'Sign In' : 'Create Account');
+  btn.textContent = loading ? 'LOADING...' : (btnId === 'auth-login-btn' ? 'Sign In' : 'Create Account');
 }
 
 async function submitLogin(e) {
@@ -2143,9 +2249,9 @@ async function submitLogin(e) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, remember }),
     });
-    const data = await res.json();
-    if (data.error) { showAuthError(data.error); return; }
-    localStorage.setItem('wc_auth_token', data.token);
+    const data = await readJsonBody(res, 'Login');
+    if (!res.ok || data?.error || !data?.token) { showAuthError(data?.error || `HTTP ${res.status}`); return; }
+    setAuthToken(data.token);
     onAuthSuccess(data.user);
   } catch (err) {
     showAuthError('Connection error — is the server running?');
@@ -2160,17 +2266,21 @@ async function submitRegister(e) {
   const email = document.getElementById('auth-reg-email').value.trim();
   const password = document.getElementById('auth-reg-pass').value;
   const password2 = document.getElementById('auth-reg-pass2').value;
+  const referral = (() => {
+    try { return (localStorage.getItem('clonyfy_referral_code') || '').trim(); } catch { return ''; }
+  })();
   if (password !== password2) { showAuthError('Passwords do not match'); return; }
   setAuthLoading('auth-reg-btn', true);
   document.getElementById('auth-err').className = 'auth-err';
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, referral }),
     });
-    const data = await res.json();
-    if (data.error) { showAuthError(data.error); return; }
-    localStorage.setItem('wc_auth_token', data.token);
+    const data = await readJsonBody(res, 'Register');
+    if (!res.ok || data?.error || !data?.token) { showAuthError(data?.error || `HTTP ${res.status}`); return; }
+    setAuthToken(data.token);
+    try { localStorage.removeItem('clonyfy_referral_code'); } catch {}
     onAuthSuccess(data.user);
   } catch (err) {
     showAuthError('Connection error — is the server running?');
@@ -2180,17 +2290,19 @@ async function submitRegister(e) {
 }
 
 function onAuthSuccess(user) {
-  user.plan = normalizePlan(user.plan);
+  user.plan = normalizePlan(user.plan || user.rawPlan);
   currentUser = user;
+  setCachedAuthUser(user);
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('titlebarUser').style.display = 'flex';
   document.getElementById('userName').textContent = user.name;
   document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
-  requestNotificationPermission();
   syncPlanLimitsToCloneForm();
-  loadHistory();
-  loadAnnouncements();
-  if (!localStorage.getItem('wc_onboarded')) showOnboarding();
+  syncPaidPlanChrome();
+  deferAppWork(() => requestNotificationPermission());
+  deferAppWork(() => loadHistory({ fast: true }));
+  deferAppWork(() => loadAnnouncements(), 150);
+  if (!localStorage.getItem('wc_onboarded')) deferAppWork(() => showOnboarding(), 250);
 }
 
 
@@ -2281,11 +2393,11 @@ async function submitForgot(e) {
 }
 
 async function logout() {
-  const token = localStorage.getItem('wc_auth_token');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (token) {
     try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }); } catch {}
   }
-  localStorage.removeItem('wc_auth_token');
+  clearAuthToken();
   currentUser = null;
   allJobs = [];
   activeJobId = null;
@@ -2308,8 +2420,20 @@ async function logout() {
 }
 
 function isPaidUser() {
-  const plan = (currentUser?.plan || 'free').toLowerCase();
+  const plan = normalizePlan(currentUser?.plan || 'free');
   return plan !== 'free';
+}
+
+function syncPaidPlanChrome() {
+  const paid = isPaidUser();
+  const plan = normalizePlan(currentUser?.plan || 'free');
+  document.querySelectorAll('#titlebarUser button[onclick="openPricing()"]').forEach((btn) => {
+    btn.style.display = paid ? 'none' : '';
+  });
+  const usageUpgrade = document.querySelector('#usageMeter button[onclick="openPricing()"]');
+  if (usageUpgrade) usageUpgrade.style.display = paid ? 'none' : '';
+  const name = document.getElementById('userName');
+  if (name && currentUser) name.title = paid ? `${planLabel(plan)} plan` : 'Free plan';
 }
 
 function requirePaid(featureName) {
@@ -2331,15 +2455,14 @@ function closePricing() {
 // Pricing state
 let pricingInterval = 'monthly';
 let paySettings = {};
-const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+const PLAN_ALIASES = { popular: 'growth', pro: 'growth', scale: 'unlimited', enterprise: 'unlimited' };
 function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
 function planLabel(plan) {
-  return ({ free:'Free', starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[normalizePlan(plan)] || 'Free';
+  return ({ free:'Free', starter:'Starter', growth:'Growth', unlimited:'Scale' })[normalizePlan(plan)] || 'Free';
 }
 const PLAN_PRICES = {
-  starter:   { monthly: 9.99,  annualMonthly: 7.99,  annual: 95.88  },
-  popular:   { monthly: 19.99, annualMonthly: 15.99, annual: 191.88 },
-  growth:    { monthly: 34.99, annualMonthly: 27.99, annual: 335.88 },
+  starter:   { monthly: 19.99, annualMonthly: 15.99, annual: 191.88 },
+  growth:    { monthly: 29.99, annualMonthly: 23.99, annual: 287.88 },
   unlimited: { monthly: 59.99, annualMonthly: 47.99, annual: 575.88 },
 };
 
@@ -2366,16 +2489,17 @@ function setPricingInterval(iv) {
 
 function updatePricingButtons() {
   const userPlan = currentUser?.plan || 'free';
-  for (const plan of ['starter', 'popular', 'growth', 'unlimited']) {
+  const normalizedUserPlan = normalizePlan(userPlan);
+  for (const plan of ['starter', 'growth', 'unlimited']) {
     const btn = document.getElementById('plan-btn-' + plan);
     if (!btn) continue;
-    if (userPlan === plan) {
+    if (normalizedUserPlan === plan) {
       btn.textContent = 'Current plan';
       btn.disabled = true;
       btn.style.opacity = '0.5';
       btn.style.cursor = 'default';
     } else {
-      btn.textContent = ({ starter:'Get Starter', popular:'Get Most Popular', growth:'Get Growth', unlimited:'Get Unlimited' })[plan] || `Get ${planLabel(plan)}`;
+      btn.textContent = ({ starter:'Get Starter', growth:'Get Growth', unlimited:'Get Scale' })[plan] || `Get ${planLabel(plan)}`;
       btn.disabled = false;
       btn.style.opacity = '';
       btn.style.cursor = '';
@@ -2395,7 +2519,7 @@ async function validatePricingPromo() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
     });
-    const data = await r.json();
+    const data = await readJsonResponse(r, 'Promo validation');
     if (data.error) { result.style.color = '#e05070'; result.textContent = '✗ ' + data.error; return; }
     result.style.color = '#1fd17a';
     result.textContent = `✓ ${data.discountPercent}% off applied at checkout`;
@@ -2414,7 +2538,7 @@ async function handleBuy(plan) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan, interval: pricingInterval, promoCode }),
       });
-      const data = await r.json();
+      const data = await readJsonResponse(r, 'Stripe checkout');
       if (data.error) { toast(data.error, 'err'); return; }
       window.location.href = data.url;
     } else {
@@ -2423,7 +2547,7 @@ async function handleBuy(plan) {
       openManualPaymentModal(plan);
     }
   } catch(e) {
-    toast('Checkout error: ' + e.message, 'err');
+    toast('Checkout error: ' + friendlyFetchError(e), 'err');
   } finally {
     updatePricingButtons();
   }
@@ -2446,7 +2570,7 @@ function openManualPaymentModal(plan) {
   const prices = PLAN_PRICES[plan] || PLAN_PRICES.starter;
   const price = pricingInterval === 'annual' ? prices.annual : prices.monthly;
   const period = pricingInterval === 'annual' ? '/yr' : '/mo';
-  const planLabel = ({ starter:'Starter', popular:'Most Popular', growth:'Growth', unlimited:'Unlimited' })[plan] || plan;
+  const planLabel = ({ starter:'Starter', growth:'Growth', unlimited:'Scale' })[normalizePlan(plan)] || plan;
   const availableMethods = MPAY_METHODS.filter(m => paySettings[m.settingKey]);
 
   _mpayState = { plan, price, period, planLabel, step: 1, selectedMethod: availableMethods[0] || null };
@@ -2646,7 +2770,7 @@ async function submitManualPayment() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plan: _mpayState.plan, method, txId, note, promoCode, interval: pricingInterval }),
     });
-    const data = await r.json();
+    const data = await readJsonResponse(r, 'Payment submission');
     if (data.error) {
       if (errEl) { errEl.style.display = 'block'; errEl.textContent = data.error; }
       return;
@@ -2654,7 +2778,7 @@ async function submitManualPayment() {
     closeMpay();
     toast('Payment submitted — admin will review within 24 hours.', 'ok');
   } catch(e) {
-    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Failed to submit: ' + e.message; }
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Failed to submit: ' + friendlyFetchError(e); }
   } finally {
     if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
   }
@@ -2695,11 +2819,11 @@ async function openProfile() {
     upgradeBtn.style.display = plan === 'free' ? '' : 'none';
   }
 
-  document.getElementById('profileHistBody').innerHTML = '<div class="hist-empty">Loading…</div>';
+  document.getElementById('profileHistBody').innerHTML = '<div class="hist-empty">LOADING...</div>';
 
   try {
-    const res = await apiFetch('/api/outputs');
-    const outputs = await res.json();
+    const res = await apiFetch('/api/outputs?fast=1&limit=50', { silentLoading: true });
+    const outputs = await readJsonResponse(res, 'Profile history');
     const total = outputs.length;
     const totalPages = outputs.reduce((s, o) => s + (o.pages || 0), 0);
     document.getElementById('profileTotalClones').textContent = total;
@@ -2775,13 +2899,12 @@ async function createShareLink() {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ outDir: job.outDir, route: editorRoute || '/', password: password || undefined, expiresInDays: expiresInDays ? Number(expiresInDays) : undefined }),
     });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Share link');
     if (data.error) { toast('Share failed: ' + data.error, 'err'); return; }
     document.getElementById('share-create-form').style.display = 'none';
     document.getElementById('shareLinkInp').value = data.url;
     document.getElementById('share-result').style.display = 'block';
-  } catch(err) { toast('Share failed: ' + err.message, 'err'); }
+  } catch(err) { toast('Share failed: ' + friendlyFetchError(err), 'err'); }
 }
 function copyShareLink() {
   const inp = document.getElementById('shareLinkInp');
@@ -2894,6 +3017,7 @@ function updateFontPickerFromSelection() {
 async function checkExistingSession() {
   const authScreen = document.getElementById('auth-screen');
   const revealForm = () => {
+    authScreen.classList.remove('auth-resuming');
     authScreen.classList.remove('auth-checking');
     // Small delay so the CSS transition has a starting frame to transition from
     setTimeout(() => document.getElementById('auth-login-email')?.focus(), 300);
@@ -2903,25 +3027,60 @@ async function checkExistingSession() {
   const urlParams = new URLSearchParams(window.location.search);
   const oauthToken = urlParams.get('oauth_token');
   const oauthError = urlParams.get('oauth_error');
+  const banReason = urlParams.get('ban_reason') || '';
   if (oauthToken) {
-    localStorage.setItem('wc_auth_token', oauthToken);
+    setAuthToken(oauthToken);
     window.history.replaceState({}, '', window.location.pathname);
   }
   if (oauthError) {
     window.history.replaceState({}, '', window.location.pathname);
     revealForm();
-    showAuthError(oauthError === 'cancelled' ? 'Sign-in cancelled.' : oauthError === 'blocked' ? 'Account suspended.' : 'Google sign-in failed. Please try again.');
+    showAuthError(oauthError === 'cancelled' ? 'Sign-in cancelled.' : oauthError === 'blocked' ? `Account suspended.${banReason ? ` Reason: ${banReason}` : ''}` : 'Google sign-in failed. Please try again.');
     return false;
   }
 
-  const token = oauthToken || localStorage.getItem('wc_auth_token');
-  if (!token) { revealForm(); return false; }
+  const token = oauthToken || localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    revealForm();
+    const storedAuthError = sessionStorage.getItem('wc_auth_error');
+    if (storedAuthError) {
+      sessionStorage.removeItem('wc_auth_error');
+      showAuthError(storedAuthError);
+    }
+    return false;
+  }
+  setAuthToken(token);
+  const cachedUser = getCachedAuthUser();
+  authScreen.classList.add('auth-resuming');
   try {
-    const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token } });
-    if (!res.ok) { localStorage.removeItem('wc_auth_token'); revealForm(); return false; }
-    const data = await res.json();
+    const signal = AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined;
+    const res = await fetch('/api/auth/me', { headers: { 'X-Auth-Token': token }, signal });
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        const data = await readJsonBody(res, 'Session check').catch(() => null);
+        clearAuthToken();
+        revealForm();
+        if (res.status === 403) showAuthError(data?.error || 'Your account has been suspended. Contact support.');
+        return false;
+      }
+      if (cachedUser) {
+        onAuthSuccess(cachedUser);
+        toast('Session check is slow. Using cached account while retrying.', 'warn');
+        return true;
+      }
+      revealForm();
+      showAuthError('Could not verify your session. Please refresh or try again.');
+      return false;
+    }
+    const data = await readJsonResponse(res, 'Session check');
     if (data.user) { onAuthSuccess(data.user); return true; }
-  } catch {}
+  } catch {
+    if (cachedUser) {
+      onAuthSuccess(cachedUser);
+      toast('Connection is slow. Using cached account while retrying.', 'warn');
+      return true;
+    }
+  }
   revealForm();
   return false;
 }
@@ -2954,6 +3113,14 @@ function switchTab(tab) {
   document.getElementById('t-editor').classList.toggle('active', tab === 'editor');
   document.getElementById('t-build').classList.toggle('active', tab === 'build');
   if (tab === 'preview') loadPreviewPages(editorOutDir);
+  if (tab === 'editor') {
+    const job = allJobs.find(j => j.id === activeJobId && j.status === 'done' && j.outDir);
+    const outDir = editorOutDir || job?.outDir || '';
+    if (outDir) {
+      editorOutDir = outDir;
+      loadEditorPages(outDir);
+    }
+  }
   if (tab === 'build') loadTemplates();
 }
 
@@ -2991,7 +3158,7 @@ async function loadTemplates() {
   const pane = document.getElementById('buildTemplatePane') || document.getElementById('buildBody');
   try {
     const res = await apiFetch('/api/templates');
-    const templates = await res.json();
+    const templates = await readJsonResponse(res, 'Templates');
     if (!Array.isArray(templates) || templates.length === 0) {
       pane.innerHTML = '<div style="padding:40px;color:var(--text3);font-size:13px">No templates found.</div>';
       return;
@@ -3013,7 +3180,7 @@ async function loadTemplates() {
     pane.innerHTML = html;
     templatesLoaded = true;
   } catch(e) {
-    pane.innerHTML = `<div style="padding:40px;color:var(--red);font-size:13px">Failed to load templates: ${e.message}</div>`;
+    pane.innerHTML = `<div style="padding:40px;color:var(--red);font-size:13px">Failed to load templates: ${escHtml(friendlyFetchError(e))}</div>`;
   }
 }
 
@@ -3040,16 +3207,16 @@ async function createFromTemplate(id, btn) {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ templateId: id }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Template creation');
     if (data.error) { toast('Error: ' + data.error, 'err'); return; }
-    await loadHistory();
+    await loadHistory({ fast: true });
     // Re-set after loadHistory() since showJob() inside it can overwrite editorOutDir
     editorOutDir = data.outDir;
     switchTab('editor');
     await loadEditorPages(data.outDir);
     toast('Template loaded — start editing!', 'ok');
   } catch(e) {
-    toast('Failed: ' + e.message, 'err');
+    toast('Failed: ' + friendlyFetchError(e), 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Use Template'; }
   }
@@ -3065,12 +3232,12 @@ function toast(msg, type) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', async () => {
+window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') startClone(); });
   try { renderProfileSelect(); } catch {}
   try { initFontPicker(); } catch {}
   // Load payment settings and session check in parallel — they are independent
-  await Promise.all([
+  Promise.all([
     fetch('/api/payments/settings').then(r => r.json()).then(s => {
       paySettings = s;
       if (s.google_oauth_enabled) {
@@ -3081,11 +3248,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   ]);
 });
 
-async function loadHistory() {
+async function loadHistory(options = {}) {
   try {
+    const outputsPath = options.fast ? '/api/outputs?fast=1' : '/api/outputs';
     const [jobs, outputs] = await Promise.all([
-      apiFetch('/api/jobs').then(r => r.json()),
-      apiFetch('/api/outputs').then(r => r.json()).catch(() => []),
+      apiFetch('/api/jobs', { silentLoading: true }).then(r => r.json()),
+      apiFetch(outputsPath, { silentLoading: true }).then(r => r.json()).catch(() => []),
     ]);
     const seen = new Set((jobs || []).map(j => j.outDir).filter(Boolean));
     const outputJobs = (outputs || [])
@@ -3112,16 +3280,25 @@ async function loadHistory() {
     renderSidebar();
     updateUsageMeter();
     if (allJobs.length > 0) showJob(allJobs[0]);
-  } catch {}
+  } catch {
+    renderSidebar();
+    updateUsageMeter();
+    toast('Could not load clone history yet.', 'warn');
+  }
 }
 
-const _PLAN_CLONE_LIMITS = { free: 3, starter: 15, popular: 50, growth: 100, unlimited: null };
-const _PLAN_PAGE_LIMITS = { free: 20, starter: 30, popular: 100, growth: 200, unlimited: 500 };
+const _PLAN_CLONE_LIMITS = { free: 3, starter: 10, growth: 25, unlimited: null };
+const _PLAN_PAGE_LIMITS = { free: 20, starter: 500, growth: 500, unlimited: 500 };
 
 function currentPlanLimits() {
   const plan = normalizePlan(currentUser?.plan || 'free');
+  const fallbackClones = _PLAN_CLONE_LIMITS[plan] ?? 3;
+  const serverClones = currentUser?.planLimits?.clonesPerMonth;
+  const clonesPerMonth = plan === 'unlimited'
+    ? null
+    : (plan === 'free' ? (serverClones ?? fallbackClones) : (serverClones && serverClones > fallbackClones ? serverClones : fallbackClones));
   return {
-    clonesPerMonth: currentUser?.planLimits?.clonesPerMonth ?? _PLAN_CLONE_LIMITS[plan] ?? 3,
+    clonesPerMonth,
     maxPages: currentUser?.planLimits?.maxPages ?? _PLAN_PAGE_LIMITS[plan] ?? 20,
   };
 }
@@ -3136,11 +3313,18 @@ function syncPlanLimitsToCloneForm() {
 
 function updateUsageMeter() {
   if (!currentUser) return;
+  syncPaidPlanChrome();
   const { clonesPerMonth: limitThisMonth } = currentPlanLimits();
   const meter = document.getElementById('usageMeter');
   const fill = document.getElementById('usageBarFill');
   const text = document.getElementById('usageText');
-  if (limitThisMonth === null) { meter.style.display = 'none'; return; }
+  if (limitThisMonth === null) {
+    meter.style.display = 'flex';
+    fill.style.width = '100%';
+    fill.style.background = 'var(--logo-grad)';
+    text.textContent = `${planLabel(currentUser.plan)} plan`;
+    return;
+  }
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const clonesThisMonth = allJobs.filter(j => j.startedAt && new Date(j.startedAt) >= monthStart).length;
   meter.style.display = 'flex';
@@ -3155,7 +3339,7 @@ async function loadAnnouncements() {
   try {
     const res = await fetch('/api/announcements');
     if (!res.ok) return;
-    const items = await res.json();
+    const items = await readJsonResponse(res, 'Announcements');
     const dismissed = JSON.parse(localStorage.getItem('wc_ann_dismissed') || '[]');
     const unseen = items.filter(a => !dismissed.includes(a.id));
     const container = document.getElementById('ann-banners');
@@ -3209,8 +3393,9 @@ async function startClone() {
     const res = await apiFetch('/api/clone', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ url, maxPages, depth: document.getElementById('depth').value, ignoreRobots: document.getElementById('ignoreRobots').checked }),
+      timeoutMs: 120000,
     });
-    const job = await res.json();
+    const job = await readJsonResponse(res, 'Clone start');
     if (job.error) {
       if (res.status === 429) { openPricing(); }
       toast('Error: ' + job.error, 'err');
@@ -3222,7 +3407,8 @@ async function startClone() {
     document.getElementById('urlInput').value = '';
     updateUsageMeter();
   } catch(e) {
-    toast('Failed to start: ' + e.message, 'err');
+    toast('Failed to start: ' + friendlyFetchError(e), 'err');
+    loadHistory();
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Clone`;
@@ -3239,8 +3425,9 @@ async function _submitRetry(ignoreRobots) {
     const res = await apiFetch('/api/clone', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: job.url, maxPages: job.maxPages || document.getElementById('maxPages').value, depth: job.depth || document.getElementById('depth').value, ignoreRobots: ignoreRobots || false }),
+      timeoutMs: 120000,
     });
-    const newJob = await res.json();
+    const newJob = await readJsonResponse(res, 'Clone retry');
     if (newJob.error) {
       if (res.status === 429) openPricing();
       toast('Error: ' + newJob.error, 'err');
@@ -3251,7 +3438,8 @@ async function _submitRetry(ignoreRobots) {
     showJob(newJob);
     updateUsageMeter();
   } catch(e) {
-    toast('Failed to retry: ' + e.message, 'err');
+    toast('Failed to retry: ' + friendlyFetchError(e), 'err');
+    loadHistory();
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg> Retry Clone'; }
   }
@@ -3276,7 +3464,7 @@ function showJob(job) {
   document.getElementById('statApi').textContent = '—';
   document.getElementById('statAssets').textContent = '—';
   updateJobView(job);
-  if (job.status === 'running') startPolling(job.id);
+  if (job.status === 'running' || job.status === 'saving') startPolling(job.id);
   else clearPolling();
   renderSidebar();
 }
@@ -3308,8 +3496,11 @@ function updateJobView(job) {
     pb.style.background = job.status === 'done' ? 'var(--green)' : 'var(--red)';
   }
   const logEl = document.getElementById('logBody');
-  const newLines = job.logs.slice(lastLogLen);
-  lastLogLen = job.logs.length;
+  const logs = Array.isArray(job.logs) ? job.logs : [];
+  const logOffset = Number.isFinite(job.logOffset) ? job.logOffset : 0;
+  if (logOffset > lastLogLen) lastLogLen = logOffset;
+  const newLines = logs.slice(Math.max(0, lastLogLen - logOffset));
+  lastLogLen = logOffset + logs.length;
   const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 60;
   for (const line of newLines) {
     const div = document.createElement('div');
@@ -3331,8 +3522,8 @@ function updateJobView(job) {
     renderHealth(job);
     clearTimer();
     editorOutDir = job.outDir;
-    loadEditorPages(job.outDir);
-    loadPreviewPages(job.outDir);
+    if (currentTab === 'editor') loadEditorPages(job.outDir);
+    if (currentTab === 'preview') loadPreviewPages(job.outDir);
   } else if (job.status === 'error') {
     if (errorCard) errorCard.className = 'error-card show';
     document.getElementById('doneCard').className = 'done-card';
@@ -3351,17 +3542,24 @@ function updateJobView(job) {
 
 function startPolling(jobId) {
   clearPolling();
-  pollInterval = setInterval(async () => {
+  const poll = async () => {
     if (activeJobId !== jobId) { clearPolling(); return; }
+    let delay = 1000;
     try {
-      const res = await apiFetch(`/api/status?id=${jobId}`);
-      const job = await res.json();
-      if (!res.ok || job.error || !job.id) throw new Error(job.error || 'Status unavailable');
+      const res = await apiFetch(`/api/status?id=${jobId}&logsFrom=${lastLogLen}`, { silentLoading: true, timeoutMs: 12000 });
+      const job = await readJsonResponse(res, 'Clone status');
+      if (job.error || !job.id) throw new Error(job.error || 'Status unavailable');
       updateJobView(job);
-    } catch {}
-  }, 1000);
+      if (job.status === 'saving') delay = 1500;
+      else if (job.status !== 'running') return;
+    } catch {
+      delay = 2500;
+    }
+    pollInterval = setTimeout(poll, delay);
+  };
+  pollInterval = setTimeout(poll, 800);
 }
-function clearPolling() { if (pollInterval) { clearInterval(pollInterval); pollInterval = null; } }
+function clearPolling() { if (pollInterval) { clearTimeout(pollInterval); pollInterval = null; } }
 function startTimer() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
   timerInterval = setInterval(() => {
@@ -3413,7 +3611,7 @@ async function renameClone(id, e) {
     inp.removeEventListener('blur', finish);
     try {
       const r = await apiFetch(`/api/clones/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ label: val }) });
-      const d = await r.json();
+      const d = await readJsonResponse(r, 'Rename clone');
       if (!d.error) job.label = d.label || null;
     } catch {}
     renderSidebar();
@@ -3430,9 +3628,9 @@ async function deleteClone(id, e) {
   if (job.outDir) {
     try {
       const r = await apiFetch('/api/output', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ outDir: job.outDir }) });
-      const d = await r.json();
+      const d = await readJsonResponse(r, 'Delete clone');
       if (d.error) { toast('Delete failed: ' + d.error, 'err'); return; }
-    } catch(err) { toast('Delete failed: ' + err.message, 'err'); return; }
+    } catch(err) { toast('Delete failed: ' + friendlyFetchError(err), 'err'); return; }
   }
   allJobs = allJobs.filter(j => j.id !== id);
   if (activeJobId === id) {
@@ -3450,8 +3648,8 @@ async function switchJob(id) {
   showJob(job);
   if (job.status === 'done' && job.outDir) {
     editorOutDir = job.outDir;
-    loadEditorPages(job.outDir);
-    loadPreviewPages(job.outDir);
+    if (currentTab === 'editor') loadEditorPages(job.outDir);
+    if (currentTab === 'preview') loadPreviewPages(job.outDir);
   }
 }
 
@@ -3471,8 +3669,7 @@ async function loadPreviewPages(outDir) {
   }
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
-    const payload = await res.json();
-    if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
+    const payload = await readJsonResponse(res, 'Preview pages');
     if (!Array.isArray(payload)) throw new Error('Invalid pages response');
     const routes = sortRoutes(payload);
     if (!routes.length) {
@@ -3484,11 +3681,11 @@ async function loadPreviewPages(outDir) {
       frame.removeAttribute('srcdoc');
       return;
     }
-    select.innerHTML = routes.map(r => `<option value="${encodeURIComponent(r)}">${r === '/' ? '/ (home)' : r}</option>`).join('');
-    loadPreviewRoute(encodeURIComponent(routes[0]));
+    select.innerHTML = routes.map(r => `<option value="${encodedRouteValue(r)}">${escHtml(routeLabel(r))}</option>`).join('');
+    await loadPreviewRoute(encodedRouteValue(routes[0]));
   } catch (e) {
     select.innerHTML = '';
-    empty.textContent = 'Preview could not load pages: ' + (e.message || 'unknown error');
+    empty.textContent = 'Preview could not load pages: ' + friendlyFetchError(e);
     empty.style.display = 'flex';
     frame.style.display = 'none';
   }
@@ -3499,15 +3696,21 @@ async function loadPreviewRoute(encodedRoute) {
   const route = decodeURIComponent(encodedRoute);
   const empty = document.getElementById('previewEmpty');
   const frame = document.getElementById('previewFrame');
-  empty.style.display = 'none';
-  frame.style.display = 'block';
+  empty.textContent = 'LOADING...';
+  empty.style.display = 'flex';
+  frame.style.display = 'none';
   try {
-    const res = await apiFetch('/api/page?outDir=' + encodeURIComponent(editorOutDir) + '&route=' + encodeURIComponent(route));
-    if (!res.ok) throw new Error('Preview request failed');
-    frame.removeAttribute('src');
-    frame.srcdoc = prepareEditorHtml(await res.text());
+    const src = '/api/page?outDir=' + encodeURIComponent(editorOutDir) + '&route=' + encodeURIComponent(route);
+    frame.onload = () => {
+      empty.style.display = 'none';
+      frame.style.display = 'block';
+      frame.onload = null;
+    };
+    frame.removeAttribute('srcdoc');
+    frame.src = src;
   } catch {
     frame.style.display = 'none';
+    frame.onload = null;
     empty.textContent = 'Preview could not load this page';
     empty.style.display = 'flex';
   }
@@ -3551,7 +3754,7 @@ async function runPreview() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ outDir: job.outDir }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Preview start');
     if (data.error) throw new Error(data.error);
     const url = data.url || 'http://localhost:3000';
     if (data.hosted) {
@@ -3562,39 +3765,54 @@ async function runPreview() {
       setTimeout(() => window.open(url, '_blank'), 4000);
     }
   } catch (e) {
-    toast('Preview failed: ' + e.message, 'err');
+    toast('Preview failed: ' + friendlyFetchError(e), 'err');
   }
 }
 async function exportZip() {
   if (!requirePaid('Export ZIP')) return;
   const job = allJobs.find(j => j.id === activeJobId);
   if (!job?.outDir) return;
-  if (isElectron) {
+  const zipName = (job.outDir.split(/[\\/]/).pop() || 'clone') + '.zip';
+  let saveHandle = null;
+  if (window.showSaveFilePicker) {
     try {
-      const res = await apiFetch('/api/export-zip', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ outDir: job.outDir }) });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      window.electronAPI.openFolder(data.folder || data.zipPath);
-    } catch (e) { toast('ZIP failed: ' + e.message, 'err'); }
-    return;
+      saveHandle = await window.showSaveFilePicker({
+        suggestedName: zipName,
+        types: [{ description: 'ZIP archive', accept: { 'application/zip': ['.zip'] } }],
+      });
+    } catch (saveErr) {
+      if (saveErr?.name === 'AbortError') {
+        toast('ZIP save cancelled', 'warn');
+        return;
+      }
+      console.warn('[ZIP SAVE PICKER]', saveErr);
+      toast('Save picker unavailable, using browser download', 'warn');
+    }
   }
   try {
     toast('Building ZIP…', 'inf');
-    const token = localStorage.getItem('wc_auth_token') || '';
+    const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
     const dlRes = await fetch(`/api/download-zip?outDir=${encodeURIComponent(job.outDir)}`, {
       headers: token ? { 'X-Auth-Token': token } : {},
     });
-    if (!dlRes.ok) { const d = await dlRes.json().catch(() => ({})); throw new Error(d.error || `HTTP ${dlRes.status}`); }
+    if (!dlRes.ok) await readJsonResponse(dlRes, 'ZIP download');
     const blob = await dlRes.blob();
+    if (saveHandle) {
+      const writable = await saveHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      toast('ZIP saved where you selected', 'ok');
+      return;
+    }
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = (job.outDir.split(/[\\/]/).pop() || 'clone') + '.zip';
+    a.download = zipName;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(blobUrl); document.body.removeChild(a); }, 2000);
-    toast('ZIP downloaded', 'ok');
-  } catch (e) { toast('ZIP failed: ' + e.message, 'err'); }
+    toast('ZIP download started. Choose the folder in your browser save dialog if prompted.', 'ok');
+  } catch (e) { toast('ZIP failed: ' + friendlyFetchError(e), 'err'); }
 }
 function activeOutDir() {
   const job = allJobs.find(j => j.id === activeJobId);
@@ -3654,7 +3872,7 @@ async function connectGithub() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'GitHub connect');
     if (data.error) throw new Error(data.error);
     if (document.getElementById('github-remember').checked) localStorage.setItem(GITHUB_TOKEN_KEY, token);
     else localStorage.removeItem(GITHUB_TOKEN_KEY);
@@ -3665,7 +3883,7 @@ async function connectGithub() {
     select.style.display = data.repos.length ? 'block' : 'none';
     setGithubStatus(`Connected as ${data.user.login}. ${data.repos.length} writable repos found.`, 'ok');
   } catch (e) {
-    showGithubErr(e.message || 'Could not connect to GitHub');
+    showGithubErr(friendlyFetchError(e) || 'Could not connect to GitHub');
     setGithubStatus('Connection failed', 'err');
   } finally {
     btn.disabled = false;
@@ -3688,7 +3906,7 @@ async function onGithubRepoPicked() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: githubToken(), repo }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'GitHub branches');
     if (data.error || !Array.isArray(data.branches) || !data.branches.length) return;
     branchSelect.innerHTML = data.branches.map(b => `<option value="${optionEsc(b)}">${optionEsc(b)}</option>`).join('');
     branchSelect.value = data.branches.includes(defaultBranch) ? defaultBranch : data.branches[0];
@@ -3723,7 +3941,7 @@ async function pushToGithub() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ outDir, repo, branch, targetPath, commitMessage, token, cleanTarget }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'GitHub push');
     if (data.error) throw new Error(data.error);
     const urlEl = document.getElementById('github-result-url');
     urlEl.textContent = `${data.files} files pushed to ${repo}#${data.branch}${data.targetPath ? `/${data.targetPath}` : ''}`;
@@ -3731,7 +3949,7 @@ async function pushToGithub() {
     document.getElementById('github-result').classList.add('show');
     toast('Pushed to GitHub', 'ok');
   } catch (e) {
-    showGithubErr(e.message || 'GitHub push failed');
+    showGithubErr(friendlyFetchError(e) || 'GitHub push failed');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Push files';
@@ -3760,6 +3978,8 @@ let edUndoIdx = -1;
 let edMode = 'select';
 let dragState = null;
 let layerSeq = 1;
+let editorLoadSeq = 0;
+let activeInlineEdit = null;
 
 const VP = { desktop: null, tablet: '768px', mobile: '390px' };
 
@@ -3770,6 +3990,19 @@ function sortRoutes(routes) {
     const weight = r => r === '/login' ? 1 : r === '/register' ? 2 : 3;
     return weight(a) - weight(b) || a.localeCompare(b);
   });
+}
+
+function encodedRouteValue(route) {
+  return encodeURIComponent(String(route || '/'));
+}
+
+function routeLabel(route) {
+  return route === '/' ? '/ (home)' : String(route || '/');
+}
+
+function isEditorVisible() {
+  const tab = document.getElementById('tab-editor');
+  return !!tab && tab.style.display !== 'none';
 }
 
 function setEditorRail(which, collapsed) {
@@ -3873,21 +4106,27 @@ if (!localStorage.getItem(FOLD_KEY)) {
 }
 
 async function loadEditorPages(outDir, preferredRoute = '') {
+  const list = document.getElementById('edPageList');
+  if (!outDir) {
+    if (list) list.innerHTML = '<div class="ed-no-site">Clone a site first</div>';
+    return;
+  }
+  editorOutDir = outDir;
+  if (list) list.innerHTML = '<div class="ed-no-site">LOADING...</div>';
   try {
     const res = await apiFetch('/api/pages?outDir=' + encodeURIComponent(outDir));
-    const payload = await res.json();
-    if (!res.ok || payload.error) throw new Error(payload.error || `HTTP ${res.status}`);
+    const payload = await readJsonResponse(res, 'Editor pages');
     if (!Array.isArray(payload)) throw new Error('Invalid pages response');
     const routes = sortRoutes(payload);
-    const list = document.getElementById('edPageList');
     if (!routes.length) { list.innerHTML = '<div class="ed-no-site">No pages found</div>'; return; }
     list.innerHTML = routes.map(r =>
-      `<button class="ed-page-btn" onclick="loadEditorPage('${encodeURIComponent(r)}')" title="${r}">${r === '/' ? '/ (home)' : r}</button>`
+      `<button class="ed-page-btn" data-route="${encodedRouteValue(r)}" onclick="loadEditorPage(this.dataset.route)" title="${escHtml(r)}">${escHtml(routeLabel(r))}</button>`
     ).join('');
     const nextRoute = routes.includes(preferredRoute) ? preferredRoute : (routes.includes(editorRoute) ? editorRoute : routes[0]);
-    loadEditorPage(encodeURIComponent(nextRoute));
+    loadEditorPage(encodedRouteValue(nextRoute));
   } catch(e) {
-    document.getElementById('edPageList').innerHTML = '<div class="ed-no-site">Error loading pages</div>';
+    document.getElementById('edPageList').innerHTML = `<div class="ed-no-site">Error loading pages<br><small>${escHtml(friendlyFetchError(e))}</small></div>`;
+    toast('Editor pages failed: ' + friendlyFetchError(e), 'err');
   }
 }
 
@@ -3899,13 +4138,13 @@ async function createAuthPage(kind) {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ outDir: editorOutDir, kind }),
     });
-    const data = await res.json();
+    const data = await readJsonResponse(res, 'Auth page creation');
     if (data.error) throw new Error(data.error);
     await loadEditorPages(editorOutDir, data.route);
     await loadPreviewPages(editorOutDir);
     toast(`${kind === 'register' ? 'Register' : 'Login'} page ready`, 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Could not create page', 'err');
+    toast(friendlyFetchError(err) || 'Could not create page', 'err');
   }
 }
 
@@ -3914,9 +4153,10 @@ document.getElementById('addRegisterPageBtn').addEventListener('click', () => cr
 
 async function loadEditorPage(encodedRoute) {
   const route = decodeURIComponent(encodedRoute);
+  const loadSeq = ++editorLoadSeq;
   editorRoute = route;
   edSelEl = null; edHovEl = null;
-  document.querySelectorAll('.ed-page-btn').forEach(b => b.classList.toggle('on', b.title === route));
+  document.querySelectorAll('.ed-page-btn').forEach(b => b.classList.toggle('on', b.dataset.route === encodedRouteValue(route)));
   document.getElementById('edCurrentPage').textContent = route;
   document.getElementById('edBuilderRoute').textContent = route === '/' ? 'Home page' : route;
   document.getElementById('edEmptyPreview').style.display = 'none';
@@ -3925,34 +4165,60 @@ async function loadEditorPage(encodedRoute) {
   const frame = document.getElementById('ed-frame');
   document.getElementById('edSaveBtn').disabled = true;
   document.getElementById('figmaExportBtn').disabled = true;
+  document.getElementById('deployBtn').disabled = true;
+  document.getElementById('githubBtn').disabled = true;
   deselect();
   edUndo = []; edUndoIdx = -1;
   try {
     const res = await apiFetch('/api/page?outDir=' + encodeURIComponent(editorOutDir) + '&route=' + encodeURIComponent(route));
-    if (!res.ok) throw new Error('Editor request failed');
+    if (!res.ok) {
+      const details = await res.text().catch(() => '');
+      throw new Error(details || 'Editor request failed');
+    }
+    const finishLoad = () => {
+      if (loadSeq !== editorLoadSeq) return;
+      const doc = frame.contentDocument;
+      if (!doc?.documentElement || doc.readyState === 'loading') {
+        setTimeout(finishLoad, 80);
+        return;
+      }
+      frame.onload = null;
+      injectEditorCSS();
+      applyVp();
+      renderLayers();
+      updateCanvasZoomLabel();
+      document.getElementById('edSaveBtn').disabled = false;
+      document.getElementById('figmaExportBtn').disabled = false;
+      document.getElementById('deployBtn').disabled = false;
+      document.getElementById('githubBtn').disabled = false;
+    };
+    frame.onload = finishLoad;
     frame.removeAttribute('src');
     frame.srcdoc = prepareEditorHtml(await res.text());
-    document.getElementById('edSaveBtn').disabled = false;
-    document.getElementById('figmaExportBtn').disabled = false;
-    document.getElementById('deployBtn').disabled = false;
-    document.getElementById('githubBtn').disabled = false;
-    setTimeout(renderLayers, 80);
-  } catch {
+    setTimeout(finishLoad, 350);
+  } catch(e) {
+    if (loadSeq !== editorLoadSeq) return;
+    frame.onload = null;
     frame.removeAttribute('srcdoc');
     document.getElementById('edEmptyPreview').style.display = 'flex';
-    document.getElementById('edEmptyPreview').textContent = 'Editor could not load this page';
+    document.getElementById('edEmptyPreview').textContent = 'Editor could not load this page: ' + friendlyFetchError(e);
   }
 }
 
-function prepareEditorHtml(html) {
-  const parsed = new DOMParser().parseFromString(html, 'text/html');
-  parsed.querySelectorAll('script').forEach(script => {
+function disableEditorScripts(root) {
+  root.querySelectorAll('script').forEach(script => {
+    if (script.hasAttribute('data-clonyfy-disabled-script')) return;
     script.setAttribute('data-clonyfy-disabled-script', 'true');
     if (script.hasAttribute('type')) {
       script.setAttribute('data-clonyfy-original-type', script.getAttribute('type'));
     }
     script.setAttribute('type', 'text/plain');
   });
+}
+
+function prepareEditorHtml(html) {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  disableEditorScripts(parsed);
   return '<!doctype html>\n' + parsed.documentElement.outerHTML;
 }
 
@@ -4266,6 +4532,7 @@ document.querySelectorAll('#sel-box .sel-handle').forEach(handle => {
 });
 
 function setMode(mode) {
+  finishInlineTextEdit();
   edMode = mode;
   // Tool buttons: select / move
   document.getElementById('toolSelect')?.classList.toggle('on', mode === 'select');
@@ -4277,8 +4544,7 @@ function setMode(mode) {
 
 // Keyboard shortcuts for tools (only when editor tab is active)
 document.addEventListener('keydown', e => {
-  const tab = document.getElementById('tab-editor');
-  if (!tab || tab.style.display === 'none') return;
+  if (!isEditorVisible()) return;
   if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.contentEditable === 'true') return;
   const map = { v:'select', h:'move', t:'text', r:'box', o:'circle', s:'section', i:'image' };
   if (map[e.key?.toLowerCase()]) { e.preventDefault(); setMode(map[e.key.toLowerCase()]); }
@@ -4379,16 +4645,43 @@ document.addEventListener('mouseup', () => {
 overlay.addEventListener('dblclick', e => {
   const el = getFrameEl(e);
   if (!el) return;
+  finishInlineTextEdit();
   overlay.classList.remove('on');
+  const oldHtml = el.innerHTML;
+  const oldContentEditable = el.getAttribute('contenteditable');
+  el.setAttribute('data-clonyfy-editing', 'true');
+  activeInlineEdit = { el, oldHtml, oldContentEditable };
   el.contentEditable = 'true';
   el.focus();
   el.addEventListener('blur', function stop() {
-    el.contentEditable = 'inherit';
-    overlay.classList.add('on');
-    if (el === edSelEl) document.getElementById('p-text').value = el.textContent || '';
+    finishInlineTextEdit(el, oldHtml, oldContentEditable);
     el.removeEventListener('blur', stop);
   }, {once:true});
 });
+
+function restoreContentEditable(el, originalValue) {
+  if (!el) return;
+  if (originalValue == null) el.removeAttribute('contenteditable');
+  else el.setAttribute('contenteditable', originalValue);
+  el.removeAttribute('data-clonyfy-editing');
+}
+
+function finishInlineTextEdit(el = activeInlineEdit?.el, oldHtml = activeInlineEdit?.oldHtml, oldContentEditable = activeInlineEdit?.oldContentEditable) {
+  if (!el) return;
+  if (!el.hasAttribute('data-clonyfy-editing') && activeInlineEdit?.el !== el) return;
+  const changed = oldHtml !== undefined && el.innerHTML !== oldHtml;
+  const val = el.innerHTML;
+  restoreContentEditable(el, oldContentEditable);
+  document.getElementById('ed-overlay')?.classList.add('on');
+  if (changed) pushUndo({ type: 'innerHTML', el, old: oldHtml, val });
+  if (el === edSelEl) {
+    document.getElementById('p-text').value = el.textContent || '';
+    syncPanel(el);
+    updateSelBox();
+    renderLayers();
+  }
+  if (activeInlineEdit?.el === el) activeInlineEdit = null;
+}
 
 // Update sel-box when canvas scrolls
 document.querySelector('.frame-area')?.addEventListener('scroll', () => { updateSelBox(); updateHoverBox(null); });
@@ -4414,7 +4707,8 @@ function select(el) {
   document.getElementById('pBody').style.display = 'block';
 }
 function deselect() {
-  if (edSelEl) { edSelEl.classList.remove('__s','__h'); edSelEl.contentEditable = 'inherit'; }
+  finishInlineTextEdit();
+  if (edSelEl) { edSelEl.classList.remove('__s','__h'); }
   if (edHovEl) { edHovEl.classList.remove('__h'); }
   edSelEl = null; edHovEl = null; edTextNode = null;
   const box = document.getElementById('sel-box');
@@ -4612,6 +4906,8 @@ function applyAttr(name, val) {
   if (val == null || val === '') edSelEl.removeAttribute(name);
   else edSelEl.setAttribute(name, val);
   pushUndo({ type: 'attr', el: edSelEl, attr: name, old, val });
+  updateSelBox();
+  renderLayers();
 }
 
 function syncPanel(el) {
@@ -4749,6 +5045,8 @@ function applyStyle(prop, val) {
   const old = inlineStyleState(edSelEl, prop);
   setInlineStyle(edSelEl, prop, val);
   pushUndo({type:'style', el:edSelEl, prop, old, val, priority:'important'});
+  updateSelBox();
+  updateHoverBox(null);
 }
 
 // ── Wire props inputs ─────────────────────────────────────────────────────────
@@ -5032,7 +5330,7 @@ async function importPickedAsset() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ outDir: editorOutDir, dataUrl, filename: file.name }),
   });
-  const data = await res.json();
+  const data = await readJsonResponse(res, 'Asset import');
   if (data.error) throw new Error(data.error);
   document.getElementById('p-media-src').value = data.path;
   input.value = '';
@@ -5074,7 +5372,7 @@ document.getElementById('act-upload-replace').addEventListener('click', async ()
     setSelectedMediaPath(src);
     toast('Media updated', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Media update failed', 'err');
+    toast(friendlyFetchError(err) || 'Media update failed', 'err');
   }
 });
 document.getElementById('act-add-image').addEventListener('click', async () => {
@@ -5085,7 +5383,7 @@ document.getElementById('act-add-image').addEventListener('click', async () => {
     insertNodeAfterSelection(img);
     toast('Image added', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Image add failed', 'err');
+    toast(friendlyFetchError(err) || 'Image add failed', 'err');
   }
 });
 document.getElementById('act-set-bg-img').addEventListener('click', async () => {
@@ -5099,7 +5397,7 @@ document.getElementById('act-set-bg-img').addEventListener('click', async () => 
     syncPanel(edSelEl);
     toast('Background image set', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Background update failed', 'err');
+    toast(friendlyFetchError(err) || 'Background update failed', 'err');
   }
 });
 document.getElementById('act-clear-bg-img').addEventListener('click', () => {
@@ -5178,6 +5476,7 @@ function nudgeSelected(dx, dy) {
 }
 
 document.addEventListener('keydown', e => {
+  if (!isEditorVisible()) return;
   const tag = document.activeElement.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if (e.key === 'Escape') { setMode('select'); deselect(); }
@@ -5220,10 +5519,12 @@ function undoStep() {
     op.el.parentNode?.replaceChild(nextEl, op.el);
     op.el = nextEl;
   }
+  else if (op.type === 'innerHTML') op.el.innerHTML = op.old;
   else if (op.type === 'move' || op.type === 'resize') applyStyleSnapshot(op.el, op.old);
   else if (op.type === 'reorder') op.parent.insertBefore(op.el, op.oldNext);
   else setInlineStyle(op.el, op.prop, op.old.value, op.old.priority);
   if (op.el === edSelEl) syncPanel(op.el);
+  updateSelBox();
   renderLayers();
 }
 function redoStep() {
@@ -5251,10 +5552,12 @@ function redoStep() {
     op.el.parentNode?.replaceChild(nextEl, op.el);
     op.el = nextEl;
   }
+  else if (op.type === 'innerHTML') op.el.innerHTML = op.val;
   else if (op.type === 'move' || op.type === 'resize') applyStyleSnapshot(op.el, op.val);
   else if (op.type === 'reorder') op.parent.insertBefore(op.el, op.newNext);
   else setInlineStyle(op.el, op.prop, op.val, op.priority);
   if (op.el === edSelEl) syncPanel(op.el);
+  updateSelBox();
   renderLayers();
 }
 
@@ -5386,7 +5689,7 @@ async function exportFigmaSvg() {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
     toast('Figma SVG exported', 'ok');
   } catch (err) {
-    toast(err instanceof Error ? err.message : 'Figma export failed', 'err');
+    toast(friendlyFetchError(err) || 'Figma export failed', 'err');
   } finally {
     btn.disabled = false;
     btn.textContent = oldText;
@@ -5597,37 +5900,37 @@ const SECTIONS_LIBRARY = [
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:960px;margin:0 auto;text-align:left">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Starter</div>
-      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$9<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">Perfect for individuals and side projects.</p>
+      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$19<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For solo builders cloning live websites.</p>
       <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get Starter</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:#374151">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 15 clones/month</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Export &amp; download</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> 10 website clones/month</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Code &amp; ZIP export</li>
         <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Visual editor</li>
       </ul>
     </div>
     <div style="background:#1e40af;border-radius:16px;padding:32px;color:#fff;position:relative">
       <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#3b82f6,#6366f1);padding:4px 16px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">Most Popular</div>
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#93c5fd;margin-bottom:16px">Pro</div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#93c5fd;margin-bottom:16px">Growth</div>
       <div style="font-size:48px;font-weight:900;letter-spacing:-2px;line-height:1;margin-bottom:8px">$29<span style="font-size:16px;color:rgba(255,255,255,.5);font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:rgba(255,255,255,.65);margin:0 0 24px;line-height:1.55">For growing teams that need more power and flexibility.</p>
-      <a href="#" style="display:block;text-align:center;padding:12px;background:#fff;color:#1e40af;border-radius:9px;font-weight:800;font-size:14px;text-decoration:none;margin-bottom:24px">Get Pro</a>
+      <p style="font-size:14px;color:rgba(255,255,255,.65);margin:0 0 24px;line-height:1.55">For builders and agencies that need more output.</p>
+      <a href="#" style="display:block;text-align:center;padding:12px;background:#fff;color:#1e40af;border-radius:9px;font-weight:800;font-size:14px;text-decoration:none;margin-bottom:24px">Get Growth</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:rgba(255,255,255,.8)">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Unlimited projects</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> 100GB storage</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Priority support</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Advanced analytics</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> 25 website clones/month</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Unlimited screens</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> Figma export</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#86efac;font-weight:800">✓</span> API access</li>
       </ul>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Enterprise</div>
-      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$99<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For large teams with custom needs and dedicated support.</p>
-      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Contact sales</a>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#64748b;margin-bottom:16px">Scale</div>
+      <div style="font-size:48px;font-weight:900;color:#0f172a;letter-spacing:-2px;line-height:1;margin-bottom:8px">$59<span style="font-size:16px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <p style="font-size:14px;color:#64748b;margin:0 0 24px;line-height:1.55">For teams that need maximum scale.</p>
+      <a href="#" style="display:block;text-align:center;padding:12px;background:#f1f5f9;color:#374151;border-radius:9px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:24px">Get Scale</a>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;font-size:14px;color:#374151">
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Custom limits</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> SSO &amp; SAML</li>
-        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Dedicated account manager</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Unlimited website clones</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Unlimited screens</li>
+        <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> Priority support</li>
         <li style="display:flex;gap:9px;align-items:center"><span style="color:#22c55e;font-weight:800">✓</span> SLA guarantee</li>
       </ul>
     </div>
@@ -5949,7 +6252,7 @@ async function insertSectionIntoPage(id, btn, closeModal = false) {
     document.getElementById('edSaveBtn').disabled = false;
     if (currentTab !== 'editor') switchTab('editor');
   } catch(e) {
-    toast('Insert failed: ' + e.message, 'err');
+    toast('Insert failed: ' + friendlyFetchError(e), 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Insert'; }
   }
@@ -6011,15 +6314,19 @@ createBuilderElement = function(type, point) {
 function stripEditorOnlyAttrs(doc) {
   const removed = [];
   doc.querySelectorAll('[data-clonyfy-layer-id]').forEach(el => {
-    removed.push([el, el.getAttribute('data-clonyfy-layer-id')]);
+    removed.push([el, 'data-clonyfy-layer-id', el.getAttribute('data-clonyfy-layer-id')]);
     el.removeAttribute('data-clonyfy-layer-id');
+  });
+  doc.querySelectorAll('[data-clonyfy-editing]').forEach(el => {
+    removed.push([el, 'data-clonyfy-editing', el.getAttribute('data-clonyfy-editing')]);
+    el.removeAttribute('data-clonyfy-editing');
   });
   return removed;
 }
 
 function restoreEditorOnlyAttrs(removed) {
-  removed.forEach(([el, value]) => {
-    if (el?.isConnected && value) el.setAttribute('data-clonyfy-layer-id', value);
+  removed.forEach(([el, name, value]) => {
+    if (el?.isConnected && value != null) el.setAttribute(name, value);
   });
 }
 
@@ -6027,6 +6334,8 @@ async function savePage() {
   if (!editorOutDir || !editorRoute) return;
   const doc = document.getElementById('ed-frame').contentDocument;
   if (!doc) return;
+  finishInlineTextEdit();
+  const selectedBeforeSave = edSelEl;
   const ce = doc.getElementById('__ce__');
   if (ce) ce.remove();
   doc.querySelectorAll('.__s,.__h').forEach(el => el.classList.remove('__s','__h'));
@@ -6034,7 +6343,10 @@ async function savePage() {
   const removedEditorAttrs = stripEditorOnlyAttrs(doc);
   const html = doc.documentElement.outerHTML;
   restoreEditorOnlyAttrs(removedEditorAttrs);
+  disableEditorScripts(doc);
   injectEditorCSS();
+  if (selectedBeforeSave?.isConnected) selectedBeforeSave.classList.add('__s');
+  updateSelBox();
   const btn = document.getElementById('edSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
@@ -6042,9 +6354,9 @@ async function savePage() {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ outDir: editorOutDir, route: editorRoute, html }),
     });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || `HTTP ${res.status}`); }
+    await readJsonResponse(res, 'Page save');
     toast('Page saved!', 'ok');
-  } catch(e) { toast('Save failed: ' + e.message, 'err'); }
+  } catch(e) { toast('Save failed: ' + friendlyFetchError(e), 'err'); }
   btn.disabled = false;
   btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save`;
 }
@@ -6150,14 +6462,14 @@ async function deployToProvider() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ outDir: editorOutDir, netlifyToken: token }),
     });
-    const data = await r.json();
+    const data = await readJsonResponse(r, 'Netlify deploy');
     if (data.error) { showDeployErr(data.error); return; }
     const urlEl = document.getElementById('deploy-result-url');
     urlEl.textContent = data.url;
     document.getElementById('deploy-result').classList.add('show');
     toast('Deployed to Netlify!', 'ok');
   } catch(e) {
-    showDeployErr('Network error: ' + e.message);
+    showDeployErr('Network error: ' + friendlyFetchError(e));
   } finally {
     btn.disabled = false; btn.textContent = 'Deploy Now';
   }

@@ -1,12 +1,13 @@
 import { createServer } from 'http';
 import { spawn } from 'child_process';
-import { randomUUID, createHash } from 'crypto';
+import { randomUUID, createHash, createHmac, timingSafeEqual } from 'crypto';
 import { resolve, join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync, createReadStream, copyFileSync } from 'fs';
 import { request as httpsRequest } from 'https';
 import { createRequire } from 'module';
 import 'dotenv/config';
+import { runClone } from './packages/cloner/dist/runClone.js';
 import {
   getUserById, getUserByEmail, getAllUsers, getUsersPage, getClonesByUserIds, insertUser, updateUser, deleteUser,
   getUserByVerifyToken, getUserByResetToken,
@@ -15,12 +16,15 @@ import {
   insertClone, updateCloneLabel, updateCloneStatus, getClonesByUser, getAllClones, deleteCloneById, deleteUserClones, getCloneCountThisMonth,
   getAllPayments, getPaymentsByUser, getPaymentById, insertPayment, updatePayment, getPendingPaymentByUserPlan, getAdminStats,
   getSettings, saveSettings,
+  getUserBlockReason, getUserBlockReasons, setUserBlockReason,
   getShare, insertShare,
   getAllPromoCodes, getPromoCode, insertPromoCode, incrementPromoUsed, deletePromoCode,
   getAllErrors, insertError, deleteError, clearErrors, pruneErrors,
   insertAudit, getAuditLog, getAuditCount, audit,
   insertAnnouncement, getAllAnnouncements,
+  insertContactSubmission, getContactSubmissions,
   getCloneByOutDir, uploadCloneFile, downloadCloneFile, saveCloneTextFile, getCloneTextFile,
+  getAffiliateOwnerBySlug, saveAffiliateSlug, getAffiliateReferrals, addAffiliateReferral, getAffiliateVisits, addAffiliateVisit,
 } from './db.js';
 
 const _cjsRequire = createRequire(import.meta.url);
@@ -34,8 +38,12 @@ const CLI = join(__dirname, 'packages', 'cloner', 'dist', 'cli.js');
 const EMAILS_DIR = join(__dirname, 'templates', 'emails');
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
 const DEFAULT_APP_URL = (process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || `http://localhost:${PORT}`).replace(/\/$/, '');
+const CANONICAL_APP_URL = (process.env.PUBLIC_APP_URL || process.env.SHARE_BASE_URL || (process.env.VERCEL ? 'https://www.clonyfy.com' : '')).replace(/\/$/, '');
+const DEFAULT_AFFONSO_PUBLIC_ID = 'cmpj1i5tn00087mxngp80ddzy';
 
 const jobs = new Map();
+const ACTIVE_JOB_STATUSES = new Set(['running', 'saving']);
+const isActiveJob = (job) => ACTIVE_JOB_STATUSES.has(job?.status);
 
 // ── Security constants ────────────────────────────────────────────────────────
 // Set PASSWORD_PEPPER and SHARE_PASSWORD_PEPPER in your .env file.
@@ -53,6 +61,45 @@ if (!ADMIN_PASSWORD) { console.error('[FATAL] ADMIN_PASSWORD env var is not set.
 // Admin sessions persisted to disk so they survive server restarts.
 const ADMIN_SESSIONS_FILE = join(__dirname, '.admin-sessions.json');
 const adminSessions = new Map(); // token → expiresAt
+const ADMIN_TOKEN_TTL_MS = 8 * 3600 * 1000;
+
+function base64UrlEncode(input) {
+  return Buffer.from(input).toString('base64url');
+}
+
+function base64UrlDecode(input) {
+  return Buffer.from(String(input || ''), 'base64url').toString('utf8');
+}
+
+function signAdminPayload(payload) {
+  return createHmac('sha256', `${ADMIN_PASSWORD || ''}:${PASSWORD_PEPPER}`)
+    .update(payload)
+    .digest('base64url');
+}
+
+function createAdminToken() {
+  const payload = base64UrlEncode(JSON.stringify({
+    exp: Date.now() + ADMIN_TOKEN_TTL_MS,
+    nonce: randomUUID(),
+  }));
+  return `adm1.${payload}.${signAdminPayload(payload)}`;
+}
+
+function verifySignedAdminToken(token) {
+  if (!ADMIN_PASSWORD || !String(token || '').startsWith('adm1.')) return false;
+  const parts = String(token).split('.');
+  if (parts.length !== 3 || !parts[1] || !parts[2]) return false;
+  const expected = signAdminPayload(parts[1]);
+  const got = Buffer.from(parts[2]);
+  const exp = Buffer.from(expected);
+  if (got.length !== exp.length || !timingSafeEqual(got, exp)) return false;
+  try {
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    return Number(payload.exp || 0) > Date.now();
+  } catch {
+    return false;
+  }
+}
 
 function _loadAdminSessions() {
   try {
@@ -82,6 +129,7 @@ _loadAdminSessions();
 function isAdmin(req) {
   const t = req.headers['x-admin-token'] || '';
   if (!t) return false;
+  if (verifySignedAdminToken(t)) return true;
   const exp = adminSessions.get(t);
   if (!exp) return false;
   if (Date.now() > exp) { adminSessions.delete(t); _persistAdminSessions(); return false; }
@@ -110,7 +158,7 @@ setInterval(async () => { try { await cleanExpiredSessions(Date.now()); } catch 
 setInterval(() => {
   const cutoff = Date.now() - 4 * 60 * 60 * 1000;
   for (const [id, job] of jobs) {
-    if (job.status !== 'running' && job.status !== 'saving' && new Date(job.startedAt).getTime() < cutoff) {
+    if (!isActiveJob(job) && new Date(job.startedAt).getTime() < cutoff) {
       jobs.delete(id);
     }
   }
@@ -119,28 +167,27 @@ setInterval(() => {
 // ── Plan limits ────────────────────────────────────────────────────────────────
 const PLAN_LIMITS = {
   free:       { clonesPerMonth: 3,        maxPages: 20  },
-  starter:    { clonesPerMonth: 15,       maxPages: 30  },
-  popular:    { clonesPerMonth: 50,       maxPages: 100 },
-  growth:     { clonesPerMonth: 100,      maxPages: 200 },
+  starter:    { clonesPerMonth: 10,       maxPages: 500 },
+  growth:     { clonesPerMonth: 25,       maxPages: 500 },
   unlimited:  { clonesPerMonth: Infinity, maxPages: 500 },
 };
-const PAID_PLAN_KEYS = ['starter', 'popular', 'growth', 'unlimited'];
-const PLAN_ALIASES = { pro: 'growth', enterprise: 'unlimited' };
+const PAID_PLAN_KEYS = ['starter', 'growth', 'unlimited'];
+const PLAN_ALIASES = { popular: 'growth', pro: 'growth', scale: 'unlimited', enterprise: 'unlimited' };
 const LEGACY_PAID_PLAN_KEYS = Object.keys(PLAN_ALIASES);
 const ALL_PAID_PLAN_KEYS = [...PAID_PLAN_KEYS, ...LEGACY_PAID_PLAN_KEYS];
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+const USE_INLINE_CLONE = IS_VERCEL || process.env.CLONYFY_INLINE_CLONE === '1';
+const SERVERLESS_MAX_PAGES = Math.max(1, parseInt(process.env.CLONYFY_SERVERLESS_MAX_PAGES || '500', 10) || 500);
 const PLAN_PRICES = {
-  starter:    { monthly: 9.99,  annual: 95.88  },
-  popular:    { monthly: 19.99, annual: 191.88 },
-  growth:     { monthly: 34.99, annual: 335.88 },
+  starter:    { monthly: 19.99, annual: 191.88 },
+  growth:     { monthly: 29.99, annual: 287.88 },
   unlimited:  { monthly: 59.99, annual: 575.88 },
 };
 const PLAN_LABELS = {
   free: 'Free',
   starter: 'Starter',
-  popular: 'Most Popular',
   growth: 'Growth',
-  unlimited: 'Unlimited',
+  unlimited: 'Scale',
 };
 function legacyAliasesForPlan(plan) {
   const normalized = normalizePlan(plan);
@@ -156,11 +203,55 @@ function isPaidPlan(plan) {
 function getPlanLimits(plan) {
   return PLAN_LIMITS[normalizePlan(plan)] || PLAN_LIMITS.free;
 }
+function getEffectivePlanLimits(plan) {
+  const limits = getPlanLimits(plan);
+  return {
+    ...limits,
+    maxPages: IS_VERCEL ? Math.min(limits.maxPages, SERVERLESS_MAX_PAGES) : limits.maxPages,
+  };
+}
 function getPlanPrices(plan) {
   return PLAN_PRICES[normalizePlan(plan)] || { monthly: 0, annual: 0 };
 }
 function getPlanLabel(plan) {
   return PLAN_LABELS[normalizePlan(plan)] || 'Free';
+}
+function planFromStripePriceId(priceId) {
+  if (!priceId) return 'free';
+  const s = getStripeSettings();
+  for (const plan of ALL_PAID_PLAN_KEYS) {
+    const normalized = normalizePlan(plan);
+    for (const interval of ['monthly', 'annual']) {
+      if (s[STRIPE_PRICE_KEY(plan, interval)] === priceId) return normalized;
+    }
+  }
+  return 'free';
+}
+async function activatePaidPlanForUser(userId, { plan, interval = 'monthly', renewsAt = null, stripeSubscriptionId = null, cancelAtPeriodEnd = 0 } = {}) {
+  const confirmedPlan = normalizePlan(plan);
+  if (!isPaidPlan(confirmedPlan)) return null;
+  const fields = {
+    plan: confirmedPlan,
+    billing_interval: interval === 'annual' ? 'annual' : 'monthly',
+    renewal_reminder_sent: 0,
+    usage_alert_sent: 0,
+    cancel_at_period_end: cancelAtPeriodEnd ? 1 : 0,
+  };
+  if (renewsAt) fields.plan_renews_at = renewsAt instanceof Date ? renewsAt.toISOString() : String(renewsAt);
+  if (stripeSubscriptionId) fields.stripe_subscription_id = stripeSubscriptionId;
+  await updateUser(userId, fields);
+  _invalidateUserSessions(userId);
+  return confirmedPlan;
+}
+function stripeSubscriptionPlan(sub, fallbackPlan = 'free') {
+  const metaPlan = normalizePlan(sub?.metadata?.plan || fallbackPlan);
+  if (isPaidPlan(metaPlan)) return metaPlan;
+  for (const item of sub?.items?.data || []) {
+    const price = item?.price;
+    const pricePlan = normalizePlan(price?.metadata?.plan || planFromStripePriceId(price?.id));
+    if (isPaidPlan(pricePlan)) return pricePlan;
+  }
+  return 'free';
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -188,8 +279,31 @@ function _invalidateUserSessions(userId) {
 }
 setInterval(() => { const now = Date.now(); for (const [t, e] of _sessionCache) if (now > e.exp) _sessionCache.delete(t); }, 120000);
 
+async function userBlockedReason(user) {
+  const columnReason = String(user?.blocked_reason || '').trim();
+  if (columnReason) return columnReason;
+  return user?.id ? String(await getUserBlockReason(user.id) || '').trim() : '';
+}
+
+async function userBlockedMessage(user) {
+  const reason = await userBlockedReason(user);
+  return reason
+    ? `Your account has been suspended. Reason: ${reason}`
+    : 'Your account has been suspended. Contact support.';
+}
+
+async function blockedUserResponse(res, user) {
+  const reason = await userBlockedReason(user);
+  return json(res, { error: reason ? `Your account has been suspended. Reason: ${reason}` : await userBlockedMessage(user), blocked: true, blockedReason: reason }, 403);
+}
+
 async function getSessionUser(req) {
-  const token = req.headers['x-auth-token'] || '';
+  const cookieToken = String(req.headers.cookie || '')
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith('wc_auth_token='))
+    ?.slice('wc_auth_token='.length);
+  const token = req.headers['x-auth-token'] || (cookieToken ? decodeURIComponent(cookieToken) : '');
   if (!token) return null;
   const hit = _sessionCache.get(token);
   if (hit) {
@@ -211,6 +325,8 @@ const SETTINGS_DEFAULTS = {
   btc:'', eth:'', usdt_trc20:'', paypal_email:'', paypal_me:'', app_note:'',
   smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
   smtp_secure: false, app_url: DEFAULT_APP_URL, support_email:'',
+  affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:DEFAULT_AFFONSO_PUBLIC_ID,
+  affiliate_program_id:'', affiliate_group_id:'', affiliate_api_key:'',
 };
 let _settingsCache = { ...SETTINGS_DEFAULTS };
 async function initSettings() { _settingsCache = await getSettings(); }
@@ -220,17 +336,111 @@ const invalidateSettingsCache = async () => {
   _emailTemplateCache.clear(); // templates may reference APP_URL / SUPPORT_EMAIL from settings
 };
 
+function normalizeAffiliateUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  let parsed;
+  try {
+    parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+  return parsed.toString();
+}
+
+function cleanAffiliatePublicId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return /^[A-Za-z0-9_-]{3,180}$/.test(raw) ? raw : null;
+}
+
+function splitAffiliateName(nameOrEmail = '') {
+  const raw = String(nameOrEmail || '').trim();
+  const fallback = raw.includes('@') ? raw.split('@')[0] : raw;
+  const parts = (fallback || 'CLONYFY Partner').split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || 'CLONYFY',
+    lastName: parts.slice(1).join(' ') || 'Partner',
+  };
+}
+
+function affiliateSlug(user) {
+  const raw = `${user.name || user.email || user.id || 'partner'}-${user.id || ''}`.toLowerCase();
+  const slug = raw.replace(/@.*/, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+  return slug || `partner-${String(user.id || '').slice(0, 8) || 'clonyfy'}`;
+}
+
+function localReferralLink(req, user) {
+  const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host || '';
+  const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(String(host));
+  const base = isLocal ? `http://${host}` : publicAppUrl(req);
+  return `${String(base).replace(/\/$/, '')}/?via=${encodeURIComponent(affiliateSlug(user))}`;
+}
+
+function cleanReferralCode(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 80);
+}
+
+async function createAffonsoEmbedToken(user, settings) {
+  const names = splitAffiliateName(user.name || user.email);
+  const payload = {
+    programId: settings.affiliate_program_id,
+    partner: {
+      email: user.email,
+      name: user.name || `${names.firstName} ${names.lastName}`.trim(),
+    },
+  };
+  if (settings.affiliate_group_id) payload.groupId = settings.affiliate_group_id;
+  const affonsoRes = await fetch('https://api.affonso.io/v1/embed/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${settings.affiliate_api_key}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await affonsoRes.json().catch(() => ({}));
+  if (!affonsoRes.ok) {
+    throw new Error(data?.message || data?.error || 'Affonso could not create an embed token.');
+  }
+  const root = data.data || data;
+  return {
+    token: root.token || root.embedToken || root.publicToken || data.token || data.publicToken || '',
+    link: root.link || root.referralLink || root.referral_link || data.link || '',
+    partner: root.partner || data.partner || null,
+  };
+}
+
+async function getAffonsoEmbedData(token) {
+  const affonsoRes = await fetch(`https://api.affonso.io/v1/embed/data?token=${encodeURIComponent(token)}`);
+  const data = await affonsoRes.json().catch(() => ({}));
+  if (!affonsoRes.ok) {
+    throw new Error(data?.message || data?.error || 'Affonso dashboard data could not be loaded.');
+  }
+  return data.data || data;
+}
+
 function publicAppUrl(req = null) {
   const configured = String(getCachedSettings().app_url || '').replace(/\/$/, '');
-  if (configured && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configured)) return configured;
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`.replace(/\/$/, '');
+  const isLocalUrl = (value) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(value);
+  const isVercelGeneratedUrl = (value) => {
+    try { return new URL(value.startsWith('http') ? value : `https://${value}`).hostname.endsWith('.vercel.app'); }
+    catch { return false; }
+  };
+  if (configured && !isLocalUrl(configured) && !isVercelGeneratedUrl(configured)) return configured;
+  if (process.env.APP_URL) {
+    const envAppUrl = process.env.APP_URL.replace(/\/$/, '');
+    if (!isVercelGeneratedUrl(envAppUrl)) return envAppUrl;
+  }
+  if (CANONICAL_APP_URL) return CANONICAL_APP_URL;
   const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
   if (host) {
     const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
     const firstHost = String(host).split(',')[0].trim();
     if (firstHost) return `${proto}://${firstHost}`.replace(/\/$/, '');
   }
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`.replace(/\/$/, '');
   return configured || DEFAULT_APP_URL;
 }
 
@@ -456,7 +666,7 @@ async function checkUsageAlert(userId) {
     const user = await getUserById(userId);
     if (!user || !isPaidPlan(user.plan) || user.usage_alert_sent) return;
     const plan = normalizePlan(user.plan);
-    const limits = getPlanLimits(plan);
+    const limits = getEffectivePlanLimits(plan);
     if (limits.clonesPerMonth === Infinity) return;
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const used = await getCloneCountThisMonth(userId, monthStart.toISOString());
@@ -473,15 +683,34 @@ async function checkUsageAlert(userId) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const OUTPUT_DIR = process.env.VERCEL ? join('/tmp', 'output') : join(__dirname, 'output');
+const OUTPUT_DIR = resolve(process.env.CLONYFY_OUTPUT_DIR || (process.env.VERCEL ? '/tmp/output' : './output'));
 
 const _fileCache = new Map();
+function affonsoPixelHtml() {
+  const s = getCachedSettings();
+  const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
+  const publicId = String(s.affiliate_public_id || DEFAULT_AFFONSO_PUBLIC_ID).trim();
+  if (!enabled || !publicId) return '';
+  return `<script async defer src="https://cdn.affonso.io/js/pixel.min.js" data-affonso="${htmlEsc(publicId)}" data-cookie_duration="30"></script>`;
+}
+
+function injectAffonsoPixel(html) {
+  if (!html || /<script\b[^>]*src=["']https:\/\/cdn\.affonso\.io\/js\/pixel\.min\.js["'][^>]*>/i.test(html)) return html;
+  const script = affonsoPixelHtml();
+  if (!script) return html;
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${script}\n</head>`);
+  return `${script}\n${html}`;
+}
+
 function serveFile(res, filePath, contentType, cacheSecs = 0) {
   try {
     let data = _fileCache.get(filePath);
     if (!data) {
       data = readFileSync(filePath);
       if (cacheSecs > 0) _fileCache.set(filePath, data);
+    }
+    if (String(contentType || '').toLowerCase().includes('text/html')) {
+      data = Buffer.from(injectAffonsoPixel(data.toString('utf8')), 'utf8');
     }
     const headers = { 'Content-Type': contentType };
     if (cacheSecs > 0) headers['Cache-Control'] = `public, max-age=${cacheSecs}`;
@@ -499,9 +728,28 @@ function json(res, data, status = 200) {
 }
 
 function isInsideOutputDir(candidate) {
-  const base = resolve(OUTPUT_DIR);
+  return isInsideDir(OUTPUT_DIR, candidate);
+}
+
+function isInsideDir(baseDir, candidate) {
+  const base = resolve(baseDir);
   const resolved = resolve(candidate || '');
   return resolved === base || resolved.startsWith(base + '\\') || resolved.startsWith(base + '/');
+}
+
+function normalizeCloneRelPath(input, allowedPrefixes = []) {
+  const normalized = String(input || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/');
+  if (!normalized || normalized.length > 500) throw new Error('Invalid clone file path');
+  if (/[\x00-\x1F]/.test(normalized)) throw new Error('Invalid clone file path');
+  const parts = normalized.split('/');
+  if (parts.some(part => !part || part === '.' || part === '..')) throw new Error('Invalid clone file path');
+  if (allowedPrefixes.length && !allowedPrefixes.some(prefix => normalized === prefix || normalized.startsWith(prefix + '/'))) {
+    throw new Error('Invalid clone file path');
+  }
+  return normalized;
 }
 
 function cloneStoragePrefix(outDir) {
@@ -509,11 +757,15 @@ function cloneStoragePrefix(outDir) {
 }
 
 function cloneStoragePath(outDir, relPath) {
-  return `${cloneStoragePrefix(outDir)}/${String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '')}`;
+  return `${cloneStoragePrefix(outDir)}/${normalizeCloneRelPath(relPath)}`;
 }
 
 function cloneFileListStoragePath(outDir) {
   return cloneStoragePath(outDir, '__files.json');
+}
+
+function cloneAssetToken(outDir) {
+  return createHash('sha256').update(`${String(outDir || '')}:${PASSWORD_PEPPER}`).digest('hex').slice(0, 32);
 }
 
 function contentTypeForPath(filePath) {
@@ -548,6 +800,7 @@ async function persistCloneOutput(outDir) {
     if (existsSync(abs) && statSync(abs).isFile()) files.push({ rel: rel.replace(/\\/g, '/'), abs });
   };
   addFile('route-map.json');
+  addFile('manifest.json');
   const walk = (baseRel) => {
     const baseAbs = join(outDir, baseRel);
     if (!existsSync(baseAbs)) return;
@@ -574,7 +827,7 @@ async function persistCloneOutput(outDir) {
       uploaded++;
     } catch (err) {
       failures.push(`${file.rel}: ${err?.message || err}`);
-      if (file.rel === 'route-map.json' || file.rel.startsWith('captured-pages/')) {
+      if (file.rel === 'route-map.json' || file.rel === 'manifest.json' || file.rel.startsWith('captured-pages/')) {
         try {
           await saveCloneTextFile(storagePath, data.toString('utf8'));
           fallbackSaved++;
@@ -590,7 +843,7 @@ async function persistCloneOutput(outDir) {
     }
   };
 
-  const criticalFiles = files.filter(file => file.rel === 'route-map.json' || file.rel.startsWith('captured-pages/'));
+  const criticalFiles = files.filter(file => file.rel === 'route-map.json' || file.rel === 'manifest.json' || file.rel.startsWith('captured-pages/'));
   const assetFiles = files.filter(file => !criticalFiles.includes(file));
   await runLimited(criticalFiles, 8);
   try {
@@ -617,12 +870,13 @@ async function persistCloneOutput(outDir) {
 }
 
 async function readCloneFile(outDir, relPath) {
-  const localPath = join(outDir, relPath);
+  const normalized = normalizeCloneRelPath(relPath);
+  const localPath = join(outDir, normalized);
   if (isInsideOutputDir(localPath) && existsSync(localPath)) return readFileSync(localPath);
-  const storagePath = cloneStoragePath(outDir, relPath);
+  const storagePath = cloneStoragePath(outDir, normalized);
   const stored = await downloadCloneFile(storagePath);
   if (stored) return stored;
-  if (relPath === 'route-map.json' || String(relPath).replace(/\\/g, '/').startsWith('captured-pages/')) {
+  if (normalized === 'route-map.json' || normalized === 'manifest.json' || normalized.startsWith('captured-pages/')) {
     const text = await getCloneTextFile(storagePath);
     if (text != null) return Buffer.from(text, 'utf8');
   }
@@ -630,9 +884,8 @@ async function readCloneFile(outDir, relPath) {
 }
 
 async function writeCloneFile(outDir, relPath, bytes, contentType = contentTypeForPath(relPath)) {
-  const normalized = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const normalized = normalizeCloneRelPath(relPath);
   const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(String(bytes ?? ''), 'utf8');
-  if (!normalized || normalized.includes('..')) throw new Error('Invalid clone file path');
   const localPath = join(outDir, normalized);
   if (isInsideOutputDir(localPath) && existsSync(outDir)) {
     mkdirSync(dirname(localPath), { recursive: true });
@@ -676,7 +929,7 @@ async function readPersistedJob(id) {
     const job = JSON.parse(raw);
     // If the job was persisted as running but has no live process, the server
     // restarted mid-job. Mark it as errored so the UI doesn't spin forever.
-    if (job.status === 'running' && !jobs.has(id)) {
+    if (isActiveJob(job) && !jobs.has(id)) {
       job.status = 'error';
       job.logs = [...(job.logs || []), '[ERROR] Clone was interrupted — server restarted while this job was running.'];
     }
@@ -706,7 +959,10 @@ async function readPersistedCloneFileList(outDir) {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed)
-      ? parsed.filter(f => f?.rel && !String(f.rel).includes('..')).map(f => ({ ...f, rel: String(f.rel).replace(/\\/g, '/') }))
+      ? parsed.map(f => {
+          try { return { ...f, rel: normalizeCloneRelPath(f?.rel) }; }
+          catch { return null; }
+        }).filter(Boolean)
       : [];
   } catch {
     return [];
@@ -722,12 +978,13 @@ async function materializeCloneOutput(outDir) {
   mkdirSync(tempDir, { recursive: true });
   try {
     for (const file of files) {
-      const rel = String(file.rel || '').replace(/\\/g, '/').replace(/^\/+/, '');
-      if (!rel || rel.includes('..')) continue;
+      let rel;
+      try { rel = normalizeCloneRelPath(file.rel); }
+      catch { continue; }
       const data = await readCloneFile(outDir, rel);
       if (!data) continue;
       const dest = join(tempDir, rel);
-      if (!isInsideOutputDir(dest)) continue;
+      if (!isInsideDir(tempDir, dest)) continue;
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, data);
     }
@@ -759,8 +1016,40 @@ async function loadRouteMapAsync(outDir) {
   catch { return null; }
 }
 
+function inferredRouteFromPageFilename(filename) {
+  const name = String(filename || '').replace(/\\/g, '/').split('/').pop() || '';
+  if (!name.endsWith('.html')) return null;
+  if (name === '__home__.html' || name === 'index.html') return '/';
+  const base = name.slice(0, -5).replace(/^_+|_+$/g, '').replace(/_+/g, '-');
+  return base ? `/${base}` : null;
+}
+
+async function inferRouteMapFromCapturedPages(outDir) {
+  if (!isInsideOutputDir(outDir)) return null;
+  const map = {};
+  const pagesDir = join(outDir, 'captured-pages');
+  if (existsSync(pagesDir)) {
+    for (const entry of readdirSync(pagesDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.html')) continue;
+      const route = inferredRouteFromPageFilename(entry.name);
+      if (route) map[route] = entry.name;
+    }
+  }
+  if (!Object.keys(map).length) {
+    const files = await readPersistedCloneFileList(outDir).catch(() => []);
+    for (const file of files) {
+      const rel = String(file?.rel || '').replace(/\\/g, '/');
+      if (!rel.startsWith('captured-pages/') || !rel.endsWith('.html')) continue;
+      const filename = rel.slice('captured-pages/'.length);
+      const route = inferredRouteFromPageFilename(filename);
+      if (route) map[route] = filename;
+    }
+  }
+  return Object.keys(map).length ? map : null;
+}
+
 async function verifyCloneReadable(outDir) {
-  const map = await loadRouteMapAsync(outDir);
+  const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
   if (!map || !Object.keys(map).length) return { ok: false, error: 'route-map.json is not readable' };
   for (const filename of Object.values(map)) {
     if (!filename) return { ok: false, error: 'A captured route has no page file' };
@@ -770,9 +1059,194 @@ async function verifyCloneReadable(outDir) {
   return { ok: true, pages: Object.keys(map).length };
 }
 
-function rewritePreviewAssetUrls(html, outDir) {
-  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&path=`;
-  return String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
+async function buildPreviewAssetContext(outDir) {
+  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
+  const map = {};
+  const originalByRelPath = {};
+  const add = (from, to) => { if (from && to && from !== '/') map[from] = to; };
+  const manifestData = await readCloneFile(outDir, 'manifest.json').catch(() => null);
+  const manifest = manifestData ? safeJsonParse(manifestData.toString('utf8'), null) : null;
+  const targetOrigin = String(manifest?.targetOrigin || '').replace(/\/$/, '');
+  for (const page of manifest?.pages || []) {
+    for (const asset of page.assets || []) {
+      const original = String(asset.originalUrl || '');
+      const local = String(asset.localPath || '');
+      if (!original || !local) continue;
+      const assetRel = local.replace(/^\/+/, '');
+      const target = `${prefix}${encodeURIComponent(assetRel)}`;
+      originalByRelPath[assetRel] = original;
+      add(original, target);
+      add(original.split('?')[0].split('#')[0], target);
+      add(local, target);
+      add(local.replace(/^\/+/, ''), target);
+      try {
+        const u = new URL(original);
+        add(`${u.pathname}${u.search}${u.hash}`, target);
+        add(`${u.pathname}${u.search}`, target);
+        add(u.pathname, target);
+      } catch {}
+    }
+  }
+  return { map, targetOrigin, originalByRelPath };
+}
+
+function rewriteCssUrlsForPreview(css, assetMap, baseUrl) {
+  const mapUrl = (rawUrl) => {
+    const clean = String(rawUrl || '').split('?')[0].split('#')[0];
+    if (assetMap.has(rawUrl)) return assetMap.get(rawUrl);
+    if (assetMap.has(clean)) return assetMap.get(clean);
+    if (baseUrl) {
+      try {
+        const abs = new URL(rawUrl, baseUrl).href;
+        const absClean = abs.split('?')[0].split('#')[0];
+        return assetMap.get(abs) || assetMap.get(absClean) || null;
+      } catch {}
+    }
+    return null;
+  };
+  return String(css)
+    .replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, rawUrl) => {
+      const mapped = mapUrl(rawUrl);
+      return mapped ? `url(${quote}${mapped}${quote})` : match;
+    })
+    .replace(/@import\s+(?:url\(\s*)?(?:(['"])([^'")]+)\1|([^'")\s;]+))\s*\)?/g, (match, _quote, quotedUrl, bareUrl) => {
+      const rawUrl = quotedUrl || bareUrl;
+      const mapped = mapUrl(rawUrl);
+      return mapped ? match.replace(rawUrl, mapped) : match;
+    });
+}
+
+async function rewritePreviewCssAsset(css, outDir, relPath) {
+  const { map, originalByRelPath } = await buildPreviewAssetContext(outDir);
+  const assetMap = new Map(Object.entries(map));
+  const baseUrl = originalByRelPath[relPath] || originalByRelPath[relPath.replace(/^public\//, '')] || undefined;
+  return rewriteCssUrlsForPreview(css, assetMap, baseUrl);
+}
+
+function previewReplayPatch(assetMap, targetOrigin = '') {
+  return `<script data-clonyfy-preview-replay>
+(() => {
+  const assetMap = ${JSON.stringify(assetMap)};
+  const targetOrigin = ${JSON.stringify(targetOrigin)};
+  const localize = (value) => {
+    if (!value) return value;
+    const s = String(value);
+    if (assetMap[s]) return assetMap[s];
+    try {
+      const url = new URL(s, window.location.href);
+      const mapped = assetMap[url.href] || assetMap[url.pathname + url.search + url.hash] || assetMap[url.pathname + url.search] || assetMap[url.pathname];
+      if (mapped) return mapped;
+      if (targetOrigin && url.pathname.startsWith('/media/')) {
+        const nextMediaPath = '/_next/static' + url.pathname;
+        return assetMap[nextMediaPath + url.search] || assetMap[nextMediaPath] || (targetOrigin + nextMediaPath + url.search + url.hash);
+      }
+      if (targetOrigin && url.pathname === '/_next/image') return targetOrigin + url.pathname + url.search + url.hash;
+      return s;
+    } catch {}
+    return s;
+  };
+  const rewriteSrcset = (value) => String(value || '').split(',').map((part) => {
+    const trimmed = part.trim();
+    const spaceIdx = trimmed.search(/\\s/);
+    if (spaceIdx === -1) return localize(trimmed);
+    return localize(trimmed.slice(0, spaceIdx)) + trimmed.slice(spaceIdx);
+  }).join(', ');
+  const nativeSetAttribute = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function(name, value) {
+    const key = String(name || '').toLowerCase();
+    if (key === 'src' || key === 'href' || key === 'poster' || key === 'action' || key === 'data') value = localize(value);
+    else if (key === 'srcset' || key === 'imagesrcset') value = rewriteSrcset(value);
+    else if (key === 'style') value = rewriteCssText(value);
+    return nativeSetAttribute.call(this, name, value);
+  };
+  const patchUrlProperty = (proto, prop) => {
+    const desc = Object.getOwnPropertyDescriptor(proto, prop);
+    if (!desc || !desc.set || !desc.get) return;
+    Object.defineProperty(proto, prop, {
+      configurable: true,
+      enumerable: desc.enumerable,
+      get() { return desc.get.call(this); },
+      set(value) { return desc.set.call(this, localize(value)); },
+    });
+  };
+  patchUrlProperty(HTMLScriptElement.prototype, 'src');
+  patchUrlProperty(HTMLLinkElement.prototype, 'href');
+  patchUrlProperty(HTMLImageElement.prototype, 'src');
+  patchUrlProperty(HTMLImageElement.prototype, 'srcset');
+  if (window.HTMLSourceElement) {
+    patchUrlProperty(HTMLSourceElement.prototype, 'src');
+    patchUrlProperty(HTMLSourceElement.prototype, 'srcset');
+  }
+  if (window.HTMLMediaElement) patchUrlProperty(HTMLMediaElement.prototype, 'src');
+  if (window.HTMLVideoElement) patchUrlProperty(HTMLVideoElement.prototype, 'poster');
+  if (window.HTMLIFrameElement) patchUrlProperty(HTMLIFrameElement.prototype, 'src');
+  if (window.HTMLObjectElement) patchUrlProperty(HTMLObjectElement.prototype, 'data');
+  if (window.HTMLEmbedElement) patchUrlProperty(HTMLEmbedElement.prototype, 'src');
+  if (window.HTMLFormElement) patchUrlProperty(HTMLFormElement.prototype, 'action');
+
+  function rewriteCssText(value) {
+    return String(value || '').replace(/url\\(\\s*(['"]?)([^'")\\s]+)\\1\\s*\\)/g, (match, quote, url) => {
+      const next = localize(url);
+      return next === url ? match : 'url(' + quote + next + quote + ')';
+    });
+  }
+
+  if (window.CSSStyleDeclaration) {
+    const nativeSetProperty = CSSStyleDeclaration.prototype.setProperty;
+    CSSStyleDeclaration.prototype.setProperty = function(name, value, priority) {
+      return nativeSetProperty.call(this, name, rewriteCssText(value), priority);
+    };
+    const bgDesc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'backgroundImage');
+    if (bgDesc && bgDesc.set && bgDesc.get) {
+      Object.defineProperty(CSSStyleDeclaration.prototype, 'backgroundImage', {
+        configurable: true,
+        enumerable: bgDesc.enumerable,
+        get() { return bgDesc.get.call(this); },
+        set(value) { return bgDesc.set.call(this, rewriteCssText(value)); },
+      });
+    }
+  }
+  if (window.CSSStyleSheet) {
+    const nativeInsertRule = CSSStyleSheet.prototype.insertRule;
+    CSSStyleSheet.prototype.insertRule = function(rule, index) {
+      return nativeInsertRule.call(this, rewriteCssText(rule), index);
+    };
+  }
+})();
+</script>`;
+}
+
+async function previewOutDirFromReferer(req) {
+  const raw = String(req.headers.referer || '');
+  if (!raw) return '';
+  try {
+    const ref = new URL(raw);
+    if (ref.pathname.startsWith('/share/')) {
+      const shareId = ref.pathname.slice(7).split('/')[0].replace(/[^a-z0-9]/gi, '');
+      const share = shareId ? await getShare(shareId) : null;
+      return share?.out_dir || '';
+    }
+    if (ref.pathname === '/api/page' || ref.pathname === '/api/asset') return ref.searchParams.get('outDir') || '';
+  } catch {}
+  return '';
+}
+
+async function rewritePreviewAssetUrls(html, outDir) {
+  const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
+  let out = String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
+  if (!out.includes('data-clonyfy-preview-replay')) {
+    const { map, targetOrigin } = await buildPreviewAssetContext(outDir);
+    if (targetOrigin) {
+      out = out
+        .replace(/([("'=\s,])\/_next\/image\?/g, `$1${targetOrigin}/_next/image?`)
+        .replace(/([("'=\s,])\/media\//g, `$1${targetOrigin}/_next/static/media/`);
+    }
+    const patch = previewReplayPatch(map, targetOrigin);
+    if (out.includes('<head>')) out = out.replace('<head>', `<head>${patch}`);
+    else if (out.includes('<head ')) out = out.replace(/(<head[^>]*>)/, `$1${patch}`);
+    else out = patch + out;
+  }
+  return out;
 }
 
 function safeJsonParse(str, fallback = []) {
@@ -783,6 +1257,117 @@ function htmlEsc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[ch]));
+}
+
+function shareRouteFromPath(pathname, shareId, search = '') {
+  let rest = pathname.slice(`/share/${shareId}`.length) || '/';
+  try { rest = decodeURIComponent(rest); } catch {}
+  rest = rest.replace(/\/+/g, '/');
+  const route = rest.startsWith('/') ? rest : `/${rest}`;
+  return search && search !== '?' ? `${route}${search}` : route;
+}
+
+function shareRouteCandidates(route) {
+  const clean = route.split('#')[0].split('?')[0] || '/';
+  const noSlash = clean.replace(/\/$/, '') || '/';
+  const query = route.includes('?') ? route.slice(route.indexOf('?')) : '';
+  const candidates = [route, clean, noSlash];
+  if (query && clean !== '/') candidates.push(`${clean}${query}`, `${noSlash}${query}`);
+  if (clean.endsWith('.html')) candidates.push(clean.slice(0, -5) || '/');
+  else candidates.push(`${noSlash}.html`);
+  candidates.push(`${noSlash}/index`, `${noSlash}/index.html`);
+  return [...new Set(candidates)];
+}
+
+function resolveSharedRoute(map, requestedRoute, defaultRoute = '/') {
+  for (const candidate of shareRouteCandidates(requestedRoute)) {
+    if (map[candidate]) return { route: candidate, filename: map[candidate] };
+  }
+  if (map[defaultRoute]) return { route: defaultRoute, filename: map[defaultRoute] };
+  if (map['/']) return { route: '/', filename: map['/'] };
+  return { route: requestedRoute, filename: null };
+}
+
+function sharedNavigationPatch(shareId, targetOrigin = '') {
+  const shareBase = `/share/${shareId}`;
+  return `<script data-clonyfy-share-nav>
+(() => {
+  const shareBase = ${JSON.stringify(shareBase)};
+  const targetOrigin = ${JSON.stringify(String(targetOrigin || '').replace(/\/$/, ''))};
+  const sameShare = (url) => url.origin === location.origin && url.pathname.startsWith(shareBase);
+  const shareUrl = (value) => {
+    if (!value || /^#/.test(String(value))) return value;
+    try {
+      const url = new URL(value, location.href);
+      if (sameShare(url) || url.pathname.startsWith('/api/') || url.pathname.startsWith('/_assets/')) return value;
+      if (url.origin === location.origin || (targetOrigin && url.origin === targetOrigin)) {
+        return shareBase + (url.pathname === '/' ? '/' : url.pathname) + url.search + url.hash;
+      }
+    } catch {}
+    return value;
+  };
+  document.addEventListener('click', (event) => {
+    const a = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+    if (!a || a.target || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const next = shareUrl(a.getAttribute('href'));
+    if (next && next !== a.getAttribute('href')) {
+      event.preventDefault();
+      location.href = next;
+    }
+  }, true);
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!form || !form.getAttribute) return;
+    const next = shareUrl(form.getAttribute('action') || location.href);
+    if (next && next !== form.getAttribute('action')) form.setAttribute('action', next);
+  }, true);
+  for (const name of ['pushState', 'replaceState']) {
+    const native = history[name];
+    history[name] = function(state, title, url) {
+      if (url != null) url = shareUrl(url);
+      return native.call(this, state, title, url);
+    };
+  }
+})();
+</script>`;
+}
+
+function injectSharedNavigationPatch(html, shareId, targetOrigin) {
+  if (String(html).includes('data-clonyfy-share-nav')) return html;
+  const patch = sharedNavigationPatch(shareId, targetOrigin);
+  if (html.includes('</body>')) return html.replace('</body>', `${patch}</body>`);
+  return html + patch;
+}
+
+function rewriteSharedNavigationUrls(html, shareId, targetOrigin = '') {
+  const shareBase = `/share/${shareId}`;
+  const cleanTargetOrigin = String(targetOrigin || '').replace(/\/$/, '');
+  const rewrite = (raw) => {
+    if (!raw) return raw;
+    if (/^#/i.test(raw)) return raw;
+    if (/^(?:mailto|tel|sms|javascript|data|blob):/i.test(raw)) return raw;
+    if (raw.startsWith('/api/') || raw.startsWith('/_assets/') || raw.startsWith('/share/')) return raw;
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)) {
+      try {
+        const u = new URL(raw, cleanTargetOrigin || undefined);
+        if (cleanTargetOrigin && u.origin === cleanTargetOrigin) return `${shareBase}${u.pathname}${u.search}${u.hash}`;
+      } catch {}
+      return raw;
+    }
+
+    if (raw === '/') return `${shareBase}/`;
+    if (raw.startsWith('/#')) return `${shareBase}/${raw.slice(1)}`;
+    if (raw.startsWith('/')) return `${shareBase}${raw}`;
+    return `${shareBase}/${raw.replace(/^\.?\//, '')}`;
+  };
+  const rewritten = String(html).replace(/\b(href|action)=("([^"]*)"|'([^']*)')/gi, (match, attr, quoted, dbl, sgl) => {
+    const value = dbl ?? sgl ?? '';
+    const next = rewrite(value);
+    if (next === value) return match;
+    const quote = quoted.startsWith("'") ? "'" : '"';
+    return `${attr}=${quote}${next}${quote}`;
+  });
+  return injectSharedNavigationPatch(rewritten, shareId, cleanTargetOrigin);
 }
 
 function routeFilename(route) {
@@ -856,14 +1441,25 @@ function readRawBody(req, limitBytes = 2_000_000) {
 
 function extensionForAsset(filename, mimeType) {
   const ext = String(filename || '').match(/\.[a-z0-9]{1,8}$/i)?.[0];
-  if (ext) return ext.toLowerCase();
+  const safeExts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.css', '.woff', '.woff2', '.ttf', '.mp4', '.webm', '.avif']);
+  if (ext && safeExts.has(ext.toLowerCase())) return ext.toLowerCase();
   const mime = String(mimeType || '').toLowerCase();
   if (mime.includes('png')) return '.png';
   if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg';
   if (mime.includes('webp')) return '.webp';
   if (mime.includes('gif')) return '.gif';
   if (mime.includes('svg')) return '.svg';
+  if (mime.includes('css')) return '.css';
+  if (mime.includes('woff2')) return '.woff2';
+  if (mime.includes('woff')) return '.woff';
+  if (mime.includes('mp4')) return '.mp4';
+  if (mime.includes('webm')) return '.webm';
+  if (mime.includes('avif')) return '.avif';
   return '.bin';
+}
+
+function isAllowedImportedAssetMime(mimeType) {
+  return /^(image\/(png|jpeg|webp|gif|svg\+xml|avif)|text\/css|font\/(woff|woff2|ttf)|video\/(mp4|webm))$/i.test(String(mimeType || ''));
 }
 
 let _outputsCache = null;
@@ -896,7 +1492,7 @@ function sharePasswordFormHtml(shareId, error) {
 
 function userPublic(u) {
   const plan = normalizePlan(u.plan);
-  const limits = getPlanLimits(plan);
+  const limits = getEffectivePlanLimits(plan);
   return {
     id: u.id, name: u.name, email: u.email,
     plan,
@@ -986,9 +1582,82 @@ function runProcess(file, args, opts = {}) {
   });
 }
 
+function routeToStaticPath(route) {
+  const cleanRoute = String(route || '/').split('?')[0].split('#')[0];
+  if (cleanRoute === '/' || !cleanRoute.replace(/\//g, '')) return 'index.html';
+  const parts = cleanRoute
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .filter(part => part !== '.' && part !== '..')
+    .map(part => part.replace(/[<>:"\\|?*\x00-\x1F]/g, '-'))
+    .filter(Boolean);
+  const last = parts[parts.length - 1] || '';
+  if (/\.[a-z0-9]{1,8}$/i.test(last)) return join(...parts);
+  return join(...parts, 'index.html');
+}
+
+function copyDirRecursive(src, dest) {
+  if (!existsSync(src)) return;
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
+    else if (entry.isFile()) copyFileSync(srcPath, destPath);
+  }
+}
+
+async function materializeStaticWebsite(outDir) {
+  const materialized = await materializeCloneOutput(outDir);
+  const siteDir = join(OUTPUT_DIR, `__static_${randomUUID().slice(0, 8)}`);
+  mkdirSync(siteDir, { recursive: true });
+  try {
+    const routeMapPath = join(materialized.dir, 'route-map.json');
+    const capturedPagesDir = join(materialized.dir, 'captured-pages');
+    const routeMap = existsSync(routeMapPath) ? JSON.parse(readFileSync(routeMapPath, 'utf8')) : null;
+    if (routeMap && existsSync(capturedPagesDir)) {
+      for (const [route, filename] of Object.entries(routeMap)) {
+        let cleanFilename;
+        try { cleanFilename = normalizeCloneRelPath(join('captured-pages', String(filename)), ['captured-pages']).slice('captured-pages/'.length); }
+        catch { continue; }
+        const srcPath = join(capturedPagesDir, cleanFilename);
+        if (!existsSync(srcPath)) continue;
+        const destPath = join(siteDir, routeToStaticPath(route));
+        if (!isInsideDir(siteDir, destPath)) continue;
+        mkdirSync(dirname(destPath), { recursive: true });
+        copyFileSync(srcPath, destPath);
+      }
+    } else if (existsSync(capturedPagesDir)) {
+      for (const file of readdirSync(capturedPagesDir)) {
+        if (!file.endsWith('.html') || file.includes('..')) continue;
+        const destName = file === '__root__.html' ? 'index.html' : file;
+        copyFileSync(join(capturedPagesDir, file), join(siteDir, destName));
+      }
+    }
+    copyDirRecursive(join(materialized.dir, 'public', '_assets'), join(siteDir, '_assets'));
+    if (!existsSync(join(siteDir, 'index.html'))) {
+      const firstHtml = readdirSync(siteDir, { recursive: true }).find(name => String(name).endsWith('.html'));
+      if (firstHtml) copyFileSync(join(siteDir, String(firstHtml)), join(siteDir, 'index.html'));
+    }
+    return {
+      dir: siteDir,
+      cleanup: () => {
+        try { materialized.cleanup(); } catch {}
+        try { rmSync(siteDir, { recursive: true, force: true }); } catch {}
+      },
+    };
+  } catch (err) {
+    try { materialized.cleanup(); } catch {}
+    try { rmSync(siteDir, { recursive: true, force: true }); } catch {}
+    throw err;
+  }
+}
+
 async function buildOutputZip(outDir) {
   if (!isInsideOutputDir(outDir)) throw new Error('Invalid output folder');
-  const materialized = await materializeCloneOutput(outDir);
+  const materialized = await materializeStaticWebsite(outDir);
   const zipName = `${outDir.split(/[\\/]/).pop()}.zip`;
   const zipPath = join(OUTPUT_DIR, zipName);
   try { rmSync(zipPath, { force: true }); } catch {}
@@ -1120,6 +1789,38 @@ function isAllowedOrigin(origin) {
   return false;
 }
 
+function contentSecurityPolicyForPath(pathname) {
+  const isPreviewSurface = pathname === '/api/page' || pathname.startsWith('/share/') || pathname === '/api/asset' || pathname.startsWith('/_assets/');
+  if (isPreviewSurface) {
+    return [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:",
+      "style-src 'self' 'unsafe-inline' fonts.googleapis.com https:",
+      "font-src 'self' fonts.gstatic.com data: https:",
+      "img-src 'self' data: blob: https:",
+      "connect-src 'self' https: wss:",
+      "frame-src 'self' https: blob: data: about:",
+      "worker-src 'self' blob:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ');
+  }
+  return [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.affonso.io",
+    "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
+    "font-src 'self' fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https: wss:",
+    "frame-src 'self'",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+}
+
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const ip = req.socket?.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0] || 'unknown';
@@ -1141,20 +1842,7 @@ async function handleRequest(req, res) {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  // Content-Security-Policy — blocks inline data: URI scripts, rogue iframes, etc.
-  // unsafe-inline is required because the HTML files use inline <script> and <style>.
-  res.setHeader('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' js.stripe.com",
-    "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
-    "font-src 'self' fonts.gstatic.com data:",
-    "img-src 'self' data: blob: https:",
-    "connect-src 'self' api.stripe.com",
-    "frame-src js.stripe.com",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join('; '));
+  res.setHeader('Content-Security-Policy', contentSecurityPolicyForPath(url.pathname));
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   // Static UI files
@@ -1164,13 +1852,38 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/app') {
     return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
   }
+  if (req.method === 'GET' && url.pathname.startsWith('/media/')) {
+    const outDir = await previewOutDirFromReferer(req);
+    if (outDir) {
+      const { map, targetOrigin } = await buildPreviewAssetContext(outDir);
+      const nextMediaPath = '/_next/static' + url.pathname;
+      const mapped = map[nextMediaPath + url.search] || map[nextMediaPath];
+      if (mapped) {
+        res.writeHead(302, { Location: mapped, 'Cache-Control': 'public, max-age=3600' });
+        res.end();
+        return;
+      }
+      if (targetOrigin) {
+        res.writeHead(302, { Location: targetOrigin + nextMediaPath + url.search, 'Cache-Control': 'public, max-age=3600' });
+        res.end();
+        return;
+      }
+    }
+  }
   const staticExts = { '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml' };
   const ext = url.pathname.match(/\.\w+$/)?.[0];
   if (ext && staticExts[ext] && !url.pathname.startsWith('/_assets/')) {
-    return serveFile(res, join(__dirname, 'public', url.pathname.slice(1)), staticExts[ext], 60);
+    let staticRel;
+    try { staticRel = normalizeCloneRelPath(url.pathname.slice(1)); }
+    catch { return json(res, { error: 'Invalid path' }, 400); }
+    const staticPath = join(__dirname, 'public', staticRel);
+    if (!isInsideDir(join(__dirname, 'public'), staticPath)) return json(res, { error: 'Invalid path' }, 400);
+    return serveFile(res, staticPath, staticExts[ext], 60);
   }
   if (req.method === 'GET' && url.pathname.startsWith('/_assets/')) {
-    const relPath = url.pathname.replace(/^\//, '');
+    let relPath;
+    try { relPath = normalizeCloneRelPath(url.pathname.replace(/^\//, ''), ['_assets']); }
+    catch { return json(res, { error: 'Invalid asset' }, 400); }
     const mimeMap = {
       '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ico': 'image/x-icon',
       '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
@@ -1191,13 +1904,23 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/asset') {
     const assetUser = await getSessionUser(req);
     const outDir = url.searchParams.get('outDir') || '';
-    const relPath = String(url.searchParams.get('path') || '').replace(/^\/+/, '');
-    if (!isInsideOutputDir(outDir) || !relPath.startsWith('_assets/')) return json(res, { error: 'Invalid asset' }, 400);
-    const readable = await canReadOutDir(assetUser, outDir) || !!(await getCloneByOutDir(outDir).catch(() => null));
+    let relPath;
+    try { relPath = normalizeCloneRelPath(url.searchParams.get('path') || '', ['_assets']); }
+    catch { return json(res, { error: 'Invalid asset' }, 400); }
+    const assetToken = String(url.searchParams.get('assetToken') || '');
+    if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid asset' }, 400);
+    const readable = await canReadOutDir(assetUser, outDir) || assetToken === cloneAssetToken(outDir);
     if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
     const data = await readCloneFile(outDir, join('public', relPath));
     if (!data) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': contentTypeForPath(relPath), 'Cache-Control': 'public, max-age=3600' });
+    const contentType = contentTypeForPath(relPath);
+    if (contentType.startsWith('text/css')) {
+      const css = await rewritePreviewCssAsset(data.toString('utf8'), outDir, relPath).catch(() => data.toString('utf8'));
+      res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=3600' });
+      res.end(css);
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=3600' });
     res.end(data);
     return;
   }
@@ -1205,14 +1928,16 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/outputs') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
-    const userClones = await getClonesByUser(user.id);
+    const fast = url.searchParams.get('fast') === '1';
+    const limit = Math.max(1, Math.min(500, parseInt(url.searchParams.get('limit') || (fast ? '100' : '500'), 10) || (fast ? 100 : 500)));
+    const userClones = await getClonesByUser(user.id, limit);
     const labelByDir = Object.fromEntries(userClones.filter(c => c.out_dir && c.label).map(c => [c.out_dir, c.label]));
-    const localByDir = Object.fromEntries(getOutputs().map(o => [o.dir, o]));
+    const localByDir = fast ? {} : Object.fromEntries(getOutputs().map(o => [o.dir, o]));
     const normalized = [];
     for (const c of userClones.filter(c => c.out_dir)) {
       let status = c.status;
       let pages = c.pages;
-      if (status === 'done') {
+      if (status === 'done' && !fast) {
         const readable = await verifyCloneReadable(c.out_dir).catch(err => ({ ok: false, error: err?.message || String(err) }));
         if (!readable.ok) {
           status = 'error';
@@ -1251,6 +1976,7 @@ async function handleRequest(req, res) {
     if (!checkRateLimit(`reg:${ip}`, 5, 3600000)) return json(res, { error: 'Too many accounts created from this address. Try again later.' }, 429);
     const body = await readJsonBody(req);
     const { name, email, password } = body;
+    const referralCode = cleanReferralCode(body.referral || body.via || '');
     if (!name || !email || !password) return json(res, { error: 'Name, email and password are required' }, 400);
     if (password.length < 8) return json(res, { error: 'Password must be at least 8 characters' }, 400);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, { error: 'Invalid email address' }, 400);
@@ -1263,6 +1989,20 @@ async function handleRequest(req, res) {
     };
     await insertUser(user);
     await updateUser(user.id, { email_verified: 1 });
+    await saveAffiliateSlug(affiliateSlug(user), user.id);
+    if (referralCode) {
+      const ownerId = await getAffiliateOwnerBySlug(referralCode);
+      if (ownerId && ownerId !== user.id) {
+        await addAffiliateReferral(ownerId, {
+          userId: user.id,
+          name: user.name,
+          email: user.email,
+          status: 'Signed up',
+          source: referralCode,
+          createdAt: user.createdAt,
+        });
+      }
+    }
     const token = randomUUID();
     await insertSession({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + 30*24*60*60*1000, impersonatedBy: null });
     audit(user.id, user.name, 'register', null, ip);
@@ -1277,7 +2017,7 @@ async function handleRequest(req, res) {
     const user = await getUserByEmail(email.toLowerCase().trim());
     const ok = user ? await verifyPw(password, user) : false;
     if (!ok) return json(res, { error: 'Invalid email or password' }, 401);
-    if (user.blocked) return json(res, { error: 'Your account has been suspended. Contact support.' }, 403);
+    if (user.blocked) return await blockedUserResponse(res, user);
     if (bcrypt && user.hash && !user.hash.startsWith('$2b$') && !user.hash.startsWith('$2a$')) {
       await updateUser(user.id, { hash: await bcrypt.hash(password, 12), salt: null });
     }
@@ -1291,6 +2031,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/auth/me') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     return json(res, { user: userPublic(user) });
   }
 
@@ -1340,7 +2081,7 @@ async function handleRequest(req, res) {
       writeAuthPage(outDir, 'register');
       const now = new Date().toISOString();
       writeFileSync(join(outDir, 'manifest.json'), JSON.stringify({ targetOrigin: `builder:${safeId}`, capturedAt: now, pages: [] }, null, 2), 'utf8');
-      await insertClone({ id, userId: templateUser.id, userName: templateUser.name, url: `builder:${safeId}`, outDir, status: 'completed', pages: 1, assets: 0, apiRoutes: 0, startedAt: now, completedAt: now });
+      await insertClone({ id, userId: templateUser.id, userName: templateUser.name, url: `builder:${safeId}`, outDir, status: 'done', pages: 1, assets: 0, apiRoutes: 0, startedAt: now, completedAt: now });
       try { await persistCloneOutput(outDir); } catch {}
       invalidateOutputsCache();
       json(res, { ok: true, outDir });
@@ -1355,7 +2096,7 @@ async function handleRequest(req, res) {
     if (!await canReadOutDir(pagesUser, outDir) && !await canReadCloneRecord(pagesUser, outDir)) {
       return json(res, { error: pagesUser ? 'Not found' : 'Not authenticated' }, pagesUser ? 404 : 401);
     }
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) return json(res, []);
     return json(res, Object.keys(map));
   }
@@ -1369,14 +2110,16 @@ async function handleRequest(req, res) {
       res.writeHead(404); res.end('Not found'); return;
     }
     const route = url.searchParams.get('route') || '/';
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) { res.writeHead(404); res.end('No clone loaded'); return; }
     const filename = map[route] || map['/'];
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
-    const data = await readCloneFile(outDir, join('captured-pages', filename));
+    let data;
+    try { data = await readCloneFile(outDir, join('captured-pages', filename)); }
+    catch { return json(res, { error: 'Invalid page path' }, 400); }
     if (!data) { res.writeHead(404); res.end('File missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(rewritePreviewAssetUrls(data.toString('utf8'), outDir));
+    res.end(await rewritePreviewAssetUrls(data.toString('utf8'), outDir));
     return;
   }
 
@@ -1387,7 +2130,7 @@ async function handleRequest(req, res) {
     // 50MB limit — cloned pages with inlined assets can be several MB
     readJsonBody(req, 50_000_000).then(async ({ outDir, route, html }) => {
       if (!await canUseCloneOutput(saveUser, outDir)) return json(res, { error: 'Not found' }, 404);
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const filename = map[route || '/'];
       if (!filename) return json(res, { error: 'Route not found: ' + route }, 404);
@@ -1408,7 +2151,7 @@ async function handleRequest(req, res) {
       if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
       if (!await canUseCloneOutput(authPageUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const pageKind = kind === 'register' ? 'register' : 'login';
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'No clone loaded' }, 404);
       const route = pageKind === 'register' ? '/register' : '/login';
       const filename = routeFilename(route);
@@ -1430,6 +2173,7 @@ async function handleRequest(req, res) {
       if (!await canUseCloneOutput(assetUser, outDir)) return json(res, { error: 'Not found' }, 404);
       const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
       if (!match) return json(res, { error: 'Invalid file data' }, 400);
+      if (!isAllowedImportedAssetMime(match[1])) return json(res, { error: 'Unsupported asset type' }, 400);
       const bytes = Buffer.from(match[2], 'base64');
       if (bytes.length > 50 * 1024 * 1024) return json(res, { error: 'File is larger than 50MB' }, 400);
       const assetsDir = join(outDir, 'public', '_assets');
@@ -1448,14 +2192,18 @@ async function handleRequest(req, res) {
     const statusUser = await getSessionUser(req);
     const statusUserId = statusUser ? statusUser.id : null;
     if (job.userId !== statusUserId) return json(res, { error: 'not found' }, 404);
-    return json(res, job);
+    const logsFrom = Math.max(0, parseInt(url.searchParams.get('logsFrom') || '0', 10) || 0);
+    if (logsFrom > 0 && Array.isArray(job.logs)) {
+      return json(res, { ...job, logs: job.logs.slice(logsFrom), logOffset: logsFrom });
+    }
+    return json(res, { ...job, logOffset: 0 });
   }
 
   // ── Clone ──────────────────────────────────────────────────────────────────
 
   if (req.method === 'POST' && url.pathname === '/api/clone') {
     const cloneUser = await getSessionUser(req);
-    if (cloneUser && cloneUser.blocked) return json(res, { error: 'Your account has been suspended. Contact support.' }, 403);
+    if (cloneUser && cloneUser.blocked) return await blockedUserResponse(res, cloneUser);
 
     let body = '';
     req.on('data', (c) => (body += c));
@@ -1467,10 +2215,11 @@ async function handleRequest(req, res) {
       const targetUrl = target.href;
       const { depth = '3', ignoreRobots = false } = parsed;
       let { maxPages = '20' } = parsed;
+      const requestedMaxPages = parseInt(maxPages, 10) || 20;
 
       if (cloneUser) {
         const plan = normalizePlan(cloneUser.plan);
-        const limits = getPlanLimits(plan);
+        const limits = getEffectivePlanLimits(plan);
         if (limits.clonesPerMonth !== Infinity) {
           const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
           const used = await getCloneCountThisMonth(cloneUser.id, monthStart.toISOString());
@@ -1484,7 +2233,7 @@ async function handleRequest(req, res) {
           return json(res, { error: `Too many clone requests. Please wait before starting another.` }, 429);
         }
         // Cap concurrent running jobs per user
-        const userRunning = [...jobs.values()].filter(j => j.userId === cloneUser.id && j.status === 'running').length;
+        const userRunning = [...jobs.values()].filter(j => j.userId === cloneUser.id && isActiveJob(j)).length;
         if (userRunning >= 2) {
           return json(res, { error: 'You already have 2 clones running. Wait for one to finish before starting another.' }, 429);
         }
@@ -1492,11 +2241,11 @@ async function handleRequest(req, res) {
       } else {
         if (!checkRateLimit(`clone_anon:${ip}`, 2, 86400000)) return json(res, { error: 'Rate limit exceeded. Sign in for more clones.' }, 429);
         // Cap concurrent running jobs per IP for anonymous users
-        const anonRunning = [...jobs.values()].filter(j => j.userId === null && j.status === 'running').length;
+        const anonRunning = [...jobs.values()].filter(j => j.userId === null && isActiveJob(j)).length;
         if (anonRunning >= 1) {
           return json(res, { error: 'An anonymous clone is already running from this server. Sign in for concurrent clones.' }, 429);
         }
-        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, PLAN_LIMITS.free.maxPages));
+        maxPages = String(Math.min(parseInt(maxPages, 10) || 20, getEffectivePlanLimits('free').maxPages));
       }
       maxPages = String(Math.max(1, parseInt(maxPages, 10) || 1));
 
@@ -1513,6 +2262,9 @@ async function handleRequest(req, res) {
         userId: cloneUser ? cloneUser.id : null,
         userName: cloneUser ? cloneUser.name : 'Anonymous',
       };
+      if (IS_VERCEL && requestedMaxPages > job.maxPages) {
+        job.logs.push(`[WARN] Page limit capped to ${job.maxPages} on serverless deployment. Set CLONYFY_SERVERLESS_MAX_PAGES or run a dedicated worker for larger clones.`);
+      }
       jobs.set(id, job);
       persistJob(job);
       try {
@@ -1532,22 +2284,7 @@ async function handleRequest(req, res) {
       const args = ['clone', targetUrl, '--out', outDir, '--max-pages', String(maxPages), '--depth', String(depth), '--concurrency', '1'];
       if (ignoreRobots) args.push('--ignore-robots');
 
-      const proc = spawn(process.execPath, [CLI, ...args], {
-        cwd: __dirname,
-        env: {
-          ...process.env,
-          ...(IS_VERCEL ? { CLONYFY_SERVERLESS: '1' } : {}),
-        },
-      });
-      proc.stdout.on('data', (c) => {
-        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));
-        persistJob(job);
-      });
-      proc.stderr.on('data', (c) => {
-        c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`));
-        persistJob(job);
-      });
-      proc.on('close', async (code, signal) => {
+      const finalizeCloneJob = async (code, signal = null) => {
         if (code !== 0) {
           job.logs.push(`[ERROR] Clone process exited with code ${code ?? 'null'}${signal ? ` signal ${signal}` : ''}`);
         }
@@ -1577,6 +2314,9 @@ async function handleRequest(req, res) {
           try {
             await persistCloneOutput(job.outDir);
             cloneReadable = await verifyCloneReadable(job.outDir);
+            if ((job.pages ?? 0) <= 0) {
+              cloneReadable = { ok: false, error: 'Clone captured 0 pages' };
+            }
             if (!cloneReadable.ok) {
               job.logs.push(`[ERROR] Clone output is not ready for preview: ${cloneReadable.error}`);
             }
@@ -1595,11 +2335,17 @@ async function handleRequest(req, res) {
           });
           cloneRecordSaved = true;
         } catch (dbErr) {
-          job.logs.push(`[ERROR] Could not save clone record: ${dbErr?.message || dbErr}`);
+          job.logs.push(`[WARN] Could not save clone record: ${dbErr?.message || dbErr}`);
         }
-        if (code === 0) job.status = cloneRecordSaved && cloneReadable?.ok ? 'done' : 'error';
+        const cloneSucceeded = code === 0 && cloneReadable?.ok;
+        if (code === 0) {
+          job.status = cloneSucceeded ? 'done' : 'error';
+          if (!cloneRecordSaved && cloneReadable?.ok) {
+            job.logs.push('[WARN] Clone finished, but history persistence failed. Preview and export may still work from local output.');
+          }
+        }
         persistJob(job);
-        if (code !== 0) {
+        if (!cloneSucceeded) {
           try {
             const errorLines = job.logs.filter(l => l.startsWith('[ERROR]') || l.toLowerCase().includes('error'));
             await insertError({
@@ -1612,8 +2358,8 @@ async function handleRequest(req, res) {
           } catch {}
         }
         if (cloneUser) {
-          audit(cloneUser.id, cloneUser.name, code === 0 ? 'clone_complete' : 'clone_error', `${targetUrl} pages=${job.pages}`, ip);
-          if (code === 0) {
+          audit(cloneUser.id, cloneUser.name, cloneSucceeded ? 'clone_complete' : 'clone_error', `${targetUrl} pages=${job.pages}`, ip);
+          if (cloneSucceeded) {
             checkUsageAlert(cloneUser.id);
             const s = getCachedSettings();
             const appUrl = (s.app_url || `http://localhost:${PORT}`).replace(/\/$/, '');
@@ -1628,7 +2374,53 @@ async function handleRequest(req, res) {
             ).catch(() => {});
           }
         }
-      });
+      };
+
+      if (USE_INLINE_CLONE) {
+        try {
+          const result = await runClone({
+            url: targetUrl,
+            out: outDir,
+            maxPages: parseInt(maxPages, 10),
+            depth: parseInt(depth, 10) || 3,
+            concurrency: 1,
+            ignoreRobots: !!ignoreRobots,
+            verbose: false,
+          }, {
+            onLog: (line) => {
+              if (line) job.logs.push(line);
+              persistJob(job);
+            },
+          });
+          job.pages = result.pages;
+          job.assets = result.assets;
+          job.apiRoutes = result.apiRoutes;
+          await finalizeCloneJob(0);
+        } catch (err) {
+          job.logs.push(`[ERROR] ${err?.message || err}`);
+          await finalizeCloneJob(1);
+        }
+      } else {
+        const proc = spawn(process.execPath, [CLI, ...args], {
+          cwd: __dirname,
+          env: process.env,
+        });
+        proc.stdout.on('data', (c) => {
+          c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(l));
+          persistJob(job);
+        });
+        proc.stderr.on('data', (c) => {
+          c.toString().split('\n').filter(Boolean).forEach((l) => job.logs.push(`[ERROR] ${l}`));
+          persistJob(job);
+        });
+        proc.on('close', (code, signal) => {
+          finalizeCloneJob(code, signal).catch((err) => {
+            job.status = 'error';
+            job.logs.push(`[ERROR] Could not finalize clone: ${err?.message || err}`);
+            persistJob(job);
+          });
+        });
+      }
 
       return json(res, job);
     });
@@ -1664,7 +2456,7 @@ async function handleRequest(req, res) {
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(previewUser, outDir)) return json(res, { error: 'Not found' }, 404);
     if (IS_VERCEL) {
-      const map = await loadRouteMapAsync(outDir);
+      const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
       if (!map) return json(res, { error: 'Preview pages not found' }, 404);
       return json(res, {
         ok: true,
@@ -1881,7 +2673,7 @@ async function handleRequest(req, res) {
     const { outDir, route, password, expiresInDays } = await readJsonBody(req);
     if (!isInsideOutputDir(outDir)) return json(res, { error: 'Invalid output folder' }, 400);
     if (!await canUseCloneOutput(shareUser, outDir)) return json(res, { error: 'Not found' }, 404);
-    const map = await loadRouteMapAsync(outDir);
+    const map = await loadRouteMapAsync(outDir) || await inferRouteMapFromCapturedPages(outDir);
     if (!map) return json(res, { error: 'No clone found' }, 404);
     const shareId = randomUUID().replace(/-/g, '').slice(0, 14);
     let passwordHash = null, salt = null;
@@ -1922,14 +2714,22 @@ async function handleRequest(req, res) {
       const hash = createHash('sha256').update(share.salt + pw + SHARE_PASSWORD_PEPPER).digest('hex');
       if (hash !== share.password_hash) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.')); return; }
     }
-    const map = await loadRouteMapAsync(share.out_dir);
+    const map = await loadRouteMapAsync(share.out_dir) || await inferRouteMapFromCapturedPages(share.out_dir);
     if (!map) { res.writeHead(404); res.end('Clone no longer exists'); return; }
-    const filename = map[share.route] || map['/'];
+    const requestedRoute = shareRouteFromPath(url.pathname, shareId, url.search);
+    const defaultRoute = share.route || '/';
+    const resolved = resolveSharedRoute(map, requestedRoute, defaultRoute);
+    const filename = resolved.filename;
     if (!filename) { res.writeHead(404); res.end('Route not found'); return; }
-    const data = await readCloneFile(share.out_dir, join('captured-pages', filename));
+    let data;
+    try { data = await readCloneFile(share.out_dir, join('captured-pages', filename)); }
+    catch { return json(res, { error: 'Invalid page path' }, 400); }
     if (!data) { res.writeHead(404); res.end('Page file missing'); return; }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir));
+    const previewHtml = await rewritePreviewAssetUrls(data.toString('utf8'), share.out_dir);
+    const manifestData = await readCloneFile(share.out_dir, 'manifest.json').catch(() => null);
+    const manifest = manifestData ? safeJsonParse(manifestData.toString('utf8'), null) : null;
+    res.end(rewriteSharedNavigationUrls(previewHtml, shareId, manifest?.targetOrigin || ''));
     return;
   }
 
@@ -1940,11 +2740,9 @@ async function handleRequest(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/admin/auth') {
     if (!checkRateLimit(`admin_login:${ip}`, 5, 300000)) return json(res, { error: 'Too many attempts. Try again in 5 minutes.' }, 429);
     const { password } = await readJsonBody(req);
-    if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled — ADMIN_PASSWORD env var is not set on the server.' }, 503);
+    if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled because ADMIN_PASSWORD is missing on this server. Add it in your hosting environment variables, then redeploy/restart.' }, 503);
     if (!password || password !== ADMIN_PASSWORD) return json(res, { error: 'Wrong password' }, 401);
-    const token = randomUUID();
-    adminSessions.set(token, Date.now() + 8 * 3600 * 1000);
-    _persistAdminSessions();
+    const token = createAdminToken();
     return json(res, { token });
   }
 
@@ -1957,7 +2755,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/admin/stats') {
     if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
     const { totalUsers, blockedUsers, totalClones, totalErrors, pendingPayments, activePaidUsers, totalRevenue, monthRevenue } = await getAdminStats();
-    const activeNow = [...jobs.values()].filter(j => j.status === 'running').length;
+    const activeNow = [...jobs.values()].filter(isActiveJob).length;
     const mrr = activePaidUsers.reduce((s, u) => {
       const p = getPlanPrices(u.plan);
       return s + (u.billing_interval === 'annual' ? p.annual / 12 : p.monthly);
@@ -1985,6 +2783,7 @@ async function handleRequest(req, res) {
     const blockedFilter = statusFilter === 'blocked' ? true : statusFilter === 'active' ? false : null;
     const { users, total } = await getUsersPage({ search, plan: planFilter, blocked: blockedFilter, limit: PAGE_SIZE, offset: page * PAGE_SIZE });
     const clones = await getClonesByUserIds(users.map(u => u.id));
+    const blockReasons = await getUserBlockReasons(users.filter(u => u.blocked === 1).map(u => u.id));
     const cloneMap = {};
     for (const c of clones) {
       if (!cloneMap[c.user_id]) cloneMap[c.user_id] = [];
@@ -1997,7 +2796,7 @@ async function handleRequest(req, res) {
           id: u.id, name: u.name, email: u.email,
           plan: normalizePlan(u.plan), rawPlan: u.plan || 'free', planLabel: getPlanLabel(u.plan), planRenewsAt: u.plan_renews_at || null,
           billingInterval: u.billing_interval || 'monthly',
-          blocked: u.blocked === 1, createdAt: u.created_at,
+          blocked: u.blocked === 1, blockedReason: u.blocked_reason || blockReasons[u.id] || '', createdAt: u.created_at,
           cloneCount: uc.length,
           lastCloneAt: uc.length > 0 ? uc[0].started_at : null,
         };
@@ -2018,9 +2817,14 @@ async function handleRequest(req, res) {
     if (body.plan !== undefined) fields.plan = normalizePlan(body.plan);
     if (body.planRenewsAt !== undefined) fields.plan_renews_at = body.planRenewsAt;
     if (body.billingInterval !== undefined) fields.billing_interval = body.billingInterval;
-    if (body.blocked !== undefined) fields.blocked = body.blocked ? 1 : 0;
+    if (body.blocked !== undefined) {
+      fields.blocked = body.blocked ? 1 : 0;
+      fields.blocked_reason = body.blocked ? String(body.blockedReason || '').trim().slice(0, 500) : null;
+      await setUserBlockReason(userId, fields.blocked_reason || '');
+    }
     await updateUser(userId, fields);
     if (fields.blocked !== undefined) _invalidateUserSessions(userId);
+    if (fields.plan !== undefined || fields.plan_renews_at !== undefined || fields.billing_interval !== undefined) _invalidateUserSessions(userId);
     audit(null, 'admin', 'admin_update_user', `userId=${userId} ${JSON.stringify(fields)}`, ip);
     return json(res, { ok: true });
   }
@@ -2060,11 +2864,12 @@ async function handleRequest(req, res) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     const pageSize = 50;
     const running = [...jobs.values()]
-      .filter(j => j.status === 'running')
+      .filter(isActiveJob)
       .map(j => ({ id: j.id, user_id: j.userId, user_name: j.userName || 'Anonymous', url: j.url, status: j.status, pages: j.pages, assets: j.assets, started_at: j.startedAt, completed_at: null }));
+    const runningIds = new Set(running.map(j => j.id));
     const all = [
       ...running,
-      ...clones.map(c => ({ ...c, user_name: c.user_name || 'Deleted' })),
+      ...clones.filter(c => !runningIds.has(c.id)).map(c => ({ ...c, user_name: c.user_name || 'Deleted' })),
     ]
       .filter(c => !userFilter || c.user_id === userFilter)
       .filter(c => !statusFilter || c.status === statusFilter)
@@ -2128,6 +2933,12 @@ async function handleRequest(req, res) {
     return json(res, await getAllAnnouncements());
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/admin/contacts') {
+    if (!isAdmin(req)) return json(res, { error: 'Unauthorized' }, 401);
+    const limit = Math.max(1, Math.min(300, parseInt(url.searchParams.get('limit') || '100', 10) || 100));
+    return json(res, await getContactSubmissions(limit));
+  }
+
   // ── Payments ───────────────────────────────────────────────────────────────
 
   if (req.method === 'GET' && url.pathname === '/api/payments/settings') {
@@ -2144,10 +2955,114 @@ async function handleRequest(req, res) {
     });
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/public-config') {
+    const s = getCachedSettings();
+    const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
+    return json(res, {
+      affiliate_enabled: enabled,
+      affiliate_program_url: s.affiliate_program_url || 'https://affonso.io/',
+      affiliate_public_id: enabled ? (s.affiliate_public_id || DEFAULT_AFFONSO_PUBLIC_ID) : '',
+      affiliate_dashboard_enabled: enabled && !!(s.affiliate_api_key && s.affiliate_program_id),
+    });
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/affiliate/embed-token') {
+    const user = await getSessionUser(req);
+    if (!user) return json(res, { error: 'Sign in to open the affiliate dashboard.' }, 401);
+    if (!checkRateLimit(`affiliate_embed:${user.id}`, 10, 600000)) return json(res, { error: 'Too many requests.' }, 429);
+    const s = getCachedSettings();
+    const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
+    if (!enabled) return json(res, { error: 'Affiliate program is disabled.' }, 404);
+    if (!s.affiliate_api_key || !s.affiliate_program_id) {
+      return json(res, { ok: true, token: '', link: localReferralLink(req, user), configured: false });
+    }
+    try {
+      const embed = await createAffonsoEmbedToken(user, s);
+      if (!embed.token) return json(res, { error: 'Affonso did not return an embed token.' }, 502);
+      return json(res, { ok: true, token: embed.token, link: embed.link || localReferralLink(req, user) });
+    } catch (err) {
+      return json(res, { error: err.message || 'Affonso request failed. Check the API key and program ID.' }, 502);
+    }
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/affiliate/track') {
+    const body = await readJsonBody(req);
+    const referralCode = cleanReferralCode(body.referral || body.via || '');
+    if (!referralCode) return json(res, { ok: false, error: 'Missing referral code' }, 400);
+    if (!checkRateLimit(`affiliate_track:${ip}:${referralCode}`, 30, 3600000)) return json(res, { ok: true, throttled: true });
+    const ownerId = await getAffiliateOwnerBySlug(referralCode);
+    if (!ownerId) return json(res, { ok: true, tracked: false });
+    const visitorId = cleanReferralCode(body.visitorId || createHash('sha256').update(`${ip}:${referralCode}`).digest('hex').slice(0, 32));
+    await addAffiliateVisit(ownerId, {
+      visitorId,
+      source: referralCode,
+      path: String(body.path || '').slice(0, 200),
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 200),
+      createdAt: new Date().toISOString(),
+    });
+    return json(res, { ok: true, tracked: true });
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/affiliate/dashboard') {
+    const user = await getSessionUser(req);
+    if (!user) return json(res, { error: 'Sign in to view your affiliate dashboard.' }, 401);
+    if (!checkRateLimit(`affiliate_dashboard:${user.id}`, 20, 600000)) return json(res, { error: 'Too many requests.' }, 429);
+    const s = getCachedSettings();
+    const enabled = s.affiliate_enabled === true || s.affiliate_enabled === 'true';
+    if (!enabled) return json(res, { error: 'Affiliate program is disabled.' }, 404);
+    await saveAffiliateSlug(affiliateSlug(user), user.id).catch(() => {});
+    const localReferrals = await getAffiliateReferrals(user.id).catch(() => []);
+    const localVisits = await getAffiliateVisits(user.id).catch(() => []);
+    if (!s.affiliate_api_key || !s.affiliate_program_id) {
+      return json(res, {
+        ok: true,
+        configured: false,
+        needs: ['Affonso API Key', 'Affonso Program ID'],
+        data: {
+          link: localReferralLink(req, user),
+          referralLink: localReferralLink(req, user),
+          stats: { clicks: localVisits.length, referrals: localReferrals.length, conversions: 0, rewards: 0 },
+          referrals: localReferrals,
+          visits: localVisits,
+          rewards: [],
+        },
+        message: 'Your referral link is ready. Affonso reporting will appear here after the API key and program ID are connected in Admin Settings.',
+      });
+    }
+    try {
+      const embed = await createAffonsoEmbedToken(user, s);
+      if (!embed.token) return json(res, { error: 'Affonso did not return an embed token.' }, 502);
+      const data = await getAffonsoEmbedData(embed.token);
+      const link = data.link || data.referralLink || data.referral_link || data.partner?.referralLink || embed.link || localReferralLink(req, user);
+      const affonsoReferrals = Array.isArray(data.referrals) ? data.referrals : [];
+      return json(res, {
+        ok: true,
+        configured: true,
+        token: embed.token,
+        data: {
+          ...data,
+          link,
+          referralLink: link,
+          referrals: [...localReferrals, ...affonsoReferrals],
+          visits: localVisits,
+          stats: {
+            ...(data.stats || {}),
+            clicks: Math.max(Number(data.stats?.clicks || data.stats?.visits || 0), localVisits.length),
+            referrals: Math.max(Number(data.stats?.referrals || 0), localReferrals.length + affonsoReferrals.length),
+          },
+          partner: { ...(data.partner || embed.partner || {}), referralLink: link },
+        },
+      });
+    } catch (err) {
+      return json(res, { error: err.message || 'Affonso dashboard failed to load.' }, 502);
+    }
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/payments/plans') {
+    const limits = Object.fromEntries(Object.keys(PLAN_LIMITS).map(plan => [plan, getEffectivePlanLimits(plan)]));
     return json(res, {
       plans: PLAN_PRICES,
-      limits: PLAN_LIMITS,
+      limits,
       labels: PLAN_LABELS,
       aliases: PLAN_ALIASES,
     });
@@ -2229,8 +3144,7 @@ async function handleRequest(req, res) {
         const renewDate = new Date();
         if (interval === 'annual') renewDate.setFullYear(renewDate.getFullYear() + 1);
         else renewDate.setMonth(renewDate.getMonth() + 1);
-        const confirmedPlan = normalizePlan(payment.plan);
-        await updateUser(payment.user_id, { plan: confirmedPlan, plan_renews_at: renewDate.toISOString(), billing_interval: interval, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+        const confirmedPlan = await activatePaidPlanForUser(payment.user_id, { plan: payment.plan, interval, renewsAt: renewDate });
         const s = getCachedSettings();
         const appUrl = s.app_url || `http://localhost:${PORT}`;
         sendEmail(user.email, `Payment confirmed — ${getPlanLabel(confirmedPlan)} plan activated`,
@@ -2321,6 +3235,8 @@ async function handleRequest(req, res) {
       'btc', 'eth', 'usdt_trc20', 'paypal_email', 'paypal_me', 'app_note',
       'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'app_url',
       'support_email',
+      'affiliate_enabled', 'affiliate_program_url', 'affiliate_public_id',
+      'affiliate_program_id', 'affiliate_group_id', 'affiliate_api_key',
       'stripe_publishable_key',
       'stripe_price_starter_monthly', 'stripe_price_starter_annual',
       'stripe_price_popular_monthly', 'stripe_price_popular_annual',
@@ -2335,6 +3251,22 @@ async function handleRequest(req, res) {
     for (const k of plainKeys) {
       if (body[k] !== undefined && !isMaskedSecret(body[k])) {
         const value = String(body[k] || '').trim();
+        if (k === 'affiliate_enabled') {
+          current[k] = value === 'true' || value === '1' || value === 'yes' ? 'true' : 'false';
+          continue;
+        }
+        if (k === 'affiliate_program_url') {
+          const cleanUrl = normalizeAffiliateUrl(value);
+          if (cleanUrl === null) return json(res, { error: 'Affiliate program URL must be a valid http(s) URL.' }, 400);
+          current[k] = cleanUrl;
+          continue;
+        }
+        if (['affiliate_public_id', 'affiliate_program_id', 'affiliate_group_id'].includes(k)) {
+          const publicId = cleanAffiliatePublicId(value);
+          if (publicId === null) return json(res, { error: 'Affonso IDs can only contain letters, numbers, underscores, and dashes.' }, 400);
+          current[k] = publicId;
+          continue;
+        }
         const stripeError = validateStripeSetting(k, value);
         if (stripeError) return json(res, { error: stripeError }, 400);
         current[k] = value;
@@ -2369,6 +3301,7 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && url.pathname === '/dashboard') return serveFile(res, join(__dirname, 'public', 'dashboard.html'), 'text/html');
+  if (req.method === 'GET' && url.pathname === '/affiliate') return serveFile(res, join(__dirname, 'public', 'affiliate.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/reset-password') return serveFile(res, join(__dirname, 'public', 'reset-password.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/tos') return serveFile(res, join(__dirname, 'public', 'tos.html'), 'text/html');
   if (req.method === 'GET' && url.pathname === '/privacy') return serveFile(res, join(__dirname, 'public', 'privacy.html'), 'text/html');
@@ -2445,11 +3378,12 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/user/dashboard') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     const userClones = await getClonesByUser(user.id);
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
     const clonesThisMonth = userClones.filter(c => new Date(c.started_at) >= monthStart).length;
     const plan = normalizePlan(user.plan);
-    const limits = getPlanLimits(plan);
+    const limits = getEffectivePlanLimits(plan);
     const totalPages = userClones.reduce((s, c) => s + (c.pages || 0), 0);
     const totalAssets = userClones.reduce((s, c) => s + (c.assets || 0), 0);
     return json(res, {
@@ -2470,12 +3404,14 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/user/billing') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     return json(res, { payments: await getPaymentsByUser(user.id) });
   }
 
   if (req.method === 'PUT' && url.pathname === '/api/user/profile') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     const { name, password } = await readJsonBody(req);
     const fields = {};
     if (name !== undefined) {
@@ -2531,6 +3467,7 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/api/user/export') {
     const user = await getSessionUser(req);
     if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    if (user.blocked) return await blockedUserResponse(res, user);
     const clones = await getClonesByUser(user.id);
     const payments = await getPaymentsByUser(user.id);
     const exportData = {
@@ -2692,7 +3629,12 @@ async function handleRequest(req, res) {
         audit(newId, googleName, 'register_google', null, ip);
       }
 
-      if (dbUser.blocked) { res.writeHead(302, { Location: `${appUrl}/app?oauth_error=blocked` }); res.end(); return; }
+      if (dbUser.blocked) {
+        const reason = encodeURIComponent(await userBlockedReason(dbUser));
+        res.writeHead(302, { Location: `${appUrl}/app?oauth_error=blocked&ban_reason=${reason}` });
+        res.end();
+        return;
+      }
 
       const sessionToken = randomUUID();
       await insertSession({ token: sessionToken, userId: dbUser.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + 30*24*60*60*1000, impersonatedBy: null });
@@ -2757,7 +3699,7 @@ async function handleRequest(req, res) {
         ...(discounts ? { discounts } : {}),
         metadata: { userId: user.id, plan, interval: bi },
         subscription_data: { metadata: { userId: user.id, plan, interval: bi } },
-        success_url: `${appUrl}/dashboard?stripe=success`,
+        success_url: `${appUrl}/dashboard?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/dashboard?stripe=cancelled`,
       });
     } catch (err) {
@@ -2765,6 +3707,53 @@ async function handleRequest(req, res) {
     }
     audit(user.id, user.name, 'stripe_checkout_created', `plan=${plan} interval=${bi}`, ip);
     return json(res, { url: session.url });
+  }
+
+  // POST /api/payments/stripe/sync — immediately unlock paid access after Checkout
+  if (req.method === 'POST' && url.pathname === '/api/payments/stripe/sync') {
+    const user = await getSessionUser(req);
+    if (!user) return json(res, { error: 'Not authenticated' }, 401);
+    const stripe = getStripe();
+    if (!stripe) return json(res, { error: stripeUnavailableReason() || 'Stripe not configured' }, 503);
+    const { sessionId } = await readJsonBody(req).catch(() => ({}));
+    try {
+      let sub = null;
+      let customerId = user.stripe_customer_id || '';
+      if (sessionId) {
+        const session = await stripe.checkout.sessions.retrieve(String(sessionId));
+        if (session.client_reference_id !== user.id && session.metadata?.userId !== user.id) {
+          return json(res, { error: 'Checkout session does not belong to this account.' }, 403);
+        }
+        if (session.customer && session.customer !== user.stripe_customer_id) {
+          customerId = session.customer;
+          await updateUser(user.id, { stripe_customer_id: customerId });
+        }
+        if (session.subscription) sub = await stripe.subscriptions.retrieve(session.subscription);
+      }
+      if (!sub && customerId) {
+        const subs = await stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 5 });
+        sub = subs.data.find(s => s.metadata?.userId === user.id) || subs.data[0] || null;
+      }
+      if (!sub || !['active', 'trialing'].includes(sub.status)) {
+        return json(res, { error: 'No active Stripe subscription found yet. Please wait a moment and refresh.' }, 404);
+      }
+      const plan = stripeSubscriptionPlan(sub, user.plan);
+      if (!isPaidPlan(plan)) return json(res, { error: 'Could not identify the paid plan for this subscription.' }, 409);
+      const periodEnd = stripePeriodEnd(sub);
+      const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
+      const interval = sub.metadata?.interval || user.billing_interval || 'monthly';
+      await activatePaidPlanForUser(user.id, {
+        plan,
+        interval,
+        renewsAt,
+        stripeSubscriptionId: sub.id,
+        cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0,
+      });
+      audit(user.id, user.name, 'stripe_subscription_synced', `plan=${plan} subscription=${sub.id}`, ip);
+      return json(res, { ok: true, user: userPublic(await getUserById(user.id)) });
+    } catch (err) {
+      return json(res, { error: `Stripe sync failed: ${err.message}` }, 502);
+    }
   }
 
   // POST /api/payments/stripe/portal — billing portal for self-service
@@ -2817,7 +3806,7 @@ async function handleRequest(req, res) {
           if (userId && plan) {
             const periodEnd = stripePeriodEnd(sub);
             const renewsAt = periodEnd ? new Date(periodEnd * 1000) : new Date(Date.now() + (bi === 'annual' ? 365 : 31) * 24 * 60 * 60 * 1000);
-            await updateUser(userId, { plan, billing_interval: bi, plan_renews_at: renewsAt.toISOString(), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+            await activatePaidPlanForUser(userId, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
             const u = await getUserById(userId);
             if (u) {
               await insertPayment({ id: randomUUID(), userId, userName: u.name, userEmail: u.email, plan, amount: (session.amount_total || 0) / 100, currency: (session.currency || 'usd').toUpperCase(), method: 'stripe', txId: session.payment_intent || session.id, note: '', promoCode: null, discountPercent: 0, interval: bi, status: 'confirmed', submittedAt: new Date().toISOString() });
@@ -2835,11 +3824,11 @@ async function handleRequest(req, res) {
         const customerUser = sub.customer ? await getUserByStripeCustomerId(sub.customer) : null;
         const userId = sub.metadata?.userId || customerUser?.id;
         if (userId && sub.status === 'active') {
-          const plan = normalizePlan(sub.metadata?.plan || customerUser?.plan);
+          const plan = stripeSubscriptionPlan(sub, customerUser?.plan);
           const bi = sub.metadata?.interval || customerUser?.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
-          if (plan) await updateUser(userId, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+          if (isPaidPlan(plan)) await activatePaidPlanForUser(userId, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
         }
       }
 
@@ -2850,11 +3839,11 @@ async function handleRequest(req, res) {
         const subscriptionId = inv.subscription || inv.parent?.subscription_details?.subscription || null;
         if (u && subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
-          const plan = normalizePlan(sub.metadata?.plan || u.plan);
+          const plan = stripeSubscriptionPlan(sub, u.plan);
           const bi = sub.metadata?.interval || u.billing_interval || 'monthly';
           const periodEnd = stripePeriodEnd(sub);
           const renewsAt = periodEnd ? new Date(periodEnd * 1000) : null;
-          await updateUser(u.id, { plan, billing_interval: bi, ...(renewsAt ? { plan_renews_at: renewsAt.toISOString() } : {}), stripe_subscription_id: sub.id, renewal_reminder_sent: 0, usage_alert_sent: 0, cancel_at_period_end: sub.cancel_at_period_end ? 1 : 0 });
+          await activatePaidPlanForUser(u.id, { plan, interval: bi, renewsAt, stripeSubscriptionId: sub.id, cancelAtPeriodEnd: sub.cancel_at_period_end ? 1 : 0 });
         }
       }
 
@@ -2864,6 +3853,7 @@ async function handleRequest(req, res) {
         const userId = sub.metadata?.userId || customerUser?.id;
         if (userId) {
           await updateUser(userId, { plan: 'free', plan_renews_at: null, stripe_subscription_id: null, cancel_at_period_end: 0, renewal_reminder_sent: 0, usage_alert_sent: 0 });
+          _invalidateUserSessions(userId);
           const u = await getUserById(userId);
           if (u) {
             sendEmail(u.email, 'Your account has been downgraded to Free',
@@ -2975,14 +3965,13 @@ async function handleRequest(req, res) {
       if (existsSync(routeMapPath) && existsSync(capturedPagesDir)) {
         const routeMap = JSON.parse(readFileSync(routeMapPath, 'utf8'));
         for (const [route, filename] of Object.entries(routeMap)) {
-          const srcPath = join(capturedPagesDir, filename);
+          let cleanFilename;
+          try { cleanFilename = normalizeCloneRelPath(join('captured-pages', String(filename)), ['captured-pages']).slice('captured-pages/'.length); }
+          catch { continue; }
+          const srcPath = join(capturedPagesDir, cleanFilename);
           if (!existsSync(srcPath)) continue;
-          let destPath;
-          if (route === '/') { destPath = join(deployTmp, 'index.html'); }
-          else {
-            const seg = route.replace(/^\//, '').replace(/\/+$/, '');
-            destPath = join(deployTmp, seg, 'index.html');
-          }
+          const destPath = join(deployTmp, routeToStaticPath(route));
+          if (!isInsideDir(deployTmp, destPath)) continue;
           mkdirSync(dirname(destPath), { recursive: true });
           copyFileSync(srcPath, destPath);
         }
@@ -2998,14 +3987,19 @@ async function handleRequest(req, res) {
         for (const f of readdirSync(assetsDir)) copyFileSync(join(assetsDir, f), join(destAssets, f));
       }
 
-      const isWin = process.platform === 'win32';
-      const zipCmd = isWin
-        ? `powershell -NoProfile -Command "Compress-Archive -Path '${deployTmp}\\*' -DestinationPath '${zipPath}' -Force"`
-        : `cd '${deployTmp}' && zip -r '${zipPath}' .`;
-      await new Promise((res2, rej) => {
-        const p = spawn(zipCmd, [], { shell: true, stdio: 'ignore' });
-        p.on('close', code => code === 0 ? res2() : rej(new Error(`zip exited ${code}`)));
-      });
+      try {
+        await runProcess('tar', ['-a', '-c', '-f', zipPath, '-C', deployTmp, '.']);
+      } catch {
+        if (process.platform !== 'win32') {
+          await runProcess('zip', ['-qr', zipPath, '.'], { cwd: deployTmp });
+        } else {
+          await runProcess('powershell', [
+            '-NoProfile', '-Command',
+            'Get-ChildItem -LiteralPath $args[0] -Force | Compress-Archive -DestinationPath $args[1] -Force',
+            deployTmp, zipPath,
+          ]);
+        }
+      }
 
       const zipData = readFileSync(zipPath);
 
@@ -3031,22 +4025,43 @@ async function handleRequest(req, res) {
   // ── Support contact ────────────────────────────────────────────────────────
   if (req.method === 'POST' && url.pathname === '/api/support/contact') {
     if (!checkRateLimit(`support:${ip}`, 3, 3600000)) return json(res, { error: 'Too many requests. Try again later.' }, 429);
-    const { name, email, message } = await readJsonBody(req);
-    if (!name || !email || !message) return json(res, { error: 'All fields are required.' }, 400);
-    if (!email.includes('@')) return json(res, { error: 'Invalid email.' }, 400);
+    const body = await readJsonBody(req);
+    const cleanName = String(body.name || '').trim().slice(0, 80);
+    const cleanLastName = String(body.lastName || body.lastname || '').trim().slice(0, 80);
+    const cleanPhone = String(body.phone || '').trim().slice(0, 60);
+    const cleanEmail = String(body.email || body.mail || '').trim().slice(0, 120);
+    const cleanMessage = String(body.message || '').trim().slice(0, 2000);
+    if (!cleanName || !cleanLastName || !cleanPhone || !cleanEmail || !cleanMessage) {
+      return json(res, { error: 'Name, lastname, phone, mail, and message are required.' }, 400);
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return json(res, { error: 'Invalid email.' }, 400);
+
+    await insertContactSubmission({
+      id: randomUUID(),
+      name: cleanName,
+      lastName: cleanLastName,
+      phone: cleanPhone,
+      email: cleanEmail,
+      message: cleanMessage,
+      ip,
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 300),
+      createdAt: new Date().toISOString(),
+    });
+
     const s = getCachedSettings();
     const supportEmail = s.support_email || s.smtp_from || '';
     if (supportEmail) {
-      const subject = `Support request from ${name}`;
+      const fullName = `${cleanName} ${cleanLastName}`.trim();
+      const subject = `Contact form: ${fullName}`;
       const body = renderEmail('support-contact', {
         SUBJECT: subject,
-        FROM_NAME: String(name).slice(0, 80),
-        FROM_EMAIL: String(email).slice(0, 120),
-        MESSAGE: String(message).slice(0, 2000).replace(/\n/g, '<br>'),
+        FROM_NAME: fullName,
+        FROM_EMAIL: cleanEmail,
+        MESSAGE: `Phone: ${htmlEsc(cleanPhone)}<br><br>${htmlEsc(cleanMessage).replace(/\n/g, '<br>')}`,
       });
       sendEmail(supportEmail, subject, body).catch(() => {});
     }
-    audit(null, String(name).slice(0,80), 'support_contact', `email=${email}`, ip);
+    audit(null, `${cleanName} ${cleanLastName}`.trim(), 'support_contact', `email=${cleanEmail}`, ip);
     return json(res, { ok: true });
   }
 
@@ -3092,15 +4107,25 @@ async function ensureInit() {
   setInterval(runDunning, 3600000);
 }
 
+async function handler(req, res) {
+  try {
+    await ensureInit();
+    return await handleRequest(req, res);
+  } catch (err) {
+    console.error('[REQUEST ERROR]', err?.message || err, err?.stack || '');
+    if (!res.headersSent) {
+      return json(res, { error: 'Internal server error' }, 500);
+    }
+    try { res.end(); } catch {}
+  }
+}
+
 if (!process.env.VERCEL) {
   ensureInit().then(() => {
-    createServer(handleRequest).listen(PORT, () => {
+    createServer(handler).listen(PORT, () => {
       console.log(`\n🌐 CLONYFY running at: http://localhost:${PORT}\n`);
     });
   });
 }
 
-export default async function handler(req, res) {
-  await ensureInit();
-  return handleRequest(req, res);
-}
+export default handler;

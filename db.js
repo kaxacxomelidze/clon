@@ -80,7 +80,7 @@ export const updateUser = async (id, fields) => {
   const allowed = [
     'name','email','hash','salt','plan','plan_renews_at','billing_interval',
     'email_verified','verify_token','verify_expiry','reset_token','reset_expiry',
-    'blocked','cancel_at_period_end','renewal_reminder_sent','usage_alert_sent',
+    'blocked','blocked_reason','cancel_at_period_end','renewal_reminder_sent','usage_alert_sent',
     'google_id','stripe_customer_id','stripe_subscription_id',
   ];
   const update = {};
@@ -89,6 +89,13 @@ export const updateUser = async (id, fields) => {
   }
   if (!Object.keys(update).length) return;
   const { error } = await supabase.from('users').update(update).eq('id', id);
+  if (error && update.blocked_reason !== undefined && /blocked_reason/i.test(error.message || '')) {
+    delete update.blocked_reason;
+    if (!Object.keys(update).length) return;
+    const retry = await supabase.from('users').update(update).eq('id', id);
+    if (retry.error) throw new Error(retry.error.message);
+    return;
+  }
   if (error) throw new Error(error.message);
 };
 
@@ -170,8 +177,11 @@ export const updateCloneStatus = async ({ id, status, pages, assets, apiRoutes, 
   if (error) throw new Error(error.message);
 };
 
-export const getClonesByUser = (userId) =>
-  all(supabase.from('clones').select('*').eq('user_id', userId).order('started_at', { ascending: false }));
+export const getClonesByUser = (userId, limit = null) => {
+  let query = supabase.from('clones').select('*').eq('user_id', userId).order('started_at', { ascending: false });
+  if (limit) query = query.limit(limit);
+  return all(query);
+};
 
 export const getAllClones = () =>
   all(supabase.from('clones').select('*').order('started_at', { ascending: false }));
@@ -267,6 +277,8 @@ const SETTINGS_DEFAULTS = {
   btc:'', eth:'', usdt_trc20:'', paypal_email:'', paypal_me:'', app_note:'',
   smtp_host:'', smtp_port:'587', smtp_user:'', smtp_pass:'', smtp_from:'',
   smtp_secure:'false', app_url:(process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') || 'http://localhost:5000').replace(/\/$/, ''),
+  affiliate_enabled:'true', affiliate_program_url:'https://affonso.io/', affiliate_public_id:'cmpj1i5tn00087mxngp80ddzy',
+  affiliate_program_id:'', affiliate_group_id:'', affiliate_api_key:'',
 };
 
 export async function getSettings() {
@@ -285,6 +297,74 @@ export async function saveSettings(obj) {
   const { error } = await supabase.from('settings').upsert(rows, { onConflict: 'key' });
   if (error) throw new Error(error.message);
 }
+
+const affiliateReferralKey = (ownerId) => `affiliate_referrals:${ownerId}`;
+const affiliateVisitKey = (ownerId) => `affiliate_visits:${ownerId}`;
+const affiliateSlugKey = (slug) => `affiliate_slug:${slug}`;
+
+export async function getAffiliateOwnerBySlug(slug) {
+  const clean = String(slug || '').trim().toLowerCase();
+  if (!clean) return null;
+  const { data } = await supabase.from('settings').select('value').eq('key', affiliateSlugKey(clean)).maybeSingle();
+  return data?.value || null;
+}
+
+export async function saveAffiliateSlug(slug, ownerId) {
+  const clean = String(slug || '').trim().toLowerCase();
+  if (!clean || !ownerId) return;
+  await supabase.from('settings').upsert({ key: affiliateSlugKey(clean), value: String(ownerId) }, { onConflict: 'key' });
+}
+
+export async function getAffiliateReferrals(ownerId) {
+  const { data } = await supabase.from('settings').select('value').eq('key', affiliateReferralKey(ownerId)).maybeSingle();
+  try { return JSON.parse(data?.value || '[]'); } catch { return []; }
+}
+
+export async function addAffiliateReferral(ownerId, referral) {
+  if (!ownerId || !referral?.userId || ownerId === referral.userId) return;
+  const rows = await getAffiliateReferrals(ownerId);
+  if (!rows.some(r => r.userId === referral.userId)) {
+    rows.unshift({ ...referral, createdAt: referral.createdAt || new Date().toISOString(), status: referral.status || 'Signed up' });
+    await supabase.from('settings').upsert({ key: affiliateReferralKey(ownerId), value: JSON.stringify(rows.slice(0, 500)) }, { onConflict: 'key' });
+  }
+}
+
+export async function getAffiliateVisits(ownerId) {
+  const { data } = await supabase.from('settings').select('value').eq('key', affiliateVisitKey(ownerId)).maybeSingle();
+  try { return JSON.parse(data?.value || '[]'); } catch { return []; }
+}
+
+export async function addAffiliateVisit(ownerId, visit) {
+  if (!ownerId || !visit?.visitorId) return;
+  const rows = await getAffiliateVisits(ownerId);
+  const recentCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const existsRecent = rows.some(r => r.visitorId === visit.visitorId && new Date(r.createdAt || 0).getTime() > recentCutoff);
+  if (!existsRecent) {
+    rows.unshift({ ...visit, createdAt: visit.createdAt || new Date().toISOString() });
+    await supabase.from('settings').upsert({ key: affiliateVisitKey(ownerId), value: JSON.stringify(rows.slice(0, 1000)) }, { onConflict: 'key' });
+  }
+}
+
+const blockedReasonKey = (userId) => `blocked_reason:${userId}`;
+
+export const getUserBlockReason = async (userId) => {
+  const { data } = await supabase.from('settings').select('value').eq('key', blockedReasonKey(userId)).maybeSingle();
+  return data?.value || '';
+};
+
+export const getUserBlockReasons = async (userIds = []) => {
+  const keys = userIds.map(blockedReasonKey);
+  if (!keys.length) return {};
+  const { data, error } = await supabase.from('settings').select('key,value').in('key', keys);
+  if (error) return {};
+  const out = {};
+  for (const row of data || []) out[row.key.replace(/^blocked_reason:/, '')] = row.value || '';
+  return out;
+};
+
+export const setUserBlockReason = async (userId, reason) => {
+  await supabase.from('settings').upsert({ key: blockedReasonKey(userId), value: String(reason || '') });
+};
 
 // ── Shares ────────────────────────────────────────────────────────────────────
 
@@ -394,6 +474,71 @@ export const getAllAnnouncements = () =>
   all(supabase.from('announcements').select('*').order('created_at', { ascending: false }));
 
 // ── Audit helper ──────────────────────────────────────────────────────────────
+
+const CONTACT_FALLBACK_KEY = 'contact_submissions';
+
+async function getFallbackContacts() {
+  const row = await getSetting(CONTACT_FALLBACK_KEY).catch(() => null);
+  try {
+    const parsed = JSON.parse(row?.value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveFallbackContacts(items) {
+  await setSetting(CONTACT_FALLBACK_KEY, JSON.stringify(items.slice(0, 500)));
+}
+
+export async function insertContactSubmission(c) {
+  const row = {
+    id: c.id,
+    name: c.name,
+    last_name: c.lastName,
+    phone: c.phone,
+    email: c.email,
+    message: c.message,
+    ip: c.ip || null,
+    user_agent: c.userAgent || null,
+    created_at: c.createdAt,
+    read_at: null,
+  };
+  try {
+    const { error } = await supabase.from('contact_submissions').insert(row);
+    if (!error) return;
+    if (!/relation .*contact_submissions|could not find the table|schema cache/i.test(error.message || '')) {
+      throw new Error(error.message);
+    }
+  } catch (err) {
+    if (!/contact_submissions|schema cache|does not exist/i.test(err?.message || '')) throw err;
+  }
+  const fallback = await getFallbackContacts();
+  fallback.unshift(row);
+  await saveFallbackContacts(fallback);
+}
+
+export async function getContactSubmissions(limit = 100) {
+  let tableRows = [];
+  try {
+    const { data, error } = await supabase
+      .from('contact_submissions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (!error) tableRows = data || [];
+  } catch {}
+  const fallbackRows = await getFallbackContacts();
+  const seen = new Set();
+  return [...tableRows, ...fallbackRows]
+    .filter((row) => {
+      if (!row?.id || seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    })
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    .slice(0, limit);
+}
 
 const CLONE_FILES_BUCKET = 'clone-files';
 let _cloneBucketReady = false;

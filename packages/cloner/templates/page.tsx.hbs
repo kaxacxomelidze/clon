@@ -7,6 +7,25 @@ try {
 } catch { /* missing on first run */ }
 const PAGES_DIR = join(process.cwd(), 'captured-pages');
 const TARGET_ORIGIN = {{{targetOriginJson}}};
+let ASSET_MAP: Record<string, string> = {};
+try {
+  const manifest = JSON.parse(readFileSync(join(process.cwd(), 'manifest.json'), 'utf8'));
+  for (const page of manifest.pages ?? []) {
+    for (const asset of page.assets ?? []) {
+      const original = String(asset.originalUrl || '');
+      const local = String(asset.localPath || '');
+      if (!original || !local) continue;
+      ASSET_MAP[original] = local;
+      ASSET_MAP[original.split('?')[0].split('#')[0]] = local;
+      try {
+        const u = new URL(original);
+        ASSET_MAP[`${u.pathname}${u.search}${u.hash}`] = local;
+        ASSET_MAP[`${u.pathname}${u.search}`] = local;
+        ASSET_MAP[u.pathname] = local;
+      } catch {}
+    }
+  }
+} catch { /* manifest is optional for older clones */ }
 
 // Importmap that redirects same-origin absolute module imports to the local server.
 // Must be injected as the very first script in <head> so it applies to all subsequent
@@ -18,17 +37,101 @@ const IMPORT_MAP = `<script type="importmap">
 const REPLAY_PATCH = `<script data-clonyfy-replay>
 (() => {
   const targetOrigin = ${JSON.stringify(TARGET_ORIGIN)};
+  const assetMap = ${JSON.stringify(ASSET_MAP)};
 
   // Redirect same-origin absolute URLs to the local server
   const localize = (value) => {
     if (!value) return value;
     const s = String(value);
+    if (assetMap[s]) return assetMap[s];
     try {
       const url = new URL(s, window.location.href);
+      if (assetMap[url.href]) return assetMap[url.href];
+      if (assetMap[url.pathname + url.search + url.hash]) return assetMap[url.pathname + url.search + url.hash];
+      if (assetMap[url.pathname + url.search]) return assetMap[url.pathname + url.search];
+      if (assetMap[url.pathname]) return assetMap[url.pathname];
+      if (url.pathname.startsWith('/media/')) {
+        const nextMediaPath = '/_next/static' + url.pathname;
+        if (assetMap[nextMediaPath + url.search]) return assetMap[nextMediaPath + url.search];
+        if (assetMap[nextMediaPath]) return assetMap[nextMediaPath];
+        return targetOrigin + nextMediaPath + url.search + url.hash;
+      }
+      if (url.pathname === '/_next/image') return targetOrigin + url.pathname + url.search + url.hash;
       if (url.origin === targetOrigin) return url.pathname + url.search + url.hash;
     } catch {}
     return s;
   };
+
+  const rewriteSrcset = (value) => String(value || '').split(',').map((part) => {
+    const trimmed = part.trim();
+    const spaceIdx = trimmed.search(/\\s/);
+    if (spaceIdx === -1) return localize(trimmed);
+    return localize(trimmed.slice(0, spaceIdx)) + trimmed.slice(spaceIdx);
+  }).join(', ');
+
+  const nativeSetAttribute = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function(name, value) {
+    const key = String(name || '').toLowerCase();
+    if (key === 'src' || key === 'href' || key === 'poster' || key === 'action' || key === 'data') value = localize(value);
+    else if (key === 'srcset' || key === 'imagesrcset') value = rewriteSrcset(value);
+    else if (key === 'style') value = rewriteCssText(value);
+    return nativeSetAttribute.call(this, name, value);
+  };
+
+  const patchUrlProperty = (proto, prop) => {
+    const desc = Object.getOwnPropertyDescriptor(proto, prop);
+    if (!desc || !desc.set || !desc.get) return;
+    Object.defineProperty(proto, prop, {
+      configurable: true,
+      enumerable: desc.enumerable,
+      get() { return desc.get.call(this); },
+      set(value) { return desc.set.call(this, localize(value)); },
+    });
+  };
+  patchUrlProperty(HTMLScriptElement.prototype, 'src');
+  patchUrlProperty(HTMLLinkElement.prototype, 'href');
+  patchUrlProperty(HTMLImageElement.prototype, 'src');
+  patchUrlProperty(HTMLImageElement.prototype, 'srcset');
+
+  if (window.HTMLSourceElement) {
+    patchUrlProperty(HTMLSourceElement.prototype, 'src');
+    patchUrlProperty(HTMLSourceElement.prototype, 'srcset');
+  }
+  if (window.HTMLMediaElement) patchUrlProperty(HTMLMediaElement.prototype, 'src');
+  if (window.HTMLVideoElement) patchUrlProperty(HTMLVideoElement.prototype, 'poster');
+  if (window.HTMLIFrameElement) patchUrlProperty(HTMLIFrameElement.prototype, 'src');
+  if (window.HTMLObjectElement) patchUrlProperty(HTMLObjectElement.prototype, 'data');
+  if (window.HTMLEmbedElement) patchUrlProperty(HTMLEmbedElement.prototype, 'src');
+  if (window.HTMLFormElement) patchUrlProperty(HTMLFormElement.prototype, 'action');
+
+  function rewriteCssText(value) {
+    return String(value || '').replace(/url\\(\\s*(['"]?)([^'")\\s]+)\\1\\s*\\)/g, (match, quote, url) => {
+      const next = localize(url);
+      return next === url ? match : 'url(' + quote + next + quote + ')';
+    });
+  }
+
+  if (window.CSSStyleDeclaration) {
+    const nativeSetProperty = CSSStyleDeclaration.prototype.setProperty;
+    CSSStyleDeclaration.prototype.setProperty = function(name, value, priority) {
+      return nativeSetProperty.call(this, name, rewriteCssText(value), priority);
+    };
+    const bgDesc = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, 'backgroundImage');
+    if (bgDesc && bgDesc.set && bgDesc.get) {
+      Object.defineProperty(CSSStyleDeclaration.prototype, 'backgroundImage', {
+        configurable: true,
+        enumerable: bgDesc.enumerable,
+        get() { return bgDesc.get.call(this); },
+        set(value) { return bgDesc.set.call(this, rewriteCssText(value)); },
+      });
+    }
+  }
+  if (window.CSSStyleSheet) {
+    const nativeInsertRule = CSSStyleSheet.prototype.insertRule;
+    CSSStyleSheet.prototype.insertRule = function(rule, index) {
+      return nativeInsertRule.call(this, rewriteCssText(rule), index);
+    };
+  }
 
   // fetch() — covers JSON API calls and module preloads
   const nativeFetch = window.fetch;
@@ -122,16 +225,13 @@ function injectReplayPatch(html: string): string {
   // precedes all other scripts. Otherwise prepend to document.
   let out = html;
   if (out.includes('<head>')) {
-    out = out.replace('<head>', `<head>${IMPORT_MAP}`);
+    out = out.replace('<head>', `<head>${IMPORT_MAP}${REPLAY_PATCH}`);
   } else if (out.includes('<head ')) {
-    out = out.replace(/(<head[^>]*>)/, `$1${IMPORT_MAP}`);
+    out = out.replace(/(<head[^>]*>)/, `$1${IMPORT_MAP}${REPLAY_PATCH}`);
   } else {
-    out = IMPORT_MAP + out;
+    out = IMPORT_MAP + REPLAY_PATCH + out;
   }
-
-  // Inject replay patch just before </head> so it runs before page scripts
-  if (out.includes('</head>')) return out.replace('</head>', `${REPLAY_PATCH}</head>`);
-  return REPLAY_PATCH + out;
+  return out;
 }
 
 // Always render dynamically so each request gets the correct snapshot.

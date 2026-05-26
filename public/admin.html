@@ -47,6 +47,9 @@ input,select{font:inherit}
 .login-btn:disabled{opacity:.4;cursor:not-allowed}
 .login-err{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,96,.2);border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:14px;display:none}
 .login-err.show{display:block}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,10,10,.94);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:var(--text);font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
 
 /* ── App layout ──────────────────────────────── */
 #app{display:flex;flex-direction:column;height:100vh}
@@ -214,6 +217,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:28px 32px;width:min(380px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .modal-title{font-size:16px;font-weight:800;margin-bottom:8px}
 .modal-body{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:22px}
+.modal-field{width:100%;box-sizing:border-box;margin-top:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font:inherit;font-size:13px;line-height:1.5;padding:10px 12px;outline:none;resize:vertical;min-height:92px}
+.modal-field:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(91,141,239,.12)}
+.blocked-reason{display:block;margin-top:5px;max-width:190px;color:var(--red);font-size:10px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 .modal-cancel{padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
 .modal-cancel:hover{color:var(--text);border-color:var(--border3)}
@@ -339,6 +345,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
           Payments
           <span class="panel-tab-count" id="payments-count">0</span>
         </button>
+        <button class="panel-tab" id="tab-btn-contacts" onclick="switchTab('contacts')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+          Contact Forms
+          <span class="panel-tab-count" id="contacts-count">0</span>
+        </button>
         <button class="panel-tab" id="tab-btn-announce" onclick="switchTab('announce')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/></svg>
           Announce
@@ -364,9 +375,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <option value="">All Plans</option>
             <option value="free">Free</option>
             <option value="starter">Starter</option>
-            <option value="popular">Most Popular</option>
             <option value="growth">Growth</option>
-            <option value="unlimited">Unlimited</option>
+            <option value="unlimited">Scale</option>
           </select>
           <select class="filter-sel" id="users-status-filter" onchange="filterUsers()">
             <option value="">All Status</option>
@@ -437,6 +447,41 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-note" placeholder="e.g. Maintenance on Saturday 2am–4am UTC" style="font-family:inherit">
           </div>
 
+          <div class="settings-section">Affiliate Program</div>
+          <div class="settings-group">
+            <div class="settings-label">Affiliate program enabled</div>
+            <select class="settings-input" id="s-affiliate-enabled" style="font-family:inherit">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+            <div class="settings-hint">Shows the affiliate section and dashboard CTA.</div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Affonso Program URL</div>
+            <input class="settings-input" id="s-affiliate-url" placeholder="https://affonso.io/" style="font-family:inherit">
+            <div class="settings-hint">Paste the public join URL from Affonso.</div>
+          </div>
+          <div class="settings-group settings-full" style="grid-column:1/-1">
+            <div class="settings-label">Affonso Public Program ID</div>
+            <input class="settings-input" id="s-affiliate-public-id" placeholder="pub_..." style="font-family:inherit">
+            <div class="settings-hint">Optional. Used to load the Affonso tracking pixel on the public site.</div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Affonso Program ID</div>
+            <input class="settings-input" id="s-affiliate-program-id" placeholder="program_..." style="font-family:inherit">
+            <div class="settings-hint">Used by the server to create affiliate dashboard tokens.</div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-label">Affonso Group ID</div>
+            <input class="settings-input" id="s-affiliate-group-id" placeholder="group_..." style="font-family:inherit">
+            <div class="settings-hint">Optional group for new affiliate partners.</div>
+          </div>
+          <div class="settings-group settings-full" style="grid-column:1/-1">
+            <div class="settings-label">Affonso API Key</div>
+            <input class="settings-input" id="s-affiliate-api-key" type="password" placeholder="affonso_api_key" style="font-family:inherit">
+            <div class="settings-hint">Server-only key. Required for dashboard embed tokens.</div>
+          </div>
+
           <div class="settings-section">📧 SMTP Email (for verification & password reset)</div>
           <div class="settings-group">
             <div class="settings-label">SMTP Host</div>
@@ -504,11 +549,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-stripe-p-starter-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Most Popular Monthly</div>
+            <div class="settings-label">Price: Legacy Popular Monthly</div>
             <input class="settings-input" id="s-stripe-p-popular-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Most Popular Annual</div>
+            <div class="settings-label">Price: Legacy Popular Annual</div>
             <input class="settings-input" id="s-stripe-p-popular-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
@@ -520,11 +565,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <input class="settings-input" id="s-stripe-p-growth-annual" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Unlimited Monthly</div>
+            <div class="settings-label">Price: Scale Monthly</div>
             <input class="settings-input" id="s-stripe-p-unlimited-monthly" placeholder="price_...">
           </div>
           <div class="settings-group">
-            <div class="settings-label">Price: Unlimited Annual</div>
+            <div class="settings-label">Price: Scale Annual</div>
             <input class="settings-input" id="s-stripe-p-unlimited-annual" placeholder="price_...">
           </div>
 
@@ -564,6 +609,20 @@ tbody td{padding:11px 14px;vertical-align:middle}
         <div class="pagination" id="payments-pagination"></div>
       </div>
 
+      <!-- Contact Forms panel -->
+      <div id="panel-contacts" class="hidden">
+        <div class="panel-toolbar">
+          <span style="font-size:11px;color:var(--text3)" id="contacts-total-label"></span>
+          <button class="act-btn" style="margin-left:auto" onclick="loadContacts()">Refresh</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Lastname</th><th>Phone</th><th>Mail</th><th>Message</th><th>Sent</th></tr></thead>
+            <tbody id="contacts-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Announce panel -->
       <div id="panel-announce" class="hidden">
         <div style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -586,9 +645,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
                     <option value="paid">Paid Users Only</option>
                     <option value="free">Free Users Only</option>
                     <option value="starter">Starter Plan</option>
-                    <option value="popular">Most Popular Plan</option>
                     <option value="growth">Growth Plan</option>
-                    <option value="unlimited">Unlimited Plan</option>
+                    <option value="unlimited">Scale Plan</option>
                   </select>
                 </div>
                 <button onclick="sendAnnouncement()" style="margin-top:18px;padding:9px 22px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Send Announcement</button>
@@ -714,9 +772,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
         <label style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Apply to plans (blank = all)</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-starter" value="starter"> Starter</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-popular" value="popular"> Most Popular</label>
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-growth" value="growth"> Growth</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-unlimited" value="unlimited"> Unlimited</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);text-transform:none;letter-spacing:0"><input type="checkbox" id="pm-unlimited" value="unlimited"> Scale</label>
         </div>
       </div>
     </div>
@@ -752,11 +809,25 @@ tbody td{padding:11px 14px;vertical-align:middle}
 </div>
 
 <div id="toasts"></div>
+<div id="slow-loading" class="slow-loading" role="status" aria-live="polite">LOADING...</div>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
-let adminToken = sessionStorage.getItem('wc_admin_token') || '';
+const ADMIN_TOKEN_KEY = 'wc_admin_token';
+function getStoredAdminToken() {
+  return localStorage.getItem(ADMIN_TOKEN_KEY) || sessionStorage.getItem(ADMIN_TOKEN_KEY) || '';
+}
+function storeAdminToken(token) {
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+function clearAdminToken() {
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+let adminToken = getStoredAdminToken();
 let allUsers = [];
+let contactsCache = [];
 let usersPage = 0;
 let usersTotal = 0;
 const USERS_PAGE_SIZE = 50;
@@ -770,12 +841,32 @@ let paymentsMethodFilter = '';
 let errorsPage = 1;
 let errorsSearch = '';
 let activeTab = 'users';
+let slowLoadingCount = 0;
+let slowLoadingTimer = null;
+function beginSlowLoading(delay = 900) {
+  slowLoadingCount++;
+  const el = document.getElementById('slow-loading');
+  if (!el) return () => {};
+  if (!slowLoadingTimer && !el.classList.contains('show')) {
+    slowLoadingTimer = setTimeout(() => {
+      slowLoadingTimer = null;
+      if (slowLoadingCount > 0) el.classList.add('show');
+    }, delay);
+  }
+  return () => {
+    slowLoadingCount = Math.max(0, slowLoadingCount - 1);
+    if (slowLoadingCount === 0) {
+      if (slowLoadingTimer) { clearTimeout(slowLoadingTimer); slowLoadingTimer = null; }
+      el.classList.remove('show');
+    }
+  };
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 (async () => {
   if (adminToken) {
     const ok = await tryLoadApp();
-    if (!ok) { adminToken = ''; sessionStorage.removeItem('wc_admin_token'); showLogin(); }
+    if (!ok) { adminToken = ''; clearAdminToken(); showLogin(); }
   } else {
     showLogin();
   }
@@ -796,7 +887,9 @@ async function checkSecurity() {
   try {
     const s = await adminFetch('GET', '/api/admin/security');
     const warnings = [];
-    if (!s.adminPasswordSet) warnings.push('⚠️ <code>ADMIN_PASSWORD</code> env var is not set — admin login is disabled. Add it to your <code>.env</code> file and restart the server.');
+    if (!s.adminPasswordSet) {
+      warnings.push('Admin login is disabled because <code>ADMIN_PASSWORD</code> is not set on this server. For local dev, add it to <code>.env</code> and restart. For Vercel/hosting, add it in Project Settings > Environment Variables and redeploy.');
+    }
     if (!s.appUrlConfigured) warnings.push('⚠️ App URL not configured — share links will point to localhost.');
     if (!s.smtpConfigured) warnings.push('⚠️ SMTP not configured — emails (verify, reset, receipts) won\'t send.');
     if (!s.stripeConfigured) warnings.push(`Stripe not configured - ${esc(s.stripeError || 'payments are disabled.')}`);
@@ -810,13 +903,19 @@ async function checkSecurity() {
 async function tryLoadApp() {
   try {
     const r = await adminFetch('GET', '/api/admin/stats');
-    if (r.error) return false;
+    if (r._status === 401 || r._status === 403) return false;
+    if (r.error) throw new Error(r.error);
     showApp();
     renderStats(r);
-    await loadUsers();
+    try { await loadUsers(); } catch (e) { toast(e.message || 'Users failed to load', 'err'); }
     checkSecurity();
     return true;
-  } catch { return false; }
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) return false;
+    showApp();
+    toast(e.message || 'Admin data failed to load. Refresh will retry.', 'err');
+    return true;
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -832,10 +931,13 @@ async function doLogin() {
     const data = await apiFetch('POST', '/api/admin/auth', { password: pw });
     if (data.error) throw new Error(data.error);
     adminToken = data.token;
-    sessionStorage.setItem('wc_admin_token', adminToken);
+    storeAdminToken(adminToken);
     await tryLoadApp();
   } catch(e) {
-    err.textContent = e.message || 'Wrong password';
+    const message = e.message || 'Wrong password';
+    err.innerHTML = message.includes('ADMIN_PASSWORD')
+      ? 'Admin login is disabled because <code>ADMIN_PASSWORD</code> is missing on this server. Add it in your hosting environment variables, then redeploy/restart.'
+      : esc(message);
     err.classList.add('show');
     document.getElementById('login-pw').select();
   } finally {
@@ -847,27 +949,46 @@ async function doLogin() {
 async function doLogout() {
   try { await adminFetch('POST', '/api/admin/logout'); } catch {}
   adminToken = '';
-  sessionStorage.removeItem('wc_admin_token');
+  clearAdminToken();
   showLogin();
   document.getElementById('login-pw').value = '';
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function apiFetch(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+  const doneLoading = beginSlowLoading();
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    data._status = res.status;
+    return data;
+  } finally {
+    doneLoading();
+  }
 }
 async function adminFetch(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+  const doneLoading = beginSlowLoading();
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': adminToken },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    data._status = res.status;
+    if (res.status === 401 || res.status === 403) {
+      const err = new Error(data.error || 'Admin session expired');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  } finally {
+    doneLoading();
+  }
 }
 
 // ── Refresh ───────────────────────────────────────────────────────────────────
@@ -881,6 +1002,7 @@ async function refreshAll() {
       activeTab === 'clones' ? loadClones() : Promise.resolve(),
       activeTab === 'errors' ? loadErrors() : Promise.resolve(),
       activeTab === 'payments' ? loadPayments() : Promise.resolve(),
+      activeTab === 'contacts' ? loadContacts() : Promise.resolve(),
     ]);
     renderStats(stats);
     toast('Refreshed', 'ok');
@@ -907,7 +1029,7 @@ function renderStats(s) {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(tab) {
   activeTab = tab;
-  for (const t of ['users','clones','errors','promos','payments','settings','announce','audit']) {
+  for (const t of ['users','clones','errors','promos','payments','contacts','settings','announce','audit']) {
     document.getElementById(`panel-${t}`)?.classList.toggle('hidden', tab !== t);
     document.getElementById(`tab-btn-${t}`)?.classList.toggle('on', tab === t);
   }
@@ -915,6 +1037,7 @@ function switchTab(tab) {
   if (tab === 'errors') loadErrors();
   if (tab === 'promos') loadPromos();
   if (tab === 'payments') loadPayments();
+  if (tab === 'contacts') loadContacts();
   if (tab === 'settings') loadAdminSettings();
   if (tab === 'announce') loadAnnouncements();
   if (tab === 'audit') loadAuditLog();
@@ -982,9 +1105,8 @@ function renderUsers(users) {
         <select class="plan-sel" onchange="updatePlan('${u.id}', this.value)" title="Change plan">
           <option value="free" ${u.plan==='free'?'selected':''}>Free</option>
           <option value="starter" ${u.plan==='starter'?'selected':''}>Starter</option>
-          <option value="popular" ${u.plan==='popular'?'selected':''}>Most Popular</option>
-          <option value="growth" ${u.plan==='growth'||u.rawPlan==='pro'?'selected':''}>Growth</option>
-          <option value="unlimited" ${u.plan==='unlimited'||u.rawPlan==='enterprise'?'selected':''}>Unlimited</option>
+          <option value="growth" ${u.plan==='growth'||u.rawPlan==='popular'||u.rawPlan==='pro'?'selected':''}>Growth</option>
+          <option value="unlimited" ${u.plan==='unlimited'||u.rawPlan==='scale'||u.rawPlan==='enterprise'?'selected':''}>Scale</option>
         </select>
       </td>
       <td><span class="num-cell">${u.cloneCount}<small>clones</small></span></td>
@@ -995,10 +1117,11 @@ function renderUsers(users) {
           <span class="dot ${u.blocked ? 'blocked' : 'active'}"></span>
           ${u.blocked ? 'Blocked' : 'Active'}
         </span>
+        ${u.blocked && u.blockedReason ? `<span class="blocked-reason" title="${esc(u.blockedReason)}">${esc(u.blockedReason)}</span>` : ''}
       </td>
       <td>
         <div class="actions-cell">
-          <button class="act-btn ${u.blocked ? 'unblock' : 'block'}" onclick="toggleBlock('${u.id}', ${u.blocked})">
+          <button class="act-btn ${u.blocked ? 'unblock' : 'block'}" data-id="${esc(u.id)}" data-blocked="${u.blocked ? '1' : '0'}" data-name="${esc(u.name)}" onclick="toggleBlock(this.dataset.id, this.dataset.blocked === '1', this.dataset.name)">
             ${u.blocked ? '✓ Unblock' : '⊘ Block'}
           </button>
           <button class="act-btn" onclick="viewUserClones('${u.id}')">Clones</button>
@@ -1021,17 +1144,30 @@ async function updatePlan(userId, plan) {
   } catch(e) { toast(e.message, 'err'); filterUsers(); }
 }
 
-async function toggleBlock(userId, currentlyBlocked) {
+async function toggleBlock(userId, currentlyBlocked, name = 'this user') {
   const blocked = !currentlyBlocked;
-  try {
-    const r = await adminFetch('PUT', `/api/admin/users/${userId}`, { blocked });
-    if (r.error) throw new Error(r.error);
-    const u = allUsers.find(u => u.id === userId);
-    if (u) u.blocked = blocked;
-    filterUsers();
-    toast(blocked ? 'User blocked' : 'User unblocked', blocked ? 'err' : 'ok');
-    refreshStats();
-  } catch(e) { toast(e.message, 'err'); }
+  const applyBlock = async (reason = '') => {
+    try {
+      const r = await adminFetch('PUT', `/api/admin/users/${userId}`, { blocked, blockedReason: reason });
+      if (r.error) throw new Error(r.error);
+      const u = allUsers.find(u => u.id === userId);
+      if (u) { u.blocked = blocked; u.blockedReason = blocked ? reason : ''; }
+      filterUsers();
+      toast(blocked ? 'User blocked' : 'User unblocked', blocked ? 'err' : 'ok');
+      refreshStats();
+    } catch(e) { toast(e.message, 'err'); }
+  };
+  if (!blocked) { await applyBlock(''); return; }
+  openModal(
+    'Block User',
+    `<p style="margin:0">Write the reason <strong>${esc(name)}</strong> will see when they try to sign in.</p>
+     <textarea id="block-reason-input" class="modal-field" maxlength="500" placeholder="Example: Payment dispute, abuse, spam, or policy violation." autofocus></textarea>`,
+    async () => {
+      const reason = document.getElementById('block-reason-input')?.value.trim() || '';
+      await applyBlock(reason);
+    }
+  );
+  setTimeout(() => document.getElementById('block-reason-input')?.focus(), 50);
 }
 
 function confirmDeleteUser(userId, name) {
@@ -1245,6 +1381,35 @@ function renderPaymentsPagination(total, page, pageSize) {
     </div>`;
 }
 function goPayPage(p) { paymentsPage = p; loadPayments(); }
+
+async function loadContacts() {
+  try {
+    const data = await adminFetch('GET', '/api/admin/contacts?limit=300');
+    if (data.error) throw new Error(data.error);
+    contactsCache = Array.isArray(data) ? data : [];
+    document.getElementById('contacts-count').textContent = contactsCache.length;
+    document.getElementById('contacts-total-label').textContent = `${contactsCache.length} messages`;
+    renderContacts(contactsCache);
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function renderContacts(items) {
+  const tbody = document.getElementById('contacts-tbody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No contact messages</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(c => `
+    <tr>
+      <td><div class="user-name">${esc(c.name || '')}</div></td>
+      <td>${esc(c.last_name || c.lastName || '')}</td>
+      <td><a href="tel:${esc(c.phone || '')}" style="color:var(--blue)">${esc(c.phone || '')}</a></td>
+      <td><a href="mailto:${esc(c.email || '')}" style="color:var(--blue)">${esc(c.email || '')}</a></td>
+      <td class="error-summary-cell" title="${esc(c.message || '')}">${esc(c.message || '')}</td>
+      <td><span class="date-cell">${relTime(c.created_at || c.createdAt)}</span></td>
+    </tr>
+  `).join('');
+}
 
 async function refreshStats() {
   try {
@@ -1474,7 +1639,6 @@ function openCreatePromo() {
   document.getElementById('pm-expiry').value = '';
   document.getElementById('pm-desc').value = '';
   document.getElementById('pm-starter').checked = false;
-  document.getElementById('pm-popular').checked = false;
   document.getElementById('pm-growth').checked = false;
   document.getElementById('pm-unlimited').checked = false;
   document.getElementById('promo-modal-overlay').classList.remove('hidden');
@@ -1485,7 +1649,7 @@ async function createPromoCode() {
   const code = document.getElementById('pm-code').value.trim().toUpperCase();
   const discountPercent = parseInt(document.getElementById('pm-discount').value, 10);
   if (!code || !discountPercent) { toast('Code and discount are required', 'err'); return; }
-  const plans = ['starter','popular','growth','unlimited'].filter(p => document.getElementById(`pm-${p}`).checked);
+  const plans = ['starter','growth','unlimited'].filter(p => document.getElementById(`pm-${p}`).checked);
   try {
     const r = await adminFetch('POST', '/api/admin/promo-codes', {
       code, discountPercent,
@@ -1521,6 +1685,12 @@ async function loadAdminSettings() {
     document.getElementById('s-pp-email').value = s.paypal_email || '';
     document.getElementById('s-pp-me').value = s.paypal_me || '';
     document.getElementById('s-note').value = s.app_note || '';
+    document.getElementById('s-affiliate-enabled').value = String(s.affiliate_enabled ?? 'true');
+    document.getElementById('s-affiliate-url').value = s.affiliate_program_url || 'https://affonso.io/';
+    document.getElementById('s-affiliate-public-id').value = s.affiliate_public_id || '';
+    document.getElementById('s-affiliate-program-id').value = s.affiliate_program_id || '';
+    document.getElementById('s-affiliate-group-id').value = s.affiliate_group_id || '';
+    document.getElementById('s-affiliate-api-key').value = s.affiliate_api_key ? '••••••••' : '';
     document.getElementById('s-smtp-host').value = s.smtp_host || '';
     document.getElementById('s-smtp-port').value = s.smtp_port || '587';
     document.getElementById('s-smtp-user').value = s.smtp_user || '';
@@ -1549,6 +1719,11 @@ async function saveAdminSettings() {
     paypal_email: document.getElementById('s-pp-email').value,
     paypal_me: document.getElementById('s-pp-me').value,
     app_note: document.getElementById('s-note').value,
+    affiliate_enabled: document.getElementById('s-affiliate-enabled').value,
+    affiliate_program_url: document.getElementById('s-affiliate-url').value,
+    affiliate_public_id: document.getElementById('s-affiliate-public-id').value,
+    affiliate_program_id: document.getElementById('s-affiliate-program-id').value,
+    affiliate_group_id: document.getElementById('s-affiliate-group-id').value,
     smtp_host: document.getElementById('s-smtp-host').value,
     smtp_port: document.getElementById('s-smtp-port').value,
     smtp_user: document.getElementById('s-smtp-user').value,
@@ -1566,6 +1741,8 @@ async function saveAdminSettings() {
     stripe_price_unlimited_annual: document.getElementById('s-stripe-p-unlimited-annual').value,
   };
   if (passField && passField !== '••••••••') body.smtp_pass = passField;
+  const affiliateApiKey = document.getElementById('s-affiliate-api-key').value;
+  if (affiliateApiKey && affiliateApiKey !== '••••••••') body.affiliate_api_key = affiliateApiKey;
   const googleSecret = document.getElementById('s-google-client-secret').value;
   const googleClientId = document.getElementById('s-google-client-id').value;
   if (googleClientId) body.google_client_id = googleClientId;

@@ -36,7 +36,7 @@ export const logger = {
   warn: (msg: string) => {
     writeToFile('WARN', msg);
     const line = `[WARN] ${msg}`;
-    console.warn(line);
+    console.log(line);
     logSink?.(line, 'WARN');
   },
   error: (msg: string, err?: unknown) => {

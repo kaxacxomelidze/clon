@@ -90,6 +90,21 @@ a:hover{text-decoration:underline}
 .section-hd{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .section-title{font-size:13px;font-weight:700}
 .section-action{font-size:12px;color:var(--blue);font-weight:600}
+.affiliate-panel{padding:20px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}
+.affiliate-title{font-size:18px;font-weight:800;letter-spacing:-.3px;margin-bottom:6px}
+.affiliate-copy{font-size:13px;color:var(--text2);line-height:1.7;max-width:620px}
+.affiliate-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:10px 18px;border-radius:9px;background:var(--grad);color:#fff;font-size:13px;font-weight:800;text-decoration:none;white-space:nowrap}
+.affiliate-btn:hover{opacity:.88;text-decoration:none}
+.affiliate-mini{font-size:11px;color:var(--text3);margin-top:8px}
+.affiliate-dashboard{padding:0 20px 20px}
+.affiliate-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.affiliate-stat{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:13px 14px;min-width:0}
+.affiliate-stat-value{font-size:20px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.affiliate-stat-label{font-size:10px;color:var(--text3);font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+.affiliate-link-box{display:grid;grid-template-columns:1fr auto;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px}
+.affiliate-link-input{min-width:0;background:transparent;border:none;color:var(--text);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;outline:none}
+.affiliate-copy-btn{padding:8px 12px;border-radius:8px;background:var(--blue-bg);border:1px solid rgba(91,141,239,.25);color:var(--blue);font-size:12px;font-weight:800}
+.affiliate-state{padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:12.5px;line-height:1.7}
 
 /* ── Table ── */
 table{width:100%;border-collapse:collapse}
@@ -127,6 +142,9 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 .toast.ok{background:#0d2218;color:#86efac;border:1px solid #166534}
 .toast.err{background:#1a0d0d;color:#fca5a5;border:1px solid #991b1b}
 .toast.inf{background:#0d2035;color:#93c5fd;border:1px solid #1d4ed8}
+.slow-loading{position:fixed;right:18px;bottom:18px;z-index:12000;display:none;align-items:center;gap:10px;padding:11px 14px;background:rgba(10,10,10,.94);border:1px solid rgba(91,141,239,.28);border-radius:8px;color:var(--text);font-size:12px;font-weight:800;letter-spacing:0;box-shadow:0 18px 44px rgba(0,0,0,.35)}
+.slow-loading.show{display:flex}
+.slow-loading::before{content:'';width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
 
 /* ── Confirm modal ── */
 #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -198,6 +216,9 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 @media(max-width:640px){
   .stats-grid{grid-template-columns:1fr 1fr}
   .plan-hero{flex-direction:column;align-items:flex-start}
+  .affiliate-panel{grid-template-columns:1fr}
+  .affiliate-stats{grid-template-columns:1fr 1fr}
+  .affiliate-link-box{grid-template-columns:1fr}
   thead th:nth-child(n+4){display:none}
   tbody td:nth-child(n+4){display:none}
   .plan-grid{padding:12px 16px}
@@ -219,6 +240,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
       App
     </a>
+    <a href="/affiliate" class="topbar-btn">Affiliate</a>
     <button class="logout-btn" onclick="logout()">Sign out</button>
   </div>
 </div>
@@ -241,7 +263,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     </div>
     <div class="plan-hero-info">
       <div class="plan-hero-name" id="plan-name">—</div>
-      <div class="plan-hero-meta" id="plan-meta">Loading…</div>
+      <div class="plan-hero-meta" id="plan-meta">LOADING...</div>
     </div>
     <div class="plan-hero-actions" id="plan-actions"></div>
   </div>
@@ -264,6 +286,25 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     </div>
   </div>
 
+  <!-- Affiliate program -->
+  <div class="section" id="affiliate-section">
+    <div class="section-hd">
+      <div class="section-title">Affiliate Program</div>
+      <a class="section-action" href="/affiliate">Open affiliate page</a>
+    </div>
+    <div class="affiliate-panel">
+      <div>
+        <div class="affiliate-title">Earn by sharing CLONYFY</div>
+        <div class="affiliate-copy">Your affiliate workspace is built into CLONYFY. Track clicks, referrals, conversions, rewards, and payouts here.</div>
+        <div class="affiliate-mini">Powered by Affonso embed data. No external redirect needed.</div>
+      </div>
+      <button id="affiliate-main-link" class="affiliate-btn" onclick="loadAffiliateDashboard()">Load affiliate dashboard</button>
+    </div>
+    <div class="affiliate-dashboard" id="affiliate-dashboard">
+      <div class="affiliate-state">LOADING...</div>
+    </div>
+  </div>
+
   <!-- Recent clones -->
   <div class="section">
     <div class="section-hd">
@@ -281,7 +322,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     <div style="overflow-x:auto">
       <table>
         <thead><tr><th>URL</th><th>Pages</th><th>Assets</th><th>Date</th><th>Status</th></tr></thead>
-        <tbody id="clones-tbody"><tr><td colspan="5" class="empty-row">Loading…</td></tr></tbody>
+        <tbody id="clones-tbody"><tr><td colspan="5" class="empty-row">LOADING...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -294,7 +335,7 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
     <div style="overflow-x:auto">
       <table>
         <thead><tr><th>Plan</th><th>Amount</th><th>Interval</th><th>Date</th><th>Status</th></tr></thead>
-        <tbody id="billing-tbody"><tr><td colspan="5" class="empty-row">Loading…</td></tr></tbody>
+        <tbody id="billing-tbody"><tr><td colspan="5" class="empty-row">LOADING...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -393,35 +434,33 @@ tbody td{padding:11px 16px;vertical-align:middle;font-size:12px}
 </div>
 
 <div id="toasts"></div>
+<div id="slow-loading" class="slow-loading" role="status" aria-live="polite">LOADING...</div>
 
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PLAN_LABELS = {
-  free:'Free', starter:'Starter', popular:'Most Popular',
-  growth:'Growth', unlimited:'Unlimited', pro:'Growth', enterprise:'Unlimited',
+  free:'Free', starter:'Starter',
+  growth:'Growth', unlimited:'Scale', popular:'Growth', pro:'Growth', scale:'Scale', enterprise:'Scale',
 };
-const PLAN_ALIASES = { pro:'growth', enterprise:'unlimited' };
+const PLAN_ALIASES = { popular:'growth', pro:'growth', scale:'unlimited', enterprise:'unlimited' };
 function normalizePlan(plan) { return PLAN_ALIASES[(plan || 'free').toLowerCase()] || (plan || 'free').toLowerCase(); }
+const AUTH_TOKEN_KEY = 'wc_auth_token';
+const DASH_CACHE_KEY = 'wc_dashboard_cache';
 const PLANS = [
   {
     key: 'starter', label: 'Starter',
-    monthly: 9.99, annual: 95.88,
-    features: ['15 clones / month', '30 pages per clone', 'All static assets', 'Next.js export', 'Visual editor'],
-  },
-  {
-    key: 'popular', label: 'Most Popular', popular: true,
     monthly: 19.99, annual: 191.88,
-    features: ['50 clones / month', '100 pages per clone', 'Priority processing', 'API route detection', 'Visual editor'],
+    features: ['10 website clones / month', 'Unlimited screens', 'Code & ZIP export', 'Visual Builder & Editor', '6 days/week support', 'Cancel anytime'],
   },
   {
-    key: 'growth', label: 'Growth',
-    monthly: 34.99, annual: 335.88,
-    features: ['100 clones / month', '200 pages per clone', 'Everything in Popular', 'Concurrent clones ×2', 'Email support'],
+    key: 'growth', label: 'Growth', popular: true,
+    monthly: 29.99, annual: 287.88,
+    features: ['25 website clones / month', 'Unlimited screens', 'Code & ZIP export', 'Figma export', 'Visual Builder & Editor', 'Access to templates', 'API access', '6 days/week support', 'Cancel anytime'],
   },
   {
-    key: 'unlimited', label: 'Unlimited',
+    key: 'unlimited', label: 'Scale',
     monthly: 59.99, annual: 575.88,
-    features: ['Unlimited clones', '500 pages per clone', 'Everything in Growth', 'Highest priority', 'Dedicated support'],
+    features: ['Unlimited website clones', 'Unlimited screens', 'Code & ZIP export', 'Figma export', 'Visual Builder & Editor', 'Access to templates', 'API access', '7 days/week priority support', 'Cancel anytime'],
   },
 ];
 
@@ -430,16 +469,152 @@ let dashPaySettings = { stripe_ready: false, stripe_error: 'Payment system is no
 let currentBillingInterval = 'monthly';
 let currentPlan = 'free';
 let checkoutInProgress = false;
+let affiliateDashboardEnabled = false;
+let affiliateDashboardLoaded = false;
+let slowLoadingCount = 0;
+let slowLoadingTimer = null;
+function beginSlowLoading(delay = 900) {
+  slowLoadingCount++;
+  const el = document.getElementById('slow-loading');
+  if (!el) return () => {};
+  if (!slowLoadingTimer && !el.classList.contains('show')) {
+    slowLoadingTimer = setTimeout(() => {
+      slowLoadingTimer = null;
+      if (slowLoadingCount > 0) el.classList.add('show');
+    }, delay);
+  }
+  return () => {
+    slowLoadingCount = Math.max(0, slowLoadingCount - 1);
+    if (slowLoadingCount === 0) {
+      if (slowLoadingTimer) { clearTimeout(slowLoadingTimer); slowLoadingTimer = null; }
+      el.classList.remove('show');
+    }
+  };
+}
 
 // ── API ───────────────────────────────────────────────────────────────────────
-async function apiFetch(method, path, body) {
-  const token = localStorage.getItem('wc_auth_token') || '';
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+async function apiFetch(method, path, body, options = {}) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  const doneLoading = options.silentLoading ? () => {} : beginSlowLoading();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 30000);
+  try {
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    data._status = res.status;
+    if (res.status === 401 || res.status === 403) {
+      const err = new Error(data.error || 'Not authenticated');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  } finally {
+    clearTimeout(timeout);
+    doneLoading();
+  }
+}
+async function syncStripeAfterCheckout(sessionId) {
+  if (!sessionId) return false;
+  const r = await apiFetch('POST', '/api/payments/stripe/sync', { sessionId });
+  if (r.error) throw new Error(r.error);
+  return true;
+}
+
+function renderAffiliateConfig(cfg = {}) {
+  const section = document.getElementById('affiliate-section');
+  if (!section) return;
+  const enabled = cfg.affiliate_enabled !== false && cfg.affiliate_enabled !== 'false';
+  if (!enabled) {
+    section.classList.add('hidden');
+    return;
+  }
+  affiliateDashboardEnabled = !!cfg.affiliate_dashboard_enabled;
+  section.classList.remove('hidden');
+  const mainLink = document.getElementById('affiliate-main-link');
+  const dash = document.getElementById('affiliate-dashboard');
+  if (mainLink) mainLink.textContent = 'Load referral link';
+  if (cfg.affiliate_public_id && !document.querySelector('script[src*="cdn.affonso.io/js/pixel.min.js"]')) {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.affonso.io/js/pixel.min.js';
+    script.async = true;
+    script.defer = true;
+    script.setAttribute('data-affonso', cfg.affiliate_public_id);
+    script.setAttribute('data-cookie_duration', '30');
+    script.dataset.affonsoPixel = 'true';
+    document.head.appendChild(script);
+  }
+  if (!affiliateDashboardLoaded) loadAffiliateDashboard();
+}
+
+function pickAffiliateValue(obj, keys, fallback = 0) {
+  for (const key of keys) {
+    const value = key.split('.').reduce((acc, part) => acc && acc[part], obj);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return fallback;
+}
+
+function formatAffiliateMoney(value) {
+  if (typeof value === 'string' && value.includes('$')) return value;
+  const num = Number(value || 0);
+  return `$${num.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function renderAffiliateDashboard(data = {}) {
+  const dash = document.getElementById('affiliate-dashboard');
+  if (!dash) return;
+  const partner = data.partner || data.affiliate || data;
+  const stats = data.stats || data.analytics || partner.stats || {};
+  const referralLink = pickAffiliateValue(data, ['referralLink', 'referral_link', 'link', 'partner.referralLink', 'partner.referral_link', 'affiliate.referralLink'], '');
+  const clicks = pickAffiliateValue(stats, ['clicks', 'visits', 'totalClicks', 'total_clicks'], 0);
+  const referrals = pickAffiliateValue(stats, ['referrals', 'leads', 'customers', 'partners'], 0);
+  const conversions = pickAffiliateValue(stats, ['conversions', 'sales', 'paidReferrals', 'paid_referrals'], 0);
+  const rewards = pickAffiliateValue(stats, ['rewards', 'commission', 'commissions', 'earnings', 'totalRewards', 'total_rewards'], 0);
+  dash.innerHTML = `
+    <div class="affiliate-stats">
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${clicks}</div><div class="affiliate-stat-label">Clicks</div></div>
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${referrals}</div><div class="affiliate-stat-label">Referrals</div></div>
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${conversions}</div><div class="affiliate-stat-label">Conversions</div></div>
+      <div class="affiliate-stat"><div class="affiliate-stat-value">${formatAffiliateMoney(rewards)}</div><div class="affiliate-stat-label">Rewards</div></div>
+    </div>
+    ${referralLink ? `
+      <div class="affiliate-link-box">
+        <input id="affiliate-ref-link" class="affiliate-link-input" value="${String(referralLink).replace(/"/g, '&quot;')}" readonly>
+        <button class="affiliate-copy-btn" onclick="copyAffiliateLink()">Copy link</button>
+      </div>
+    ` : '<div class="affiliate-state">Your affiliate account is ready, but Affonso did not return a referral link yet. Refresh in a moment.</div>'}
+  `;
+}
+
+async function copyAffiliateLink() {
+  const input = document.getElementById('affiliate-ref-link');
+  if (!input) return;
+  await navigator.clipboard.writeText(input.value);
+  toast('Affiliate link copied', 'ok');
+}
+
+async function loadAffiliateDashboard() {
+  const dash = document.getElementById('affiliate-dashboard');
+  const link = document.getElementById('affiliate-main-link');
+  const oldText = link ? link.textContent : '';
+  if (link) link.textContent = 'LOADING...';
+  if (dash) dash.innerHTML = '<div class="affiliate-state">LOADING...</div>';
+  try {
+    const r = await apiFetch('GET', '/api/affiliate/dashboard', null, { silentLoading: true, timeoutMs: 25000 });
+    if (r.error) throw new Error(r.error);
+    affiliateDashboardLoaded = true;
+    renderAffiliateDashboard(r.data || {});
+  } catch (e) {
+    if (dash) dash.innerHTML = '<div class="affiliate-state">Open the full affiliate page to view and copy your referral link.</div>';
+    toast(e.message || 'Affiliate dashboard failed to open.', 'err');
+  } finally {
+    if (link) link.textContent = oldText || 'Load affiliate dashboard';
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -448,19 +623,31 @@ async function init() {
 
   const impersonateToken = urlParams.get('impersonate_token');
   if (impersonateToken) {
-    localStorage.setItem('wc_auth_token', impersonateToken);
+    localStorage.setItem(AUTH_TOKEN_KEY, impersonateToken);
     history.replaceState(null, '', '/dashboard');
   }
 
   const stripeResult = urlParams.get('stripe');
+  const stripeSessionId = urlParams.get('session_id');
   if (stripeResult) history.replaceState(null, '', '/dashboard');
 
-  const token = localStorage.getItem('wc_auth_token');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) { location.href = '/'; return; }
 
   try {
+    if (stripeResult === 'success' && stripeSessionId) {
+      try {
+        await syncStripeAfterCheckout(stripeSessionId);
+      } catch (e) {
+        toast(e.message || 'Payment is still processing. Refresh in a moment.', 'warn');
+      }
+    }
+    const settingsPromise = apiFetch('GET', '/api/payments/settings', null, { silentLoading: true });
+    const billingPromise = apiFetch('GET', '/api/user/billing', null, { silentLoading: true });
+    const affiliatePromise = apiFetch('GET', '/api/public-config', null, { silentLoading: true });
     dashData = await apiFetch('GET', '/api/user/dashboard');
-    if (dashData.error) { location.href = '/'; return; }
+    if (dashData.error) throw new Error(dashData.error);
+    try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(dashData)); } catch {}
 
     if (dashData.impersonatedBy) {
       const banner = document.createElement('div');
@@ -471,16 +658,41 @@ async function init() {
 
     renderDashboard(dashData);
 
-    dashPaySettings = await apiFetch('GET', '/api/payments/settings');
-    const billing = await apiFetch('GET', '/api/user/billing');
-    renderBilling(billing.payments || []);
+    const [settingsResult, billingResult, affiliateResult] = await Promise.allSettled([settingsPromise, billingPromise, affiliatePromise]);
+    if (settingsResult.status === 'fulfilled' && settingsResult.value && !settingsResult.value.error) {
+      dashPaySettings = settingsResult.value;
+    }
+    if (billingResult.status === 'fulfilled' && billingResult.value && !billingResult.value.error) {
+      renderBilling(billingResult.value.payments || []);
+    } else {
+      renderBilling([]);
+    }
+    if (affiliateResult.status === 'fulfilled' && affiliateResult.value && !affiliateResult.value.error) {
+      renderAffiliateConfig(affiliateResult.value);
+    }
 
     document.getElementById('field-name').value = dashData.user.name || '';
     document.getElementById('field-email').value = dashData.user.email || '';
 
     if (stripeResult === 'success') toast('Payment successful — your plan is now active!', 'ok');
     else if (stripeResult === 'cancelled') toast('Checkout cancelled. No charge was made.', 'inf');
-  } catch { toast('Failed to load dashboard', 'err'); }
+  } catch(e) {
+    if (e.status === 401 || e.status === 403) {
+      if (e.status === 403) sessionStorage.setItem('wc_auth_error', e.message || 'Your account has been suspended. Contact support.');
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(DASH_CACHE_KEY);
+      location.href = '/';
+      return;
+    }
+    const cached = (() => { try { return JSON.parse(localStorage.getItem(DASH_CACHE_KEY) || 'null'); } catch { return null; } })();
+    if (cached) {
+      dashData = cached;
+      renderDashboard(dashData);
+      toast('Dashboard is loading slowly. Showing cached data while you retry.', 'warn');
+      return;
+    }
+    toast(e.message || 'Failed to load dashboard. Please refresh.', 'err');
+  }
 }
 
 // ── Render dashboard ──────────────────────────────────────────────────────────
@@ -765,7 +977,7 @@ async function saveProfile() {
 
 // ── GDPR ──────────────────────────────────────────────────────────────────────
 function exportMyData() {
-  const token = localStorage.getItem('wc_auth_token') || '';
+  const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
   fetch('/api/user/export', { headers: { 'X-Auth-Token': token } })
     .then(r => r.blob())
     .then(blob => {
@@ -788,15 +1000,16 @@ function confirmDeleteAccount() {
       const pw = document.getElementById('del-account-pw')?.value || '';
       if (!pw) { toast('Password is required', 'err'); return; }
       try {
-        const token = localStorage.getItem('wc_auth_token') || '';
+        const token = localStorage.getItem(AUTH_TOKEN_KEY) || '';
         const res = await fetch('/api/user/account', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
           body: JSON.stringify({ password: pw }),
         });
-        const r = await res.json();
+        const r = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         if (r.error) throw new Error(r.error);
-        localStorage.removeItem('wc_auth_token');
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(DASH_CACHE_KEY);
         toast('Account deleted', 'ok');
         setTimeout(() => { location.href = '/'; }, 1800);
       } catch(e) { toast(e.message, 'err'); }
@@ -807,9 +1020,10 @@ function confirmDeleteAccount() {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function logout() {
-  const token = localStorage.getItem('wc_auth_token');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (token) fetch('/api/auth/logout', { method: 'POST', headers: { 'X-Auth-Token': token } }).catch(() => {});
-  localStorage.removeItem('wc_auth_token');
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(DASH_CACHE_KEY);
   location.href = '/';
 }
 
