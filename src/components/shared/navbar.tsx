@@ -14,6 +14,13 @@ const navLinks = [
   
 ];
 
+function hasActiveSession() {
+  if (typeof window === "undefined") return false;
+  const localToken = window.localStorage.getItem("wc_auth_token");
+  const cookieToken = document.cookie.split(";").some((part) => part.trim().startsWith("wc_auth_token="));
+  return Boolean(localToken || cookieToken);
+}
+
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -26,8 +33,14 @@ export function Navbar() {
   }, []);
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
-    setIsAuthenticated(!!token);
+    const syncAuthState = () => setIsAuthenticated(hasActiveSession());
+    syncAuthState();
+    window.addEventListener("storage", syncAuthState);
+    window.addEventListener("focus", syncAuthState);
+    return () => {
+      window.removeEventListener("storage", syncAuthState);
+      window.removeEventListener("focus", syncAuthState);
+    };
   }, []);
 
   return (
