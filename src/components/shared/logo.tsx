@@ -15,7 +15,7 @@ export function Logo({ className, size = "md", href = "/", variant = "dark" }: L
   const heights = { sm: 28, md: 34, lg: 42 };
   const h = heights[size];
 
-  const src = "/clonyfy-logo.jpeg";
+  const src = "/clonyfy-logo.png";
 
   return (
     <Link href={href} className={cn("flex items-center shrink-0 group", className)}>
