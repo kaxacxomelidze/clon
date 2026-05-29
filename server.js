@@ -1957,6 +1957,9 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && url.pathname === '/register') {
     return res.writeHead(302, { Location: '/app' }), res.end();
   }
+  if (req.method === 'GET' && url.pathname === '/favicon.ico') {
+    return serveFile(res, join(__dirname, 'public', 'icon.svg'), 'image/svg+xml', 86400);
+  }
   if (isPageRead && /\/__next\.[^/]+\.txt$/.test(url.pathname)) {
     const name = url.pathname.split('/').pop();
     return serveFile(res, join(__dirname, 'public', name), 'text/plain', 60);
