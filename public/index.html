@@ -451,31 +451,49 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 @keyframes spin{to{transform:rotate(360deg)}}
 .fadein{animation:fadeIn .2s ease}
 
-/* ── Clone starting animation ──────────────────────────── */
-@keyframes clone-pulse{0%,100%{opacity:.35;transform:scale(.92)}50%{opacity:1;transform:scale(1)}}
-@keyframes clone-scan{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
-@keyframes clone-orbit{0%{transform:rotate(0deg) translateX(48px) rotate(0deg)}100%{transform:rotate(360deg) translateX(48px) rotate(-360deg)}}
-@keyframes clone-fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-@keyframes clone-step{0%{opacity:.35}50%{opacity:1;color:#60a5fa}100%{opacity:.35}}
-@keyframes clone-grid-pan{0%{background-position:0 0}100%{background-position:32px 32px}}
-.clone-loader{display:none;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;animation:clone-fade-in .35s ease;border-radius:16px;margin:16px auto;max-width:560px;position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(37,99,235,.06),rgba(124,58,237,.06));border:1px solid rgba(96,165,250,.18)}
-.clone-loader::before{content:'';position:absolute;inset:0;background:linear-gradient(to right,transparent,rgba(96,165,250,.18),transparent);width:30%;animation:clone-scan 2.2s linear infinite;pointer-events:none}
-.clone-loader::after{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(96,165,250,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(96,165,250,.08) 1px,transparent 1px);background-size:32px 32px;animation:clone-grid-pan 4s linear infinite;pointer-events:none;opacity:.6}
+/* ── Clone starting animation (mono black/white) ──────────────────────────── */
+@keyframes clone-fade-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes clone-ring-spin{to{transform:rotate(360deg)}}
+@keyframes clone-ring-spin-rev{to{transform:rotate(-360deg)}}
+@keyframes clone-core-pulse{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.05)}}
+@keyframes clone-scan-h{0%{transform:translateY(-50%) translateX(-110%);opacity:0}10%,90%{opacity:.9}100%{transform:translateY(-50%) translateX(110%);opacity:0}}
+@keyframes clone-scan-v{0%{transform:translateX(-50%) translateY(-110%);opacity:0}10%,90%{opacity:.55}100%{transform:translateX(-50%) translateY(110%);opacity:0}}
+@keyframes clone-grain{0%,100%{transform:translate(0,0)}25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-2%)}}
+@keyframes clone-blink{0%,55%{opacity:1}56%,100%{opacity:0}}
+@keyframes clone-fill-bar{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+@keyframes clone-step-tick{0%{transform:scale(.7);opacity:.4}55%{transform:scale(1.15);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes clone-ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.clone-loader{display:none;flex-direction:column;align-items:center;justify-content:center;padding:56px 28px 40px;margin:18px auto;max-width:620px;position:relative;overflow:hidden;border-radius:18px;background:#000;border:1px solid rgba(255,255,255,.08);animation:clone-fade-in .4s cubic-bezier(.16,1,.3,1);box-shadow:0 24px 60px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.02) inset}
+.clone-loader::before{content:'';position:absolute;inset:-50%;background-image:radial-gradient(rgba(255,255,255,.04) 1px,transparent 1px);background-size:14px 14px;animation:clone-grain 4s ease-in-out infinite;pointer-events:none;opacity:.7}
+.clone-loader::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(to bottom,transparent 0,transparent 2px,rgba(255,255,255,.015) 3px,transparent 4px);pointer-events:none}
 .clone-loader.on{display:flex}
-.clone-orb{position:relative;width:128px;height:128px;display:flex;align-items:center;justify-content:center;z-index:1}
-.clone-orb-core{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#93c5fd,#2563eb 70%);box-shadow:0 0 40px rgba(96,165,250,.6),0 0 80px rgba(124,58,237,.35);animation:clone-pulse 1.6s ease-in-out infinite;display:flex;align-items:center;justify-content:center;color:#fff}
-.clone-orb-dot{position:absolute;width:8px;height:8px;border-radius:50%;background:#a5f3fc;box-shadow:0 0 12px #67e8f9}
-.clone-orb-dot:nth-child(1){animation:clone-orbit 2.4s linear infinite}
-.clone-orb-dot:nth-child(2){animation:clone-orbit 2.4s linear infinite -.8s;background:#f0abfc;box-shadow:0 0 12px #e879f9}
-.clone-orb-dot:nth-child(3){animation:clone-orbit 2.4s linear infinite -1.6s;background:#fde68a;box-shadow:0 0 12px #fbbf24}
-.clone-status{margin-top:18px;font-size:14px;font-weight:700;color:#e6edf3;letter-spacing:.2px;z-index:1;min-height:20px}
-.clone-status .dot{display:inline-block;animation:clone-step 1.2s ease-in-out infinite;margin-left:1px}
-.clone-status .dot:nth-child(2){animation-delay:.2s}
-.clone-status .dot:nth-child(3){animation-delay:.4s}
-.clone-steps{display:flex;gap:14px;margin-top:14px;z-index:1;flex-wrap:wrap;justify-content:center}
-.clone-steps span{font-size:11px;font-weight:600;color:rgba(230,237,243,.4);text-transform:uppercase;letter-spacing:.12em;padding:5px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);transition:all .3s}
-.clone-steps span.active{color:#93c5fd;border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.08);box-shadow:0 0 16px rgba(96,165,250,.18)}
-.clone-tip{margin-top:14px;font-size:11px;color:rgba(230,237,243,.45);font-style:italic;z-index:1;text-align:center;max-width:380px;line-height:1.5}
+.clone-rings{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;z-index:2}
+.clone-rings::before,.clone-rings::after{content:'';position:absolute;border-radius:50%;border:1px solid transparent;pointer-events:none}
+.clone-rings::before{inset:-22px;border-top-color:rgba(255,255,255,.85);border-right-color:rgba(255,255,255,.25);animation:clone-ring-spin 2.2s linear infinite}
+.clone-rings::after{inset:-4px;border-bottom-color:rgba(255,255,255,.55);border-left-color:rgba(255,255,255,.1);animation:clone-ring-spin-rev 3s linear infinite}
+.clone-rings .clone-ring-mid{position:absolute;inset:-12px;border-radius:50%;border:1px dashed rgba(255,255,255,.18);animation:clone-ring-spin 6s linear infinite}
+.clone-rings .clone-core{width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#bdbdbd 55%,#0a0a0a 100%);box-shadow:0 0 0 1px rgba(255,255,255,.4),0 0 60px rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;color:#000;animation:clone-core-pulse 1.8s ease-in-out infinite;position:relative;z-index:1}
+.clone-rings .clone-core svg{filter:drop-shadow(0 0 6px rgba(255,255,255,.5))}
+.clone-scan-frame{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1}
+.clone-scan-frame .scan-h{position:absolute;top:50%;left:0;width:100%;height:1px;background:linear-gradient(to right,transparent,rgba(255,255,255,.85),transparent);animation:clone-scan-h 3s linear infinite}
+.clone-scan-frame .scan-v{position:absolute;left:50%;top:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.45),transparent);animation:clone-scan-v 4s linear infinite}
+.clone-status{margin-top:30px;font-family:'JetBrains Mono','Menlo','Consolas',ui-monospace,monospace;font-size:13px;font-weight:600;color:#fff;letter-spacing:.08em;text-transform:uppercase;z-index:2;min-height:18px;display:flex;align-items:center;gap:8px}
+.clone-status::before{content:'>';color:rgba(255,255,255,.4);font-weight:400}
+.clone-status .cursor{display:inline-block;width:8px;height:14px;background:#fff;margin-left:2px;animation:clone-blink 1s steps(1) infinite;vertical-align:middle}
+.clone-progress{margin-top:18px;width:100%;max-width:420px;height:2px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;z-index:2;position:relative}
+.clone-progress-fill{position:absolute;inset:0;background:linear-gradient(to right,rgba(255,255,255,.5),#fff);border-radius:999px;transform-origin:left;transform:scaleX(0);transition:transform 1.2s cubic-bezier(.65,0,.35,1)}
+.clone-steps{display:flex;gap:0;margin-top:22px;z-index:2;flex-wrap:wrap;justify-content:center;width:100%;max-width:520px}
+.clone-steps span{flex:1;text-align:center;font-family:'JetBrains Mono','Menlo','Consolas',ui-monospace,monospace;font-size:10px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.18em;padding:8px 6px;border-top:1px solid rgba(255,255,255,.08);position:relative;transition:color .35s ease}
+.clone-steps span::before{content:'';position:absolute;top:-3px;left:50%;transform:translateX(-50%) scale(.7);width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.15);transition:all .35s ease}
+.clone-steps span.active{color:#fff}
+.clone-steps span.active::before{background:#fff;box-shadow:0 0 12px rgba(255,255,255,.6);animation:clone-step-tick .5s cubic-bezier(.16,1,.3,1)}
+.clone-steps span.done{color:rgba(255,255,255,.5)}
+.clone-steps span.done::before{background:rgba(255,255,255,.6)}
+.clone-tip{margin-top:18px;font-size:11px;color:rgba(255,255,255,.4);font-style:normal;z-index:2;text-align:center;max-width:420px;line-height:1.6;letter-spacing:.02em;font-family:'JetBrains Mono','Menlo','Consolas',ui-monospace,monospace}
+.clone-ticker{margin-top:14px;width:100%;max-width:520px;overflow:hidden;mask-image:linear-gradient(to right,transparent,#000 12%,#000 88%,transparent);z-index:2;position:relative}
+.clone-ticker-track{display:flex;gap:32px;white-space:nowrap;animation:clone-ticker 22s linear infinite;font-family:'JetBrains Mono','Menlo','Consolas',ui-monospace,monospace;font-size:10px;color:rgba(255,255,255,.32);text-transform:uppercase;letter-spacing:.22em}
+.clone-ticker-track span{display:inline-flex;align-items:center;gap:6px}
+.clone-ticker-track span::before{content:'';width:4px;height:4px;background:rgba(255,255,255,.4);border-radius:50%;display:inline-block}
 
 /* ── Build tab ──────────────────────────────────────── */
 .build-root{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
@@ -1671,15 +1689,18 @@ input[type=checkbox]{accent-color:#fff!important}
     </div>
     <div class="prog-bar"><div class="prog-bar-inner" id="progressBar"></div></div>
     <div class="clone-loader" id="cloneLoader">
-      <div class="clone-orb">
-        <div class="clone-orb-dot"></div>
-        <div class="clone-orb-dot"></div>
-        <div class="clone-orb-dot"></div>
-        <div class="clone-orb-core">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <div class="clone-scan-frame">
+        <div class="scan-h"></div>
+        <div class="scan-v"></div>
+      </div>
+      <div class="clone-rings">
+        <div class="clone-ring-mid"></div>
+        <div class="clone-core">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </div>
       </div>
-      <div class="clone-status" id="cloneLoaderStatus">Initializing<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+      <div class="clone-status" id="cloneLoaderStatus"><span class="msg">INITIALIZING</span><span class="cursor"></span></div>
+      <div class="clone-progress"><div class="clone-progress-fill" id="cloneLoaderProgress"></div></div>
       <div class="clone-steps" id="cloneLoaderSteps">
         <span data-step="0">Connect</span>
         <span data-step="1">Crawl</span>
@@ -1687,7 +1708,13 @@ input[type=checkbox]{accent-color:#fff!important}
         <span data-step="3">Analyze</span>
         <span data-step="4">Generate</span>
       </div>
-      <div class="clone-tip" id="cloneLoaderTip">Boot sequence — preparing browser context, resolving target origin, validating robots…</div>
+      <div class="clone-tip" id="cloneLoaderTip">// preparing browser context, resolving target origin, validating robots</div>
+      <div class="clone-ticker">
+        <div class="clone-ticker-track">
+          <span>HEADLESS BROWSER READY</span><span>SAME-ORIGIN POLICY OK</span><span>PLAYWRIGHT v1.50</span><span>NETWORK INTERCEPT ON</span><span>ASSET PIPELINE WARM</span><span>FIXTURE STORE OPEN</span>
+          <span>HEADLESS BROWSER READY</span><span>SAME-ORIGIN POLICY OK</span><span>PLAYWRIGHT v1.50</span><span>NETWORK INTERCEPT ON</span><span>ASSET PIPELINE WARM</span><span>FIXTURE STORE OPEN</span>
+        </div>
+      </div>
     </div>
     <div class="detail">
       <div class="detail-empty" id="emptyState">
@@ -3571,24 +3598,39 @@ function showCloneLoader(url) {
   if (jobV) jobV.style.display = 'none';
   if (!ldr) return;
   ldr.classList.add('on');
+  let host = '';
+  try { host = new URL(url).host.toUpperCase(); } catch {}
   const stages = [
-    { label: 'Connecting', tip: `Reaching ${url}… resolving DNS, opening browser context.`, step: 0 },
-    { label: 'Reading robots.txt', tip: 'Checking crawl policy and disallowed paths.', step: 0 },
-    { label: 'Loading homepage', tip: 'Rendering initial page with Playwright, intercepting network.', step: 1 },
-    { label: 'Discovering links', tip: 'Mapping internal navigation, building the crawl queue.', step: 1 },
-    { label: 'Capturing assets', tip: 'Downloading images, fonts, CSS, JS, and media.', step: 2 },
-    { label: 'Analyzing API routes', tip: 'Grouping network requests into reusable fixtures.', step: 3 },
-    { label: 'Almost there', tip: 'Finalizing handshake with the cloning engine…', step: 4 },
+    { label: 'CONNECTING', tip: `// reaching ${host || url} — resolving DNS, opening browser context`, step: 0 },
+    { label: 'READING ROBOTS', tip: '// fetching /robots.txt — checking crawl policy and disallowed paths', step: 0 },
+    { label: 'LOADING HOMEPAGE', tip: '// rendering initial page with Playwright — intercepting network traffic', step: 1 },
+    { label: 'DISCOVERING LINKS', tip: '// mapping internal navigation — building BFS crawl queue', step: 1 },
+    { label: 'CAPTURING ASSETS', tip: '// downloading images, fonts, CSS, JS and media — hashing for deduplication', step: 2 },
+    { label: 'ANALYZING ROUTES', tip: '// grouping network requests — normalizing paths, generating fixtures', step: 3 },
+    { label: 'GENERATING APP', tip: '// rendering Next.js templates — wiring Prisma schema and replay shim', step: 4 },
+    { label: 'FINALIZING', tip: '// almost there — sealing manifest and handing off to runner', step: 4 },
   ];
   let i = 0;
   const status = document.getElementById('cloneLoaderStatus');
   const tip = document.getElementById('cloneLoaderTip');
+  const fill = document.getElementById('cloneLoaderProgress');
   const steps = document.querySelectorAll('#cloneLoaderSteps span');
   const tick = () => {
     const s = stages[Math.min(i, stages.length - 1)];
-    if (status) status.innerHTML = `${s.label}<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>`;
+    if (status) {
+      const msg = status.querySelector('.msg');
+      if (msg) msg.textContent = s.label;
+    }
     if (tip) tip.textContent = s.tip;
-    steps.forEach(el => el.classList.toggle('active', parseInt(el.dataset.step, 10) === s.step));
+    steps.forEach(el => {
+      const n = parseInt(el.dataset.step, 10);
+      el.classList.toggle('active', n === s.step);
+      el.classList.toggle('done', n < s.step);
+    });
+    if (fill) {
+      const pct = Math.min(1, (i + 1) / stages.length);
+      fill.style.transform = `scaleX(${pct})`;
+    }
     i++;
   };
   tick();
