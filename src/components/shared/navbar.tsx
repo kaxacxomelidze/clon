@@ -83,14 +83,14 @@ export function Navbar() {
                           event.preventDefault();
                           scrollToHash(link.href);
                         }}
-                        className="text-[13px] px-4 py-2 rounded-lg font-medium text-white/60 hover:text-white transition-colors hover:bg-white/[0.06]"
+                        className="text-[13px] px-4 py-2 rounded-lg font-medium text-white hover:text-white transition-colors hover:bg-white/[0.06]"
                       >
                         {link.label}
                       </a>
                     ) : (
                       <Link
                         href={link.href}
-                        className="text-[13px] px-4 py-2 rounded-lg font-medium text-white/60 hover:text-white transition-colors hover:bg-white/[0.06]"
+                        className="text-[13px] px-4 py-2 rounded-lg font-medium text-white hover:text-white transition-colors hover:bg-white/[0.06]"
                       >
                         {link.label}
                       </Link>
@@ -112,7 +112,7 @@ export function Navbar() {
                   <>
                     <a
                       href="/sign-in"
-                      className="inline-flex items-center justify-center text-[13px] font-medium text-white/60 hover:text-white transition-colors px-3 py-2"
+                      className="inline-flex items-center justify-center text-[13px] font-medium text-white hover:text-white transition-colors px-3 py-2"
                     >
                       Log in
                     </a>
@@ -153,7 +153,7 @@ export function Navbar() {
                       <a
                         key={link.label}
                         href={link.href}
-                        className="text-sm font-medium text-white/60 hover:text-white px-3 py-2.5 rounded-lg hover:bg-white/[0.07] transition-colors"
+                        className="text-sm font-medium text-white hover:text-white px-3 py-2.5 rounded-lg hover:bg-white/[0.07] transition-colors"
                         onClick={(event) => {
                           event.preventDefault();
                           setMobileOpen(false);
@@ -166,7 +166,7 @@ export function Navbar() {
                       <Link
                         key={link.label}
                         href={link.href}
-                        className="text-sm font-medium text-white/60 hover:text-white px-3 py-2.5 rounded-lg hover:bg-white/[0.07] transition-colors"
+                        className="text-sm font-medium text-white hover:text-white px-3 py-2.5 rounded-lg hover:bg-white/[0.07] transition-colors"
                         onClick={() => setMobileOpen(false)}
                       >
                         {link.label}
@@ -185,7 +185,7 @@ export function Navbar() {
                       <>
                         <a
                           href="/sign-in"
-                          className="flex-1 inline-flex items-center justify-center h-9 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-xl"
+                          className="flex-1 inline-flex items-center justify-center h-9 text-sm text-white hover:text-white hover:bg-white/10 rounded-xl"
                         >
                           Sign in
                         </a>
