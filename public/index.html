@@ -451,6 +451,32 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 @keyframes spin{to{transform:rotate(360deg)}}
 .fadein{animation:fadeIn .2s ease}
 
+/* ── Clone starting animation ──────────────────────────── */
+@keyframes clone-pulse{0%,100%{opacity:.35;transform:scale(.92)}50%{opacity:1;transform:scale(1)}}
+@keyframes clone-scan{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+@keyframes clone-orbit{0%{transform:rotate(0deg) translateX(48px) rotate(0deg)}100%{transform:rotate(360deg) translateX(48px) rotate(-360deg)}}
+@keyframes clone-fade-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes clone-step{0%{opacity:.35}50%{opacity:1;color:#60a5fa}100%{opacity:.35}}
+@keyframes clone-grid-pan{0%{background-position:0 0}100%{background-position:32px 32px}}
+.clone-loader{display:none;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;animation:clone-fade-in .35s ease;border-radius:16px;margin:16px auto;max-width:560px;position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(37,99,235,.06),rgba(124,58,237,.06));border:1px solid rgba(96,165,250,.18)}
+.clone-loader::before{content:'';position:absolute;inset:0;background:linear-gradient(to right,transparent,rgba(96,165,250,.18),transparent);width:30%;animation:clone-scan 2.2s linear infinite;pointer-events:none}
+.clone-loader::after{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(96,165,250,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(96,165,250,.08) 1px,transparent 1px);background-size:32px 32px;animation:clone-grid-pan 4s linear infinite;pointer-events:none;opacity:.6}
+.clone-loader.on{display:flex}
+.clone-orb{position:relative;width:128px;height:128px;display:flex;align-items:center;justify-content:center;z-index:1}
+.clone-orb-core{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#93c5fd,#2563eb 70%);box-shadow:0 0 40px rgba(96,165,250,.6),0 0 80px rgba(124,58,237,.35);animation:clone-pulse 1.6s ease-in-out infinite;display:flex;align-items:center;justify-content:center;color:#fff}
+.clone-orb-dot{position:absolute;width:8px;height:8px;border-radius:50%;background:#a5f3fc;box-shadow:0 0 12px #67e8f9}
+.clone-orb-dot:nth-child(1){animation:clone-orbit 2.4s linear infinite}
+.clone-orb-dot:nth-child(2){animation:clone-orbit 2.4s linear infinite -.8s;background:#f0abfc;box-shadow:0 0 12px #e879f9}
+.clone-orb-dot:nth-child(3){animation:clone-orbit 2.4s linear infinite -1.6s;background:#fde68a;box-shadow:0 0 12px #fbbf24}
+.clone-status{margin-top:18px;font-size:14px;font-weight:700;color:#e6edf3;letter-spacing:.2px;z-index:1;min-height:20px}
+.clone-status .dot{display:inline-block;animation:clone-step 1.2s ease-in-out infinite;margin-left:1px}
+.clone-status .dot:nth-child(2){animation-delay:.2s}
+.clone-status .dot:nth-child(3){animation-delay:.4s}
+.clone-steps{display:flex;gap:14px;margin-top:14px;z-index:1;flex-wrap:wrap;justify-content:center}
+.clone-steps span{font-size:11px;font-weight:600;color:rgba(230,237,243,.4);text-transform:uppercase;letter-spacing:.12em;padding:5px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);transition:all .3s}
+.clone-steps span.active{color:#93c5fd;border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.08);box-shadow:0 0 16px rgba(96,165,250,.18)}
+.clone-tip{margin-top:14px;font-size:11px;color:rgba(230,237,243,.45);font-style:italic;z-index:1;text-align:center;max-width:380px;line-height:1.5}
+
 /* ── Build tab ──────────────────────────────────────── */
 .build-root{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
 .build-header{padding:32px 36px 22px;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,rgba(91,141,239,.04) 0%,transparent 100%)}
@@ -1644,6 +1670,25 @@ input[type=checkbox]{accent-color:#fff!important}
       </div>
     </div>
     <div class="prog-bar"><div class="prog-bar-inner" id="progressBar"></div></div>
+    <div class="clone-loader" id="cloneLoader">
+      <div class="clone-orb">
+        <div class="clone-orb-dot"></div>
+        <div class="clone-orb-dot"></div>
+        <div class="clone-orb-dot"></div>
+        <div class="clone-orb-core">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+      </div>
+      <div class="clone-status" id="cloneLoaderStatus">Initializing<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></div>
+      <div class="clone-steps" id="cloneLoaderSteps">
+        <span data-step="0">Connect</span>
+        <span data-step="1">Crawl</span>
+        <span data-step="2">Capture</span>
+        <span data-step="3">Analyze</span>
+        <span data-step="4">Generate</span>
+      </div>
+      <div class="clone-tip" id="cloneLoaderTip">Boot sequence — preparing browser context, resolving target origin, validating robots…</div>
+    </div>
     <div class="detail">
       <div class="detail-empty" id="emptyState">
         <div class="detail-empty-icon">🌐</div>
@@ -3518,6 +3563,44 @@ function normalizeCloneUrl(input) {
   return parsed.href;
 }
 
+function showCloneLoader(url) {
+  const ldr = document.getElementById('cloneLoader');
+  const empty = document.getElementById('emptyState');
+  const jobV = document.getElementById('jobView');
+  if (empty) empty.style.display = 'none';
+  if (jobV) jobV.style.display = 'none';
+  if (!ldr) return;
+  ldr.classList.add('on');
+  const stages = [
+    { label: 'Connecting', tip: `Reaching ${url}… resolving DNS, opening browser context.`, step: 0 },
+    { label: 'Reading robots.txt', tip: 'Checking crawl policy and disallowed paths.', step: 0 },
+    { label: 'Loading homepage', tip: 'Rendering initial page with Playwright, intercepting network.', step: 1 },
+    { label: 'Discovering links', tip: 'Mapping internal navigation, building the crawl queue.', step: 1 },
+    { label: 'Capturing assets', tip: 'Downloading images, fonts, CSS, JS, and media.', step: 2 },
+    { label: 'Analyzing API routes', tip: 'Grouping network requests into reusable fixtures.', step: 3 },
+    { label: 'Almost there', tip: 'Finalizing handshake with the cloning engine…', step: 4 },
+  ];
+  let i = 0;
+  const status = document.getElementById('cloneLoaderStatus');
+  const tip = document.getElementById('cloneLoaderTip');
+  const steps = document.querySelectorAll('#cloneLoaderSteps span');
+  const tick = () => {
+    const s = stages[Math.min(i, stages.length - 1)];
+    if (status) status.innerHTML = `${s.label}<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>`;
+    if (tip) tip.textContent = s.tip;
+    steps.forEach(el => el.classList.toggle('active', parseInt(el.dataset.step, 10) === s.step));
+    i++;
+  };
+  tick();
+  ldr._iv = setInterval(tick, 1400);
+}
+function hideCloneLoader() {
+  const ldr = document.getElementById('cloneLoader');
+  if (!ldr) return;
+  if (ldr._iv) { clearInterval(ldr._iv); ldr._iv = null; }
+  ldr.classList.remove('on');
+}
+
 async function startClone() {
   let url;
   try { url = normalizeCloneUrl(document.getElementById('urlInput').value); }
@@ -3526,6 +3609,7 @@ async function startClone() {
   const btn = document.getElementById('cloneBtn');
   btn.disabled = true;
   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Cloning...`;
+  showCloneLoader(url);
   try {
     syncPlanLimitsToCloneForm();
     const maxPages = Math.min(parseInt(document.getElementById('maxPages').value, 10) || 20, currentPlanLimits().maxPages);
@@ -3551,6 +3635,7 @@ async function startClone() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Clone`;
+    hideCloneLoader();
   }
 }
 
