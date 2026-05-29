@@ -93,7 +93,7 @@ export function Navbar() {
                     href="/app"
                     className="inline-flex items-center justify-center relative h-9 px-5 text-[13px] font-semibold text-black bg-white rounded-full hover:bg-white/90 transition-all duration-200 shadow-[0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(255,255,255,0.25)]"
                   >
-                    Dashboard
+                    Settings
                   </a>
                 ) : (
                   <>
@@ -162,7 +162,7 @@ export function Navbar() {
                         href="/app"
                         className="flex-1 inline-flex items-center justify-center h-9 text-sm bg-white text-black hover:bg-white/90 rounded-xl font-semibold"
                       >
-                        Dashboard
+                        Settings
                       </a>
                     ) : (
                       <>
