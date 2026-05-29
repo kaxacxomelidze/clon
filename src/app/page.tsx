@@ -21,8 +21,8 @@ export default function LandingPage() {
       <Navbar />
       <main className="flex-1">
         <HeroSection />
-        <StatsSection />
         <DemoSection />
+        <StatsSection />
         <HowItWorks />
         <ProblemSection />
         <FeaturesSection />

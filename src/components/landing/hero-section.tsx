@@ -153,7 +153,7 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-black px-0 pb-16 pt-24 sm:pt-28">
+    <section className="relative flex h-[100svh] min-h-[640px] flex-col items-center justify-center overflow-hidden bg-black px-0 py-24 sm:py-28">
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
 
       <FloatingExcusePill text={excuses[0]} initialX={4} initialY={20} rotate={-10} delay={0.1} />
@@ -191,7 +191,7 @@ export function HeroSection() {
           variants={fadeUp}
           initial="hidden"
           animate="show"
-          className="mt-8 max-w-xl text-[17px] font-normal leading-relaxed text-white/45 sm:text-xl"
+          className="mt-8 max-w-3xl whitespace-nowrap text-[clamp(14px,2.1vw,20px)] font-normal leading-relaxed text-white/45"
         >
           Paste a URL & get any website. No limits. Save thousands in dev fees.
         </motion.p>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link2, Cpu, Edit3, Download, ArrowRight, Play, RefreshCw, Check } from "lucide-react";
+import { Link2, Cpu, Edit3, Download, ArrowRight, RefreshCw, Check } from "lucide-react";
 
 type DemoStep = {
   id: number;
@@ -85,11 +85,8 @@ export function DemoSection() {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6">
 
         {/* Header */}
-        <div className="max-w-3xl mx-auto text-center mb-16">
-          <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.25em] px-4.5 py-2.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-white/50 backdrop-blur-md mb-6">
-            PROCESS
-          </span>
-          <h2 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+        <div className="max-w-6xl mx-auto text-center mb-16">
+          <h2 className="whitespace-nowrap bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-[clamp(26px,4.1vw,50px)] font-black tracking-tight text-transparent leading-tight">
             See the cloning process in action
           </h2>
           <p className="mt-4 text-base sm:text-lg text-white/45 max-w-xl mx-auto">
@@ -154,26 +151,6 @@ export function DemoSection() {
               );
             })}
 
-          </div>
-
-          {/* Play/Pause controls */}
-          <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={() => setIsPlaying(!isPlaying)}
-                className="flex items-center gap-2 text-xs font-semibold text-white/40 hover:text-white/80 transition-colors py-2"
-              >
-                {isPlaying ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Autoplay Active (Pause)</span>
-                  </>
-                ) : (
-                  <>
-                    <Play size={10} className="fill-current" />
-                    <span>Autoplay Paused (Resume)</span>
-                  </>
-                )}
-              </button>
           </div>
 
           {/* Full-width visual simulator browser */}

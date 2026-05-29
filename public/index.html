@@ -108,6 +108,11 @@ input[type=number]{width:78px;text-align:center}
 .clone-btn:hover:not(:disabled){opacity:.88}
 .clone-btn:active:not(:disabled){transform:scale(.98)}
 .clone-btn:disabled{background:var(--bg4);color:var(--text3);cursor:not-allowed;box-shadow:none}
+.clone-btn.loading{position:relative;overflow:hidden;color:#fff;background:#111;border:1px solid rgba(255,255,255,.1)}
+.clone-btn.loading::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent);animation:btnCloneSweep 1.2s linear infinite}
+.clone-btn-dots{display:inline-flex;gap:3px;position:relative;z-index:1}
+.clone-btn-dots i{width:4px;height:4px;border-radius:50%;background:#fff;animation:pulse .75s ease-in-out infinite}
+.clone-btn-dots i:nth-child(2){animation-delay:.15s}.clone-btn-dots i:nth-child(3){animation-delay:.3s}
 .prog-bar{height:1px;background:var(--border);flex-shrink:0;overflow:hidden}
 .prog-bar-inner{height:100%;background:var(--logo-grad);width:0%;transition:width .5s}
 .prog-bar-inner.ind{animation:prog-slide 1.5s infinite;width:30%}
@@ -120,6 +125,7 @@ input[type=number]{width:78px;text-align:center}
 .job-meta{font-size:11px;color:var(--text3);margin-top:3px;font-weight:500}
 .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:.04em}
 .badge.running{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(245,166,35,.15)}
+.badge.saving{background:rgba(255,255,255,.07);color:var(--text);border:1px solid rgba(255,255,255,.14)}
 .badge.done{background:var(--green-bg);color:var(--green);border:1px solid rgba(31,209,122,.15)}
 .badge.error{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,96,.15)}
 .stats-row{display:flex;gap:8px;padding:12px 32px;border-bottom:1px solid var(--border);flex-shrink:0}
@@ -129,6 +135,23 @@ input[type=number]{width:78px;text-align:center}
 .stat-val.green{color:var(--green)}
 .stat-val.yellow{color:var(--yellow)}
 .stat-lbl{font-size:10px;color:var(--text3);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.clone-anim{display:none;margin:12px 32px 0;padding:16px 18px;background:radial-gradient(circle at 18% 20%,rgba(255,255,255,.09),transparent 30%),linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.018));border:1px solid var(--border2);border-radius:14px;overflow:hidden;position:relative;flex-shrink:0}
+.clone-anim.show{display:grid;grid-template-columns:190px 1fr;gap:18px;align-items:center;animation:fadeIn .22s ease}
+.clone-orbit{height:132px;border-radius:12px;background:#050505;border:1px solid var(--border);position:relative;overflow:hidden}
+.clone-orbit::before{content:'';position:absolute;inset:16px;border:1px dashed rgba(255,255,255,.12);border-radius:50%;animation:spin 8s linear infinite}
+.clone-orbit::after{content:'';position:absolute;left:50%;top:50%;width:54px;height:54px;transform:translate(-50%,-50%);border-radius:16px;background:#fff;box-shadow:0 0 34px rgba(255,255,255,.18)}
+.clone-node{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--green);box-shadow:0 0 18px rgba(31,209,122,.6);animation:nodeTravel 3s ease-in-out infinite}
+.clone-node.n2{background:#93c5fd;animation-delay:.55s;box-shadow:0 0 18px rgba(147,197,253,.55)}
+.clone-node.n3{background:#f0abfc;animation-delay:1.1s;box-shadow:0 0 18px rgba(240,171,252,.5)}
+.clone-scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.8),transparent);animation:cloneScan 2.4s ease-in-out infinite}
+.clone-anim-title{font-size:13px;font-weight:800;margin-bottom:6px}
+.clone-anim-sub{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:12px}
+.clone-anim-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.clone-step{min-width:0;padding:9px 10px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
+.clone-step-label{font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.clone-step-value{font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clone-step.active{border-color:rgba(31,209,122,.24);background:rgba(31,209,122,.055)}
+.clone-step.active .clone-step-value{color:var(--green)}
 .log-area{flex:1;display:flex;flex-direction:column;overflow:hidden;margin:0 32px}
 .log-hd{display:flex;align-items:center;justify-content:space-between;padding:10px 0 6px;flex-shrink:0}
 .log-title{font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.12em}
@@ -449,6 +472,9 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 @keyframes prog-slide{0%{margin-left:-30%}100%{margin-left:100%}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes nodeTravel{0%{left:18%;top:78%;transform:scale(.7)}35%{left:48%;top:32%;transform:scale(1)}70%{left:76%;top:68%;transform:scale(.85)}100%{left:18%;top:78%;transform:scale(.7)}}
+@keyframes cloneScan{0%{top:14%;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:86%;opacity:0}}
+@keyframes btnCloneSweep{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 .fadein{animation:fadeIn .2s ease}
 
 /* ── Build tab ──────────────────────────────────────── */
@@ -499,6 +525,10 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   .log-area{margin:0 12px}
   .job-hd{padding:10px 12px}
   .stats-row{padding:8px 12px;gap:6px}
+  .clone-anim{margin:10px 12px 0}
+  .clone-anim.show{grid-template-columns:1fr}
+  .clone-orbit{height:110px}
+  .clone-anim-steps{grid-template-columns:1fr 1fr}
   .done-card{margin:0 12px 10px}
   .done-card-actions{gap:6px}
   .error-card{margin:0 12px 10px}
@@ -1663,6 +1693,24 @@ input[type=checkbox]{accent-color:#fff!important}
           <div class="stat-card"><div class="stat-val green" id="statApi">—</div><div class="stat-lbl">API routes</div></div>
           <div class="stat-card"><div class="stat-val yellow" id="statAssets">—</div><div class="stat-lbl">Assets</div></div>
           <div class="stat-card"><div class="stat-val" id="statTime">0s</div><div class="stat-lbl">Elapsed</div></div>
+        </div>
+        <div class="clone-anim" id="cloneAnim" aria-live="polite">
+          <div class="clone-orbit">
+            <span class="clone-scan"></span>
+            <span class="clone-node n1"></span>
+            <span class="clone-node n2"></span>
+            <span class="clone-node n3"></span>
+          </div>
+          <div>
+            <div class="clone-anim-title" id="cloneAnimTitle">Cloning website structure</div>
+            <div class="clone-anim-sub" id="cloneAnimSub">Reading the live page, collecting assets, and rebuilding it as editable code.</div>
+            <div class="clone-anim-steps">
+              <div class="clone-step active" id="cloneStepFetch"><div class="clone-step-label">Fetch</div><div class="clone-step-value">Page map</div></div>
+              <div class="clone-step" id="cloneStepAssets"><div class="clone-step-label">Assets</div><div class="clone-step-value">Images + fonts</div></div>
+              <div class="clone-step" id="cloneStepBuild"><div class="clone-step-label">Build</div><div class="clone-step-value">React output</div></div>
+              <div class="clone-step" id="cloneStepSave"><div class="clone-step-label">Save</div><div class="clone-step-value">Final files</div></div>
+            </div>
+          </div>
         </div>
         <div class="done-card" id="doneCard">
           <div class="done-card-title">
@@ -3529,7 +3577,8 @@ async function startClone() {
   document.getElementById('urlInput').value = url;
   const btn = document.getElementById('cloneBtn');
   btn.disabled = true;
-  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Cloning...`;
+  btn.classList.add('loading');
+  btn.innerHTML = `<span class="clone-btn-dots" aria-hidden="true"><i></i><i></i><i></i></span><span style="position:relative;z-index:1">Cloning</span>`;
   try {
     syncPlanLimitsToCloneForm();
     const maxPages = Math.min(parseInt(document.getElementById('maxPages').value, 10) || 20, currentPlanLimits().maxPages);
@@ -3554,6 +3603,7 @@ async function startClone() {
     loadHistory();
   } finally {
     btn.disabled = false;
+    btn.classList.remove('loading');
     btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Clone`;
   }
 }
@@ -3602,6 +3652,7 @@ function showJob(job) {
   v.style.overflow = 'hidden';
   document.getElementById('logBody').innerHTML = '';
   document.getElementById('doneCard').className = 'done-card';
+  const _ca = document.getElementById('cloneAnim'); if (_ca) _ca.className = 'clone-anim';
   const _ec = document.getElementById('errorCard'); if (_ec) _ec.className = 'error-card';
   document.getElementById('statPages').textContent = '—';
   document.getElementById('statApi').textContent = '—';
@@ -3610,6 +3661,32 @@ function showJob(job) {
   if (job.status === 'running' || job.status === 'saving') startPolling(job.id);
   else clearPolling();
   renderSidebar();
+}
+
+function updateCloneAnimation(job) {
+  const card = document.getElementById('cloneAnim');
+  if (!card) return;
+  const running = job.status === 'running' || job.status === 'saving';
+  card.className = running ? 'clone-anim show' : 'clone-anim';
+  if (!running) return;
+  const logs = Array.isArray(job.logs) ? job.logs.join('\n').toLowerCase() : '';
+  const stepIds = ['cloneStepFetch', 'cloneStepAssets', 'cloneStepBuild', 'cloneStepSave'];
+  let activeIndex = 0;
+  if (job.status === 'saving' || logs.includes('persist') || logs.includes('saving')) activeIndex = 3;
+  else if (logs.includes('generat') || logs.includes('tailwind') || logs.includes('react')) activeIndex = 2;
+  else if (logs.includes('asset') || logs.includes('image') || logs.includes('font')) activeIndex = 1;
+  stepIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.className = 'clone-step' + (i <= activeIndex ? ' active' : '');
+  });
+  const titles = [
+    ['Scanning the source site', 'Mapping pages, routes, and the rendered DOM before the rebuild starts.'],
+    ['Collecting visual assets', 'Pulling images, fonts, stylesheets, and layout signals into the clone workspace.'],
+    ['Rebuilding editable code', 'Converting the captured structure into clean React and Tailwind output.'],
+    ['Packing the finished clone', 'Saving files and preparing preview, export, and editor actions.'],
+  ];
+  document.getElementById('cloneAnimTitle').textContent = titles[activeIndex][0];
+  document.getElementById('cloneAnimSub').textContent = titles[activeIndex][1];
 }
 
 function updateJobView(job) {
@@ -3638,6 +3715,7 @@ function updateJobView(job) {
     pb.style.width = job.status === 'done' ? '100%' : '0%';
     pb.style.background = job.status === 'done' ? 'var(--green)' : 'var(--red)';
   }
+  updateCloneAnimation(job);
   const logEl = document.getElementById('logBody');
   const logs = Array.isArray(job.logs) ? job.logs : [];
   const logOffset = Number.isFinite(job.logOffset) ? job.logOffset : 0;
