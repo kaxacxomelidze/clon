@@ -2031,7 +2031,18 @@ async function handleRequest(req, res) {
     if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
     const data = await readCloneFile(outDir, join('public', relPath));
     if (!data) { res.writeHead(404); res.end('Not found'); return; }
-    const contentType = contentTypeForPath(relPath);
+    let contentType = contentTypeForPath(relPath);
+    // Sniff content for .bin / octet-stream — capture sometimes saves JS/CSS without proper extension
+    if (contentType === 'application/octet-stream' && data.length) {
+      const head = data.slice(0, 256).toString('utf8');
+      if (/^\s*(\/\*|\/\/|!function|var |let |const |function |import |export |\(function|window\.|document\.|;|\(|\{)/.test(head)) {
+        contentType = 'application/javascript';
+      } else if (/^\s*([.#@a-zA-Z][^{]*\{|@(media|import|font-face|keyframes|charset))/.test(head)) {
+        contentType = 'text/css';
+      } else if (head.startsWith('<')) {
+        contentType = 'text/html; charset=utf-8';
+      }
+    }
     if (contentType.startsWith('text/css')) {
       const css = await rewritePreviewCssAsset(data.toString('utf8'), outDir, relPath).catch(() => data.toString('utf8'));
       res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=3600' });
