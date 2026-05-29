@@ -36,36 +36,38 @@ function FloatingExcusePill({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 1, x: 0, y: 0, rotate }}
-      animate={{
-        opacity: 1,
-        x: [0, 26, 0, -18, 0],
-        y: [0, -18, 0, 14, 0],
-        rotate: [rotate, rotate + 5, rotate],
-      }}
-      transition={{
-        duration: 9,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay,
-      }}
       drag
       dragMomentum={false}
-      dragElastic={0.1}
-      whileHover={{ scale: 1.05, zIndex: 50 }}
-      whileDrag={{ scale: 1.1, zIndex: 100, cursor: "grab" }}
-      className="absolute z-30 cursor-grab active:cursor-grabbing"
+      dragElastic={0.05}
+      whileHover={{ scale: 1.04, zIndex: 50 }}
+      whileDrag={{ scale: 1.08, zIndex: 100, cursor: "grabbing" }}
+      className="absolute z-30 cursor-grab touch-none active:cursor-grabbing"
       style={{ left: `${initialX}%`, top: `${initialY}%` }}
     >
-      <div
-        className="whitespace-nowrap rounded-full border px-4 py-2 text-[10px] font-bold tracking-[0.08em] text-white/85 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:text-xs"
+      <motion.div
+        initial={{ opacity: 0, rotate, scale: 0.94 }}
+        animate={{
+          opacity: 1,
+          x: [0, 16, -9, 20, 0],
+          y: [0, -14, 8, -6, 0],
+          rotate: [rotate, rotate + 4, rotate - 3, rotate + 2, rotate],
+          scale: [1, 1.04, 0.98, 1.02, 1],
+        }}
+        transition={{
+          duration: 7.5 + delay,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay,
+        }}
+        className="pointer-events-none whitespace-nowrap rounded-full border px-4 py-2 text-[10px] font-bold tracking-[0.08em] text-white/85 shadow-[0_10px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:text-xs"
         style={{
-          background: "linear-gradient(135deg, rgba(167, 139, 250, 0.15), rgba(244, 114, 182, 0.15))",
-          borderColor: "rgba(167, 139, 250, 0.3)",
+          background:
+            "linear-gradient(135deg, rgba(167, 139, 250, 0.18), rgba(244, 114, 182, 0.14), rgba(34, 211, 238, 0.1))",
+          borderColor: "rgba(255, 255, 255, 0.2)",
         }}
       >
         {text}
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
