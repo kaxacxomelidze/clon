@@ -15,10 +15,7 @@ export function Logo({ className, size = "md", href = "/", variant = "dark" }: L
   const heights = { sm: 28, md: 34, lg: 42 };
   const h = heights[size];
 
-  // Use the logo+text SVG — white bg version for dark text (dark variant), black bg version for light text (light variant)
-  const src = variant === "light"
-    ? "/clonyfy-logo-text-black.svg"   // black bg = white text logo (for dark backgrounds)
-    : "/clonyfy-logo-text-white.svg";  // white bg = dark text logo (for light backgrounds)
+  const src = "/clonyfy-logo-new.jpg";
 
   return (
     <Link href={href} className={cn("flex items-center shrink-0 group", className)}>
@@ -26,7 +23,7 @@ export function Logo({ className, size = "md", href = "/", variant = "dark" }: L
         src={src}
         alt="Clonyfy"
         height={h}
-        width={h * 4.5}
+        width={Math.round(h * 1.55)}
         className="object-contain"
         priority
       />
