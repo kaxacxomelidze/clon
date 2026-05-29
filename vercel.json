@@ -7,5 +7,21 @@
       "excludeFiles": "output/**,packages/cloner/node_modules/**"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }]
+  "rewrites": [
+    { "source": "/((?!_next/|favicon\\.|icon\\.|clonyfy-logo|brand-|.*\\.(?:css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf|eot|mp4|webm|txt|json|map|xml)$).*)", "destination": "/api/index" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*\\.(?:css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf|eot|mp4|webm))",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
 }
