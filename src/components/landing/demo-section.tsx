@@ -82,11 +82,11 @@ export function DemoSection() {
       {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] rounded-full bg-white/[0.01] blur-[140px] pointer-events-none" />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="relative z-10 mx-auto w-full max-w-[1680px] px-4 sm:px-6">
 
         {/* Header */}
         <div className="max-w-6xl mx-auto text-center mb-16">
-          <h2 className="whitespace-nowrap bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-[clamp(26px,4.1vw,50px)] font-black tracking-tight text-transparent leading-tight">
+          <h2 className="whitespace-nowrap bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-[clamp(16px,4.1vw,50px)] font-black tracking-tight text-transparent leading-tight">
             See the cloning process in action
           </h2>
           <p className="mt-4 text-base sm:text-lg text-white/45 max-w-xl mx-auto">
@@ -155,7 +155,7 @@ export function DemoSection() {
 
           {/* Full-width visual simulator browser */}
           <div className="flex items-center justify-center">
-            <div className="w-full rounded-3xl border border-white/[0.08] bg-[#07070b]/60 overflow-hidden shadow-2xl relative min-h-[520px] flex flex-col">
+            <div className="w-full rounded-3xl border border-white/[0.08] bg-[#07070b]/60 overflow-hidden shadow-2xl relative min-h-[560px] flex flex-col">
 
               {/* Browser chrome header */}
               <div className="h-11 px-4 border-b border-white/[0.06] bg-black/40 flex items-center gap-4 shrink-0">

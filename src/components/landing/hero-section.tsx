@@ -41,7 +41,7 @@ function FloatingExcusePill({
       dragElastic={0.05}
       whileHover={{ scale: 1.04, zIndex: 50 }}
       whileDrag={{ scale: 1.08, zIndex: 100, cursor: "grabbing" }}
-      className="absolute z-30 cursor-grab touch-none active:cursor-grabbing"
+      className="absolute z-30 hidden cursor-grab touch-none active:cursor-grabbing sm:block"
       style={{ left: `${initialX}%`, top: `${initialY}%` }}
     >
       <motion.div
@@ -166,7 +166,7 @@ export function HeroSection() {
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-64 bg-gradient-to-t from-black to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-48 bg-gradient-to-b from-black/70 to-transparent" />
 
-      <div className="relative z-20 mx-auto flex w-full max-w-[960px] flex-col items-center px-4 text-center sm:px-8">
+      <div className="relative z-20 mx-auto flex w-full max-w-[960px] -translate-y-5 flex-col items-center px-4 text-center sm:-translate-y-7 sm:px-8">
         <motion.div custom={0} variants={fadeUp} initial="hidden" animate="show" className="mb-8">
           <span className="inline-flex items-center gap-2.5 rounded-full border border-white/[0.12] bg-white/[0.05] px-4 py-2 text-[11px] font-semibold tracking-[0.12em] text-white/60">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-400" />
@@ -179,11 +179,11 @@ export function HeroSection() {
           variants={fadeUp}
           initial="hidden"
           animate="show"
-          className="text-[clamp(36px,7vw,80px)] font-black leading-[0.96] tracking-tight text-white"
+          className="text-[clamp(34px,7vw,80px)] font-black leading-[0.96] tracking-tight text-white"
         >
           Clone any website.
           <br />
-          <span className="inline-block whitespace-nowrap bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
+          <span className="inline-block bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent sm:whitespace-nowrap">
             Rebuild & export in seconds.
           </span>
         </motion.h1>
@@ -193,7 +193,7 @@ export function HeroSection() {
           variants={fadeUp}
           initial="hidden"
           animate="show"
-          className="mt-8 max-w-3xl whitespace-nowrap text-[clamp(14px,2.1vw,20px)] font-normal leading-relaxed text-white/45"
+          className="mt-8 max-w-3xl whitespace-nowrap text-[10px] font-normal leading-relaxed text-white/45 sm:text-[clamp(14px,2.1vw,20px)]"
         >
           Paste a URL & get any website. No limits. Save thousands in dev fees.
         </motion.p>

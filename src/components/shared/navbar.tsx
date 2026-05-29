@@ -8,7 +8,7 @@ import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const navLinks = [
-  { label: "Process", href: "#process" },
+  { label: "How it Works", href: "#process" },
   { label: "Features", href: "#demo" },
   { label: "Pricing", href: "#pricing" },
   
@@ -25,6 +25,15 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const scrollToHash = (href: string) => {
+    if (typeof window === "undefined") return;
+    const target = document.querySelector(href);
+    if (!target) return;
+    const top = target.getBoundingClientRect().top + window.scrollY - 68;
+    window.scrollTo({ top, behavior: "smooth" });
+    window.history.replaceState(null, "", href);
+  };
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -70,6 +79,10 @@ export function Navbar() {
                     {link.href.startsWith("#") ? (
                       <a
                         href={link.href}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          scrollToHash(link.href);
+                        }}
                         className="text-[13px] px-4 py-2 rounded-lg font-medium text-white/60 hover:text-white transition-colors hover:bg-white/[0.06]"
                       >
                         {link.label}
@@ -98,13 +111,13 @@ export function Navbar() {
                 ) : (
                   <>
                     <a
-                      href="/app"
+                      href="/sign-in"
                       className="inline-flex items-center justify-center text-[13px] font-medium text-white/60 hover:text-white transition-colors px-3 py-2"
                     >
                       Log in
                     </a>
                     <a
-                      href="/app"
+                      href="/sign-up"
                       className="inline-flex items-center justify-center relative h-9 px-5 text-[13px] font-semibold text-black bg-white rounded-full hover:bg-white/90 transition-all duration-200 shadow-[0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_20px_rgba(255,255,255,0.25)]"
                     >
                       Get started
@@ -141,7 +154,11 @@ export function Navbar() {
                         key={link.label}
                         href={link.href}
                         className="text-sm font-medium text-white/60 hover:text-white px-3 py-2.5 rounded-lg hover:bg-white/[0.07] transition-colors"
-                        onClick={() => setMobileOpen(false)}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setMobileOpen(false);
+                          scrollToHash(link.href);
+                        }}
                       >
                         {link.label}
                       </a>
@@ -167,13 +184,13 @@ export function Navbar() {
                     ) : (
                       <>
                         <a
-                          href="/app"
+                          href="/sign-in"
                           className="flex-1 inline-flex items-center justify-center h-9 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-xl"
                         >
                           Sign in
                         </a>
                         <a
-                          href="/app"
+                          href="/sign-up"
                           className="flex-1 inline-flex items-center justify-center h-9 text-sm bg-white text-black hover:bg-white/90 rounded-xl font-semibold"
                         >
                           Get started

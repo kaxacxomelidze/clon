@@ -220,9 +220,9 @@ export function HowItWorks() {
         </motion.p>
         <motion.h2
           initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }}
-          className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-tight text-balance"
+          className="whitespace-nowrap bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-[clamp(34px,5.5vw,72px)] font-black tracking-tight text-transparent leading-tight"
         >
-          Three simple steps.
+          Process
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.2 }}

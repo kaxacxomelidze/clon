@@ -36,7 +36,7 @@ export function JoinSection() {
 
             <motion.h2
               initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.18 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight max-w-2xl mx-auto text-balance"
+              className="mx-auto max-w-3xl whitespace-nowrap text-[clamp(28px,5.2vw,60px)] font-black tracking-tight leading-tight"
             >
               <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
                 Stop Thinking. Build what works.

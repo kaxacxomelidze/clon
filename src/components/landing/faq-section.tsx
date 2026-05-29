@@ -81,7 +81,7 @@ export function FaqSection() {
             </motion.p>
             <motion.h2
               initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.08 }}
-              className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-tight"
+              className="whitespace-nowrap bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-[clamp(30px,4.6vw,52px)] font-black tracking-tight text-transparent leading-tight"
             >
               Everything you want to know.
             </motion.h2>

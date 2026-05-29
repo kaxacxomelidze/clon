@@ -1,81 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-
-function AnimatedCounter({ target = 14600 }: { target?: number }) {
-  const [count, setCount] = useState(0);
-  const [hasStarted, setHasStarted] = useState(false);
-
-  useEffect(() => {
-    if (hasStarted) return;
-    setHasStarted(true);
-    let frame = 0;
-    const totalFrames = 90;
-    const timer = window.setInterval(() => {
-      frame += 1;
-      const progress = 1 - Math.pow(1 - frame / totalFrames, 3);
-      setCount(Math.min(target, Math.round(target * progress)));
-      if (frame >= totalFrames) window.clearInterval(timer);
-    }, 18);
-    return () => window.clearInterval(timer);
-  }, [target, hasStarted]);
-
-  return <span>+{count.toLocaleString()}</span>;
-}
+import { AnimatedCounter } from "./animated-counter";
 
 export function StatsSection() {
   return (
-    <section className="relative py-20 bg-black border-b border-white/[0.06] overflow-hidden">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
+    <section className="relative overflow-hidden border-b border-white/[0.06] bg-black py-20 sm:py-24">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 text-center sm:px-6">
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="relative rounded-3xl overflow-hidden p-10 sm:p-14"
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
+          transition={{ duration: 0.55 }}
+          className="mx-auto whitespace-nowrap bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-[clamp(22px,4vw,52px)] font-black leading-tight tracking-tight text-transparent"
         >
-          <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
-            style={{ backgroundImage: "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent pointer-events-none" />
+          Website Cloned with Clonyfy
+        </motion.p>
 
-          <div className="relative z-10">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.7, delay: 0.1 }}
-              className="mb-4"
-            >
-              <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/30">
-                Websites Cloned with Clonyfy
-              </span>
-            </motion.div>
-
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              className="text-5xl sm:text-7xl lg:text-8xl font-black text-white tracking-tight leading-tight"
-            >
-              <AnimatedCounter target={14600} />
-            </motion.h2>
-
-            <motion.p
-              initial={{ opacity: 0, y: 14 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="mt-4 text-xl sm:text-2xl font-medium text-white/45"
-            >
-              builders already started from reality, not from scratch.
-            </motion.p>
-          </div>
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.65, delay: 0.1 }}
+          className="mt-5 flex items-center justify-center whitespace-nowrap text-[clamp(58px,12vw,160px)] font-black leading-none tracking-tight text-white"
+        >
+          <AnimatedCounter target={14600} duration={1800} />
         </motion.div>
       </div>
     </section>

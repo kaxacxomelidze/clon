@@ -15,12 +15,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clonyfy — Clone Any Website Instantly with AI",
+  title: "Clonyfy - Clone Any Website Instantly with AI",
   description:
-    "Paste a URL and get a pixel-perfect, editable clone in seconds. Powered by advanced AI — no design skills required.",
+    "Paste a URL and get a pixel-perfect, editable clone in seconds. Powered by advanced AI - no design skills required.",
   keywords: ["website cloner", "AI design", "clone website", "web scraper", "UI generator", "clonyfy"],
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.ico" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/icon.svg",
+  },
   openGraph: {
-    title: "Clonyfy — Clone Any Website Instantly",
+    title: "Clonyfy - Clone Any Website Instantly",
     description: "Paste a URL, get a pixel-perfect AI clone in seconds.",
     type: "website",
   },

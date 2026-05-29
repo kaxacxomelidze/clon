@@ -1936,6 +1936,12 @@ async function handleRequest(req, res) {
   if (isPageRead && url.pathname === '/app') {
     return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
   }
+  if (isPageRead && url.pathname === '/sign-in') {
+    return serveFile(res, join(__dirname, 'public', 'sign-in.html'), 'text/html');
+  }
+  if (isPageRead && url.pathname === '/sign-up') {
+    return serveFile(res, join(__dirname, 'public', 'sign-up.html'), 'text/html');
+  }
   if (isPageRead && url.pathname === '/dashboard') {
     return serveFile(res, join(__dirname, 'public', 'dashboard.html'), 'text/html');
   }
@@ -1952,10 +1958,10 @@ async function handleRequest(req, res) {
     return serveFile(res, join(__dirname, 'public', 'privacy.html'), 'text/html');
   }
   if (req.method === 'GET' && url.pathname === '/login') {
-    return res.writeHead(302, { Location: '/app' }), res.end();
+    return res.writeHead(302, { Location: '/sign-in' }), res.end();
   }
   if (req.method === 'GET' && url.pathname === '/register') {
-    return res.writeHead(302, { Location: '/app' }), res.end();
+    return res.writeHead(302, { Location: '/sign-up' }), res.end();
   }
   if (isPageRead && /\/__next\.[^/]+\.txt$/.test(url.pathname)) {
     const name = url.pathname.split('/').pop();

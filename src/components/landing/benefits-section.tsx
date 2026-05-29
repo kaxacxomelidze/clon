@@ -80,10 +80,10 @@ export function BenefitsSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8, delay: 0.08 }}
-            className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight text-balance"
+            className="text-[clamp(24px,3.3vw,40px)] font-black tracking-tight leading-tight sm:whitespace-nowrap"
           >
             <span className="bg-gradient-to-r from-purple-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
-              The fastest way to rebuild, redesign and ship any website.
+              Fastest way to rebuild, redesign and ship any website.
             </span>
           </motion.h2>
 
