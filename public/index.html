@@ -7037,6 +7037,25 @@ function showDeployErr(msg) {
 </style>
 
 <!-- ════════════════════════════════════════════════════════════════════
+     DESKTOP SCROLL FIX — let detail / job view scroll when content overflows
+     ════════════════════════════════════════════════════════════════════ -->
+<style id="__clonyfy_desktop_scroll__">
+/* Make the clone-tab detail area scrollable on desktop, not viewport-locked */
+.tab-panel#tab-clone .detail { overflow-y: auto !important; }
+.tab-panel#tab-clone #jobView { overflow-y: visible !important; }
+.tab-panel#tab-clone .log-area { overflow: visible !important; flex: 0 0 auto !important; min-height: 200px !important; }
+.tab-panel#tab-clone .log-body { max-height: 360px !important; overflow-y: auto !important; }
+.tab-panel#tab-clone .done-card { flex-shrink: 0 !important; }
+/* Same for editor properties — already scrolls, but make sure */
+.ed-props { overflow-y: auto !important; }
+.frame-area { overflow: auto !important; }
+/* Custom scrollbar (more visible) */
+.detail::-webkit-scrollbar,.frame-area::-webkit-scrollbar,.ed-props::-webkit-scrollbar,.log-body::-webkit-scrollbar{width:8px;height:8px}
+.detail::-webkit-scrollbar-thumb,.frame-area::-webkit-scrollbar-thumb,.ed-props::-webkit-scrollbar-thumb,.log-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:6px}
+.detail::-webkit-scrollbar-thumb:hover,.frame-area::-webkit-scrollbar-thumb:hover,.ed-props::-webkit-scrollbar-thumb:hover,.log-body::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.22)}
+</style>
+
+<!-- ════════════════════════════════════════════════════════════════════
      FINAL MOBILE OVERRIDE — must be last to win cascade
      ════════════════════════════════════════════════════════════════════ -->
 <style id="__clonyfy_mobile_override__">
