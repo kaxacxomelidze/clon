@@ -1727,7 +1727,9 @@ var STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 6e4;
 function shouldUseStaticFirstServerless(env = process.env, serverless = IS_SERVERLESS2) {
   if (!serverless) return false;
   if (env.CLONYFY_BROWSER_FIRST === "1") return false;
-  return env.CLONYFY_STATIC_FIRST === "1";
+  // Default to static-first on serverless when Chromium can't reliably launch.
+  // Opt out via CLONYFY_STATIC_FIRST=0 or CLONYFY_BROWSER_FIRST=1.
+  return env.CLONYFY_STATIC_FIRST !== "0";
 }
 var STATIC_FIRST_SERVERLESS = shouldUseStaticFirstServerless();
 function shouldUseBundledChromium(playwrightPath, platform = process.platform, serverless = IS_SERVERLESS2) {

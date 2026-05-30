@@ -47,7 +47,9 @@ export function shouldUseStaticFirstServerless(
 ): boolean {
   if (!serverless) return false;
   if (env.CLONYFY_BROWSER_FIRST === '1') return false;
-  return env.CLONYFY_STATIC_FIRST === '1';
+  // Default to static-first on serverless: Chromium often fails to launch in
+  // Vercel/Lambda. Opt out via CLONYFY_STATIC_FIRST=0 or CLONYFY_BROWSER_FIRST=1.
+  return env.CLONYFY_STATIC_FIRST !== '0';
 }
 
 const STATIC_FIRST_SERVERLESS = shouldUseStaticFirstServerless();
