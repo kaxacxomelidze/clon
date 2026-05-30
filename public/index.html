@@ -1741,6 +1741,10 @@ input[type=checkbox]{accent-color:#fff!important}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Run Preview
             </button>
+            <button class="done-action-btn edit-btn" id="openEditorBtn" onclick="openEditor()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Edit in Studio
+            </button>
             <button class="done-action-btn secondary" onclick="copyCmd()">Copy Commands</button>
             <button class="done-action-btn secondary" onclick="exportZip()">Export ZIP</button>
             <button class="done-action-btn secondary" onclick="openGithubModal()" style="color:#e6edf3;border-color:rgba(255,255,255,.15)">
@@ -1750,10 +1754,6 @@ input[type=checkbox]{accent-color:#fff!important}
             <button class="done-action-btn secondary" onclick="openShareModal()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               Share
-            </button>
-            <button class="done-action-btn edit-btn" id="openEditorBtn" onclick="openEditor()">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              Edit in Studio
             </button>
           </div>
           <div class="health-card" id="healthCard"></div>
@@ -3833,7 +3833,9 @@ function clearTimer() { if (timerInterval) { clearInterval(timerInterval); timer
 
 // ── Open editor ───────────────────────────────────────────────────────────────
 function openEditor() {
-  if (!requirePaid('Visual editor')) return;
+  // Free users CAN open the editor (view + edit in-browser).
+  // Paywall is enforced separately on actions that take the work outside
+  // the browser (Export ZIP, Push to GitHub, Share, Copy Commands).
   switchTab('editor');
 }
 
@@ -3989,6 +3991,7 @@ function openOutputFolder() {
   if (isElectron) window.electronAPI.openFolder('');
 }
 function copyCmd() {
+  if (!requirePaid('Copy Commands')) return;
   const cmd = document.getElementById('doneCmd').textContent;
   navigator.clipboard.writeText(cmd).then(() => toast('Copied!', 'ok'));
 }
