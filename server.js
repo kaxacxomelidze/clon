@@ -685,6 +685,32 @@ async function checkUsageAlert(userId) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const OUTPUT_DIR = resolve(process.env.CLONYFY_OUTPUT_DIR || (process.env.VERCEL ? '/tmp/output' : './output'));
 
+// Vercel /tmp has a 512MB cap and persists across warm invocations. Old clones
+// pile up and eventually trigger ENOSPC. Before each new clone we wipe every
+// clone directory except the ones in `keepDirs` (the active job we're about to
+// start). Safe on local too — just a no-op when there's nothing old.
+function cleanupTmpClones(keepDirs = []) {
+  try {
+    if (!existsSync(OUTPUT_DIR)) return;
+    const keepSet = new Set(keepDirs.map(d => String(d).replace(/[\\/]+$/, '')));
+    const entries = readdirSync(OUTPUT_DIR, { withFileTypes: true });
+    let freed = 0;
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      const full = join(OUTPUT_DIR, ent.name);
+      if (keepSet.has(full)) continue;
+      try {
+        // Best-effort cumulative size (capped) for logging
+        rmSync(full, { recursive: true, force: true });
+        freed++;
+      } catch {}
+    }
+    if (freed > 0) console.log(`[tmp cleanup] removed ${freed} old clone dir(s) from ${OUTPUT_DIR}`);
+  } catch (err) {
+    console.warn('[tmp cleanup] failed:', err?.message || err);
+  }
+}
+
 const _fileCache = new Map();
 function affonsoPixelHtml() {
   const s = getCachedSettings();
@@ -2449,6 +2475,16 @@ async function handleRequest(req, res) {
       const hostname = target.hostname.replace(/\./g, '-');
       const outDir = resolve(OUTPUT_DIR, `${hostname}-${id.slice(0, 6)}`);
 
+      // On serverless (Vercel /tmp = 512MB cap, persists across warm invocations),
+      // wipe previous clone directories so the new clone has enough disk space.
+      // Keep only directories belonging to currently-active jobs.
+      if (IS_VERCEL) {
+        const activeDirs = [...jobs.values()]
+          .filter(j => isActiveJob(j) && j.outDir)
+          .map(j => j.outDir);
+        cleanupTmpClones([...activeDirs, outDir]);
+      }
+
       const job = {
         id, url: targetUrl, hostname: target.hostname,
         status: 'running', logs: [], outDir,
@@ -2515,6 +2551,11 @@ async function handleRequest(req, res) {
             }
             if (!cloneReadable.ok) {
               job.logs.push(`[ERROR] Clone output is not ready for preview: ${cloneReadable.error}`);
+            }
+            // On serverless: files are now in Supabase Storage, so free /tmp
+            // before the function instance handles another clone.
+            if (IS_VERCEL && cloneReadable?.ok) {
+              try { rmSync(job.outDir, { recursive: true, force: true }); } catch {}
             }
           } catch (storageErr) {
             job.logs.push(`[WARN] Could not persist all clone files: ${storageErr?.message || storageErr}`);
