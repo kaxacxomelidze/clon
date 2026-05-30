@@ -1299,10 +1299,15 @@ async function rewritePreviewAssetUrls(html, outDir) {
   // fails (CORS, missing chunks), leaving the page invisible. Inject a tiny CSS
   // override that forces visible state, and a tiny script that strips common
   // "loading" classes from <html>.
-  const visibilityFix = `<style id="__clonyfy_visibility_fix__">html,body,#__next,#root,main,header,nav,footer,section,article{opacity:1!important;visibility:visible!important;display:revert!important}html.js,html.no-js,body.preload,body.loading,body.no-js{opacity:1!important;visibility:visible!important}[data-loading],[data-skeleton],[hidden]{display:revert!important}</style><script id="__clonyfy_visibility_script__">(function(){try{var h=document.documentElement;['loading','no-js','is-loading','preload'].forEach(function(c){h.classList.remove(c)});h.classList.add('js','clonyfy-preview');document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('[style*="opacity:0"],[style*="opacity: 0"],[style*="visibility:hidden"],[style*="visibility: hidden"]').forEach(function(el){if(el.tagName==='BODY'||el.tagName==='HTML'||el.id==='__next'||el.id==='root'){el.style.opacity='1';el.style.visibility='visible';}});}); }catch(e){}})();</script>`;
-  if (out.includes('</head>')) out = out.replace('</head>', `${visibilityFix}</head>`);
-  else if (out.includes('<head>')) out = out.replace('<head>', `<head>${visibilityFix}`);
-  else out = visibilityFix + out;
+  // <base href="/"> forces all relative URLs in the cloned HTML to resolve
+  // against the origin root instead of the preview path `/api/page?...`.
+  // Without this, `fetch('api/foo.php')` from cloned JS becomes
+  // `/api/api/foo.php` (because the document URL is `/api/page`).
+  const visibilityFix = `<base href="/"><style id="__clonyfy_visibility_fix__">html,body,#__next,#root,main,header,nav,footer,section,article{opacity:1!important;visibility:visible!important;display:revert!important}html.js,html.no-js,body.preload,body.loading,body.no-js{opacity:1!important;visibility:visible!important}[data-loading],[data-skeleton],[hidden]{display:revert!important}</style><script id="__clonyfy_visibility_script__">(function(){try{var h=document.documentElement;['loading','no-js','is-loading','preload'].forEach(function(c){h.classList.remove(c)});h.classList.add('js','clonyfy-preview');document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('[style*="opacity:0"],[style*="opacity: 0"],[style*="visibility:hidden"],[style*="visibility: hidden"]').forEach(function(el){if(el.tagName==='BODY'||el.tagName==='HTML'||el.id==='__next'||el.id==='root'){el.style.opacity='1';el.style.visibility='visible';}});}); }catch(e){}})();</script>`;
+  // Inject right after opening <head>, so a captured <base> (if any) doesn't override ours.
+  if (out.match(/<head[^>]*>/i)) out = out.replace(/<head[^>]*>/i, m => `${m}${visibilityFix}`);
+  else if (out.includes('<html')) out = out.replace(/<html[^>]*>/i, m => `${m}<head>${visibilityFix}</head>`);
+  else out = `<head>${visibilityFix}</head>` + out;
 
   // Resolve the clone's original origin once (used for media rewrite + replay/nav patches).
   const context = await buildPreviewAssetContext(outDir);
@@ -2074,7 +2079,20 @@ async function handleRequest(req, res) {
     const readable = await canReadOutDir(assetUser, outDir) || assetToken === cloneAssetToken(outDir);
     if (!readable) return json(res, { error: assetUser ? 'Not found' : 'Not authenticated' }, assetUser ? 404 : 401);
     const data = await readCloneFile(outDir, join('public', relPath));
-    if (!data) { res.writeHead(404); res.end('Not found'); return; }
+    if (!data) {
+      // Asset wasn't captured (or upload failed). Try to recover by looking
+      // up the original URL from manifest and redirecting the browser to it.
+      try {
+        const ctx = await buildPreviewAssetContext(outDir);
+        const origUrl = ctx.originalByRelPath?.[relPath];
+        if (origUrl && /^https?:\/\//.test(origUrl)) {
+          res.writeHead(302, { Location: origUrl, 'Cache-Control': 'public, max-age=300' });
+          res.end();
+          return;
+        }
+      } catch {}
+      res.writeHead(404); res.end('Not found'); return;
+    }
     let contentType = contentTypeForPath(relPath);
     // Sniff content for .bin / octet-stream — capture sometimes saves JS/CSS without proper extension
     if (contentType === 'application/octet-stream' && data.length) {
@@ -4250,20 +4268,30 @@ async function handleRequest(req, res) {
   }
 
   // Preview-asset fallback: when a cloned page references an absolute path
-  // (e.g. /figma/abc.svg, /assets/img/foo.png, /video.mp4) that we didn't
-  // capture, transparently redirect to the original site so the preview
-  // still shows the asset. Uses Referer to find which clone is being viewed.
-  if (req.method === 'GET' && isPageRead) {
+  // (e.g. /figma/abc.svg, /assets/img/foo.png, /video.mp4, /api/foo.php)
+  // that we didn't capture, transparently redirect to the original site so
+  // the preview still shows the asset. Uses Referer to find which clone is
+  // being viewed. Handles GET, HEAD, and POST (cloned JS often POSTs to APIs).
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'POST') {
     try {
       const refOutDir = await previewOutDirFromReferer(req);
       if (refOutDir) {
+        // Quiet telemetry beacons the cloned site fires (Cloudflare RUM,
+        // analytics) — return 204 so the console isn't flooded with 404s.
+        if (/^\/(cdn-cgi\/|__cf|gtm|gtag|gtag-rum|googletagmanager|hotjar|segment\.io|amplitude|mixpanel|fathom|plausible|posthog)/i.test(url.pathname)) {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
         const manifestData = await readCloneFile(refOutDir, 'manifest.json').catch(() => null);
         if (manifestData) {
           const manifest = safeJsonParse(manifestData.toString('utf8'), null);
           const targetOrigin = String(manifest?.targetOrigin || '').replace(/\/$/, '');
           if (targetOrigin && /^https?:\/\//.test(targetOrigin)) {
             const redirectTo = targetOrigin + url.pathname + (url.search || '');
-            res.writeHead(302, { Location: redirectTo, 'Cache-Control': 'public, max-age=300' });
+            // 307/308 preserve method+body (302 may downgrade POST→GET).
+            const status = (req.method === 'POST') ? 307 : 302;
+            res.writeHead(status, { Location: redirectTo, 'Cache-Control': 'public, max-age=300' });
             res.end();
             return;
           }
