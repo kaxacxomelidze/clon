@@ -523,57 +523,138 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .tpl-use-btn:hover{opacity:.85}
 .tpl-use-btn:disabled{background:var(--bg4);color:var(--text3);cursor:not-allowed;box-shadow:none}
 
-/* ── Mobile responsive ──────────────────────────────── */
-@media(max-width:768px){
-  html,body{overflow:auto}
-  .app-body{flex-direction:column}
-  .sidebar{width:100%;height:auto;max-height:180px;border-right:none;border-bottom:1px solid var(--border);flex-shrink:0}
-  .sb-list{display:flex;flex-direction:row;gap:6px;padding:6px 8px;overflow-x:auto;overflow-y:hidden}
-  .sb-item{flex-shrink:0;min-width:160px;max-width:200px;margin-bottom:0}
-  .sb-hd{padding:10px 10px 4px;font-size:9px}
-  .sb-foot{display:none}
-  .titlebar{padding:0 8px;gap:4px}
+/* ── Mobile responsive (full app) ────────────────────── */
+@media(max-width:900px){
+  /* Titlebar / nav */
+  .titlebar{padding:0 8px;gap:4px;height:auto;min-height:42px;flex-wrap:wrap}
   .titlebar-logo{min-width:auto;padding-right:8px}
-  .tabs{gap:0;overflow-x:auto}
-  .tab-btn{padding:5px 10px;font-size:11px;white-space:nowrap}
-  .clone-panel{padding:16px 14px 12px}
+  .titlebar-logo img,.titlebar-wordmark{height:22px}
+  .titlebar-user{gap:6px}
+  .titlebar-user > *{font-size:11px}
+  .titlebar-user button[onclick="openPricing()"]{padding:3px 9px;font-size:10px}
+  /* Tabs */
+  .tabs{gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tab-btn{padding:6px 11px;font-size:11px;white-space:nowrap;flex-shrink:0}
+}
+@media(max-width:768px){
+  html,body{overflow:auto;-webkit-text-size-adjust:100%;touch-action:manipulation}
+  body{overscroll-behavior-y:contain}
+  /* Layout: stack everything vertically */
+  .app-body{flex-direction:column}
+  .sidebar{width:100%;height:auto;max-height:160px;border-right:none;border-bottom:1px solid var(--border);flex-shrink:0}
+  .sb-list{display:flex;flex-direction:row;gap:6px;padding:6px 8px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+  .sb-item{flex-shrink:0;min-width:150px;max-width:200px;margin-bottom:0;padding:8px 10px}
+  .sb-hd{padding:8px 10px 4px;font-size:9px}
+  .sb-foot{display:none}
+  .sb-rename,.sb-del{padding:6px;font-size:14px}
+  /* Clone tab */
+  .clone-panel{padding:14px 12px 10px}
   .input-row{flex-direction:column;gap:8px}
-  .clone-btn{width:100%;justify-content:center}
-  .options-row{gap:10px}
-  .log-area{margin:0 12px}
-  .job-hd{padding:10px 12px}
-  .stats-row{padding:8px 12px;gap:6px}
-  .done-card{margin:0 12px 10px}
-  .done-card-actions{gap:6px}
-  .error-card{margin:0 12px 10px}
-  .done-action-btn{padding:5px 10px;font-size:11px}
+  .url-input-wrap{width:100%}
+  .clone-btn{width:100%;justify-content:center;min-height:42px}
+  .options-row{gap:10px;flex-wrap:wrap}
+  .opt-grp{flex:1 1 calc(50% - 5px);min-width:0}
+  .opt-grp input[type="number"]{width:100%;min-height:38px}
+  .profiles-row{flex-wrap:wrap;gap:6px}
+  .profile-select{flex:1 1 100%;min-height:36px}
+  /* Job view */
+  .log-area{margin:0 10px}
+  .job-hd{padding:10px 12px;flex-wrap:wrap;gap:8px}
+  .job-hd-info{min-width:0;flex:1 1 100%}
+  .job-url{font-size:12px;word-break:break-all}
+  .job-meta{font-size:10px}
+  .stats-row{padding:8px 10px;gap:6px;display:grid;grid-template-columns:repeat(2,1fr);overflow-x:visible}
+  .stat-card{padding:8px 10px}
+  .stat-val{font-size:18px}
+  .stat-lbl{font-size:9px}
+  /* Done/error cards */
+  .done-card{margin:0 10px 10px;padding:14px 12px}
+  .done-card-cmd{font-size:11px;padding:8px 10px;word-break:break-all}
+  .done-card-actions{gap:6px;flex-wrap:wrap}
+  .done-action-btn{padding:8px 12px;font-size:11px;min-height:38px;flex:1 1 auto;min-width:130px;justify-content:center}
+  .error-card{margin:0 10px 10px;padding:14px 12px}
+  .retry-btn{width:100%;min-height:40px}
+  .health-card{margin:0 10px 10px;font-size:11px}
+  /* Editor */
   .editor-root{flex-direction:column}
-  .ed-pages{width:100%;max-width:100%;resize:none;border-right:none;border-bottom:1px solid #1c1c1c;max-height:140px}
-  .ed-props{width:100%;max-width:100%;resize:none;border-left:none;border-top:1px solid #1c1c1c}
+  .ed-pages{width:100%!important;max-width:100%;resize:none;border-right:none;border-bottom:1px solid #1c1c1c;max-height:120px;flex-shrink:0}
+  .ed-pages-list{flex-direction:row;overflow-x:auto;gap:6px;padding:6px}
+  .ed-pages-list .ed-page-item{flex-shrink:0;min-width:140px}
+  .ed-props{width:100%!important;max-width:100%;resize:none;border-left:none;border-top:1px solid #1c1c1c;max-height:42vh;flex-shrink:0}
+  .ed-center{min-height:50vh}
+  .ed-toolbar{padding:6px 8px;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
+  .ed-toolbar .tool-btn,.ed-toolbar .tool-sep{flex-shrink:0}
+  .tool-btn{min-width:34px;min-height:34px;padding:6px}
+  .insert-btn{min-width:34px;min-height:34px}
+  .vp-btn{padding:5px 9px;font-size:10px}
+  .frame-area{padding:0!important}
+  #frame-wrap{padding:8px!important}
+  .canvas-zoom-hud{bottom:8px;left:8px;transform:scale(.85);transform-origin:bottom left}
+  .ed-save-btn{padding:6px 12px;font-size:11px;min-height:34px}
+  /* Properties panel — readable on mobile */
+  .ed-props .pl-row,.ed-props .ps-row{flex-wrap:wrap;gap:6px}
+  .ed-props input,.ed-props select{min-height:34px;font-size:13px}
+  .ed-props .pl-label,.ed-props .ps-label{font-size:11px}
+  /* Tabs panel */
   .tab-panel{min-width:0}
-  #pricing-modal{padding:24px 12px 48px}
-  .pricing-cards{flex-direction:column;max-width:100%}
+  /* Pricing modal */
+  #pricing-modal{padding:24px 10px 48px}
+  .pricing-cards{flex-direction:column;max-width:100%;gap:12px}
+  .plan-card{padding:18px 16px}
+  /* Generic modals — fit screen */
+  .modal-content,.modal-body,.modal-card{max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;-webkit-overflow-scrolling:touch}
+  .modal-bg,#share-modal,#github-modal,#deploy-modal,#profile-modal,#billing-modal{padding:12px}
+  /* Auth screens */
+  .auth-card{padding:24px 18px;max-width:100%;border-radius:14px}
+  .auth-title{font-size:22px}
+  .auth-input{min-height:42px;font-size:14px}
+  .auth-btn{min-height:44px;font-size:14px}
+  /* Forms — touch-friendly */
+  input,select,textarea,button{font-size:14px}
+  button{min-height:36px}
   /* Clone loader — mobile sizing */
-  .clone-loader{padding:34px 18px 28px;margin:12px 8px;border-radius:14px}
+  .clone-loader{padding:30px 14px 24px;margin:10px 8px;border-radius:14px;max-width:calc(100% - 16px)}
   .clone-rings{width:120px;height:120px}
-  .clone-rings .clone-core{width:60px;height:60px}
-  .clone-status{font-size:11px;margin-top:22px;flex-wrap:wrap;justify-content:center;text-align:center}
-  .clone-steps{gap:0}
-  .clone-steps span{font-size:9px;padding:7px 3px;letter-spacing:.1em}
-  .clone-tip{font-size:10px;line-height:1.5}
-  .clone-ticker-track{font-size:9px;gap:20px}
+  .clone-rings .clone-core{width:58px;height:58px}
+  .clone-status{font-size:11px;margin-top:20px;flex-wrap:wrap;justify-content:center;text-align:center}
+  .clone-status::before{display:none}
+  .clone-steps{gap:0;max-width:100%}
+  .clone-steps span{font-size:9px;padding:7px 2px;letter-spacing:.08em}
+  .clone-tip{font-size:10px;line-height:1.5;padding:0 6px}
+  .clone-ticker-track{font-size:9px;gap:18px}
   .clone-progress{max-width:100%}
-  /* Done card — mobile actions stack */
-  .done-card-actions{flex-wrap:wrap}
-  .done-card-actions .done-action-btn{flex:1 1 auto;min-width:130px;justify-content:center}
-  /* Sidebar collapsible on mobile */
-  .sidebar{max-height:140px}
+  /* Templates/builder grid */
+  .templates-grid,.builder-grid{grid-template-columns:1fr;gap:12px;padding:12px}
+  /* Sidebar item buttons larger touch target */
+  .sb-item .sb-name{font-size:12px}
+  .sb-item .sb-sub{font-size:10px}
 }
 @media(max-width:480px){
+  .titlebar-logo img,.titlebar-wordmark{height:20px}
+  .tab-btn{padding:5px 8px;font-size:10px}
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .stat-val{font-size:16px}
+  .done-card-actions .done-action-btn{flex:1 1 100%;min-width:0}
   .clone-rings{width:96px;height:96px}
   .clone-rings .clone-core{width:48px;height:48px}
   .clone-steps span{font-size:8px;padding:6px 2px}
   .clone-status{font-size:10px}
+  .clone-tip{font-size:9px}
+  .ed-props{max-height:48vh}
+  .vp-btn{padding:4px 7px;font-size:9px}
+  .tool-btn{min-width:30px;min-height:30px;padding:5px}
+  .auth-card{padding:20px 14px}
+  .auth-title{font-size:20px}
+  /* Hide non-essential UI on very small screens */
+  .titlebar-user .user-name{display:none}
+  .ed-toolbar .tool-sep{display:none}
+  /* Live ticker can clip on tiny screens */
+  .clone-ticker{display:none}
+}
+@media(max-width:768px) and (orientation:landscape){
+  .sidebar{max-height:100px}
+  .ed-pages{max-height:90px}
+  .ed-props{max-height:50vh}
 }
 
 /* ── Auth screen ─────────────────────────────────────── */
