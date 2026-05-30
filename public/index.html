@@ -1757,8 +1757,8 @@ input[type=checkbox]{accent-color:#fff!important}
 <div class="app-body">
 
   <!-- Sidebar -->
-  <aside class="sidebar">
-    <div class="sb-hd">History</div>
+  <aside class="sidebar" id="appSidebar">
+    <div class="sb-hd" onclick="toggleMobileSidebar()"><span>History</span><span class="sb-hd-caret" aria-hidden="true">▾</span></div>
     <div class="sb-search-wrap">
       <input class="sb-search" id="sbSearch" type="text" placeholder="Filter clones…" oninput="renderSidebar()" autocomplete="off">
     </div>
@@ -3425,11 +3425,8 @@ let lastLogLen = 0;
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  if (tab === 'editor' && !isPaidUser()) {
-    toast('Visual editor is a paid feature — upgrade to access it.', 'warn');
-    setTimeout(() => openPricing(), 350);
-    return;
-  }
+  // Editor is free to use in-browser. Paywall is enforced only on actions that
+  // take work outside the browser (Export ZIP, GitHub, Share, Deploy, Copy).
   currentTab = tab;
   document.getElementById('tab-clone').style.display = tab === 'clone' ? 'flex' : 'none';
   document.getElementById('tab-preview').style.display = tab === 'preview' ? 'flex' : 'none';
@@ -4117,6 +4114,12 @@ function openEditor() {
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
+// Mobile: tap "History" header to collapse/expand the clone-history strip so it
+// doesn't permanently eat vertical space. No-op on desktop (header not tappable).
+function toggleMobileSidebar() {
+  if (!window.matchMedia('(max-width: 900px)').matches) return;
+  document.getElementById('appSidebar')?.classList.toggle('sb-collapsed');
+}
 function renderSidebar() {
   const el = document.getElementById('sidebarList');
   const q = (document.getElementById('sbSearch')?.value || '').toLowerCase().trim();
@@ -7218,6 +7221,18 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
   .clone-steps span { font-size: 8.5px !important; padding: 7px 2px !important; letter-spacing: .06em !important; }
   .clone-tip { font-size: 10px !important; padding: 0 8px !important; line-height: 1.5 !important; }
   .clone-ticker-track { font-size: 9px !important; gap: 16px !important; }
+  /* Sidebar header is a tappable collapse toggle on mobile */
+  .sb-hd { display: flex !important; align-items: center !important; justify-content: space-between !important; cursor: pointer !important; user-select: none !important; }
+  .sb-hd-caret { font-size: 9px !important; opacity: .5 !important; transition: transform .2s !important; }
+  #appSidebar.sb-collapsed { max-height: 34px !important; overflow: hidden !important; }
+  #appSidebar.sb-collapsed .sb-search-wrap, #appSidebar.sb-collapsed .sb-list { display: none !important; }
+  #appSidebar.sb-collapsed .sb-hd-caret { transform: rotate(-90deg) !important; }
+  /* Preview tab bar wraps and fills width */
+  .preview-bar { height: auto !important; flex-wrap: wrap !important; padding: 8px 10px !important; gap: 8px !important; }
+  .preview-route { flex: 1 1 100% !important; min-width: 0 !important; min-height: 38px !important; }
+  .preview-bar .done-action-btn { flex: 1 1 auto !important; justify-content: center !important; min-height: 38px !important; }
+  .preview-frame { min-height: 70vh !important; }
+  .preview-empty { min-height: 50vh !important; }
   /* Hide unnecessary clutter on mobile */
   .ed-toolbar .tool-sep { display: none !important; }
 }
