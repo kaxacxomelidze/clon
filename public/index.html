@@ -7037,22 +7037,36 @@ function showDeployErr(msg) {
 </style>
 
 <!-- ════════════════════════════════════════════════════════════════════
-     DESKTOP SCROLL FIX — let detail / job view scroll when content overflows
+     FULL PAGE SCROLL — body scrolls naturally on Clone/Build/Preview tabs
      ════════════════════════════════════════════════════════════════════ -->
 <style id="__clonyfy_desktop_scroll__">
-/* Make the clone-tab detail area scrollable on desktop, not viewport-locked */
-.tab-panel#tab-clone .detail { overflow-y: auto !important; }
-.tab-panel#tab-clone #jobView { overflow-y: visible !important; }
-.tab-panel#tab-clone .log-area { overflow: visible !important; flex: 0 0 auto !important; min-height: 200px !important; }
-.tab-panel#tab-clone .log-body { max-height: 360px !important; overflow-y: auto !important; }
+/* Unlock global body scroll on all viewports for non-editor tabs */
+html { height: auto !important; min-height: 100% !important; overflow: hidden auto !important; }
+body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: auto !important; display: block !important; }
+.titlebar { position: sticky !important; top: 0 !important; z-index: 100 !important; }
+.app-body { display: flex !important; min-height: calc(100vh - 44px) !important; height: auto !important; overflow: visible !important; align-items: stretch !important; }
+.sidebar { height: auto !important; min-height: calc(100vh - 44px) !important; max-height: none !important; position: sticky !important; top: 44px !important; align-self: flex-start !important; overflow-y: auto !important; }
+.sb-list { max-height: calc(100vh - 200px) !important; overflow-y: auto !important; }
+/* Clone / Build / Preview tabs flow naturally */
+.tab-panel { overflow: visible !important; height: auto !important; min-height: calc(100vh - 44px) !important; display: flex !important; flex-direction: column !important; }
+.tab-panel#tab-clone .detail,
+.tab-panel#tab-build .build-root,
+.tab-panel#tab-preview .preview-root { overflow: visible !important; height: auto !important; flex: 1 1 auto !important; }
+.tab-panel#tab-clone #jobView { overflow: visible !important; height: auto !important; flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; }
+.tab-panel#tab-clone .log-area { overflow: visible !important; flex: 0 0 auto !important; min-height: 240px !important; margin-bottom: 24px !important; }
+.tab-panel#tab-clone .log-body { max-height: 420px !important; overflow-y: auto !important; }
 .tab-panel#tab-clone .done-card { flex-shrink: 0 !important; }
-/* Same for editor properties — already scrolls, but make sure */
-.ed-props { overflow-y: auto !important; }
-.frame-area { overflow: auto !important; }
-/* Custom scrollbar (more visible) */
-.detail::-webkit-scrollbar,.frame-area::-webkit-scrollbar,.ed-props::-webkit-scrollbar,.log-body::-webkit-scrollbar{width:8px;height:8px}
-.detail::-webkit-scrollbar-thumb,.frame-area::-webkit-scrollbar-thumb,.ed-props::-webkit-scrollbar-thumb,.log-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:6px}
-.detail::-webkit-scrollbar-thumb:hover,.frame-area::-webkit-scrollbar-thumb:hover,.ed-props::-webkit-scrollbar-thumb:hover,.log-body::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.22)}
+/* Editor stays IDE-style (its own pages/canvas/props scroll), but allow body scroll if it overflows */
+.tab-panel#tab-editor { min-height: calc(100vh - 44px) !important; height: auto !important; }
+.ed-pages { max-height: calc(100vh - 92px) !important; overflow-y: auto !important; }
+.ed-props { max-height: calc(100vh - 92px) !important; overflow-y: auto !important; position: sticky !important; top: 44px !important; align-self: flex-start !important; }
+.frame-area { min-height: 60vh !important; overflow: auto !important; }
+/* Visible scrollbars across the app */
+::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,.02) !important; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14) !important; border-radius: 6px !important; border: 2px solid transparent !important; background-clip: padding-box !important; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28) !important; background-clip: padding-box !important; }
+html { scrollbar-width: thin !important; scrollbar-color: rgba(255,255,255,.18) transparent !important; }
 </style>
 
 <!-- ════════════════════════════════════════════════════════════════════
