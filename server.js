@@ -1999,7 +1999,10 @@ async function handleRequest(req, res) {
     catch { return json(res, { error: 'Invalid path' }, 400); }
     const staticPath = join(__dirname, 'public', staticRel);
     if (!isInsideDir(join(__dirname, 'public'), staticPath)) return json(res, { error: 'Invalid path' }, 400);
-    return serveFile(res, staticPath, staticExts[ext], 60);
+    // If the file exists locally, serve it. Otherwise fall through so the
+    // preview-asset proxy fallback (below) can redirect to the original origin
+    // for cloned-page references like /figma/x.svg, /websitefighty.mp4, etc.
+    if (existsSync(staticPath)) return serveFile(res, staticPath, staticExts[ext], 60);
   }
   if (req.method === 'GET' && url.pathname.startsWith('/_assets/')) {
     let relPath;
