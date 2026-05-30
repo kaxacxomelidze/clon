@@ -3847,10 +3847,153 @@ function showJob(job) {
   document.getElementById('statPages').textContent = '—';
   document.getElementById('statApi').textContent = '—';
   document.getElementById('statAssets').textContent = '—';
+  stopNarrator();
+  if (job.status === 'running' || job.status === 'saving') {
+    startNarrator(job);
+  }
   updateJobView(job);
   if (job.status === 'running' || job.status === 'saving') startPolling(job.id);
   else clearPolling();
   renderSidebar();
+}
+
+// ── Narrator: keep Live Output interesting while clone runs ──────────────────
+let _narratorState = null;
+const NARRATOR_MESSAGES = {
+  init: [
+    '🔌 Connecting to {host}...',
+    '🤝 Negotiating TLS handshake',
+    '📡 Resolving DNS records',
+    '🌐 Opening headless browser context',
+    '🛡️  Reading robots.txt policy',
+  ],
+  discover: [
+    '🔍 Scanning page for internal links',
+    '🗺️  Building site map from navigation',
+    '📋 Queueing discovered routes',
+    '🧭 Following sitemap.xml hints',
+    '📑 Parsing href attributes',
+  ],
+  capture: [
+    '📦 Capturing assets — images, fonts, CSS',
+    '🎨 Extracting inline style blocks',
+    '🖼️  Downloading {asset} images',
+    '🔤 Capturing web fonts',
+    '⚡ Hashing assets for deduplication',
+    '🎬 Capturing video and media files',
+  ],
+  process: [
+    '⚙️  Processing intercepted network calls',
+    '🧬 Detecting GraphQL operations',
+    '🔁 Grouping API routes by signature',
+    '📊 Normalizing dynamic path segments',
+    '📝 Generating fixture data',
+  ],
+  generate: [
+    '🏗️  Rendering Next.js page templates',
+    '📦 Wiring Prisma schema from form fields',
+    '🔌 Injecting replay shim for runtime',
+    '✨ Finalizing manifest and route map',
+    '🎯 Sealing project bundle',
+  ],
+};
+
+function emitNarratorLine(text, tag = 'info') {
+  const logEl = document.getElementById('logBody');
+  if (!logEl) return;
+  const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 100;
+  const div = document.createElement('div');
+  div.className = 'log-line ' + tag;
+  div.dataset.narrator = '1';
+  const t = document.createElement('span');
+  t.className = 'log-time';
+  t.textContent = new Date().toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  div.appendChild(t);
+  const s = document.createElement('span');
+  s.textContent = text;
+  div.appendChild(s);
+  logEl.appendChild(div);
+  if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function pickNarratorMessage(stage, vars = {}) {
+  const arr = NARRATOR_MESSAGES[stage] || NARRATOR_MESSAGES.process;
+  const tpl = arr[Math.floor(Math.random() * arr.length)];
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] || '?');
+}
+
+function startNarrator(job) {
+  stopNarrator();
+  let host = '';
+  try { host = new URL(job.url).hostname; } catch {}
+  _narratorState = {
+    jobId: job.id,
+    startTime: Date.now(),
+    host,
+    lastPages: 0,
+    lastAssets: 0,
+    lastApi: 0,
+    lastDiscovered: new Set(),
+    tickCount: 0,
+  };
+  // First line immediately
+  emitNarratorLine(`▶ Starting clone of ${job.url}`, 'ok');
+  emitNarratorLine(pickNarratorMessage('init', { host: host || 'target' }));
+  _narratorState.iv = setInterval(narratorTick, 1100 + Math.random() * 600);
+}
+
+function stopNarrator() {
+  if (_narratorState?.iv) clearInterval(_narratorState.iv);
+  _narratorState = null;
+}
+
+function narratorTick() {
+  if (!_narratorState) return;
+  const job = allJobs.find(j => j.id === _narratorState.jobId);
+  if (!job || (job.status !== 'running' && job.status !== 'saving')) {
+    stopNarrator();
+    return;
+  }
+  _narratorState.tickCount++;
+  const elapsed = (Date.now() - _narratorState.startTime) / 1000;
+  // Pick stage based on elapsed time + job progress
+  let stage = 'init';
+  if (elapsed > 30 || (job.assets ?? 0) > 0) stage = 'capture';
+  else if (elapsed > 12 || (job.pages ?? 0) > 1) stage = 'discover';
+  if (elapsed > 60 || (job.apiRoutes ?? 0) > 0) stage = 'process';
+  if (job.status === 'saving') stage = 'generate';
+  // Detect deltas in stats — emit per-page/per-asset highlights
+  if ((job.pages ?? 0) > _narratorState.lastPages) {
+    const newPages = (job.pages ?? 0) - _narratorState.lastPages;
+    emitNarratorLine(`✅ Captured page ${job.pages} (${newPages > 1 ? `+${newPages} this tick` : 'rendered & parsed'})`, 'ok');
+    _narratorState.lastPages = job.pages;
+  }
+  if ((job.assets ?? 0) > _narratorState.lastAssets) {
+    const delta = (job.assets ?? 0) - _narratorState.lastAssets;
+    emitNarratorLine(`📥 Downloaded ${delta} new asset${delta > 1 ? 's' : ''} (${job.assets} total)`);
+    _narratorState.lastAssets = job.assets;
+  }
+  if ((job.apiRoutes ?? 0) > _narratorState.lastApi) {
+    emitNarratorLine(`🔌 Detected API route #${job.apiRoutes}`, 'ok');
+    _narratorState.lastApi = job.apiRoutes;
+  }
+  // Look for new page URLs in raw logs
+  const logs = job.logs || [];
+  for (const line of logs.slice(-10)) {
+    const m = line.match(/\[(\d+)\/(\d+)\][^A-Z]*(.+)$/) || line.match(/(?:Capturing|Fetching|Loading)[^a-zA-Z]*((?:https?:\/\/|\/)[^\s]+)/i);
+    if (m) {
+      const target = m[3] || m[1] || '';
+      if (target && !_narratorState.lastDiscovered.has(target)) {
+        _narratorState.lastDiscovered.add(target);
+        emitNarratorLine(`🌐 Visiting ${String(target).slice(0, 70)}`);
+        break;
+      }
+    }
+  }
+  // Always emit a flavor line every 2-3 ticks
+  if (_narratorState.tickCount % 2 === 0) {
+    emitNarratorLine(pickNarratorMessage(stage, { host: _narratorState.host || 'target', asset: Math.floor(Math.random() * 24 + 3) }));
+  }
 }
 
 function updateJobView(job) {
@@ -3899,6 +4042,11 @@ function updateJobView(job) {
   if (atBottom) logEl.scrollTop = logEl.scrollHeight;
   const errorCard = document.getElementById('errorCard');
   if (job.status === 'done' && job.outDir) {
+    if (_narratorState?.jobId === job.id) {
+      emitNarratorLine(`🎉 Clone complete — ${job.pages ?? 0} pages, ${job.assets ?? 0} assets, ${job.apiRoutes ?? 0} API routes`, 'ok');
+      emitNarratorLine(`✨ Output saved to ${job.outDir}`, 'ok');
+      stopNarrator();
+    }
     fireCloneNotification(job);
     document.getElementById('doneCard').className = 'done-card show fadein';
     if (errorCard) errorCard.className = 'error-card';
@@ -3909,11 +4057,16 @@ function updateJobView(job) {
     if (currentTab === 'editor') loadEditorPages(job.outDir);
     if (currentTab === 'preview') loadPreviewPages(job.outDir);
   } else if (job.status === 'error') {
+    if (_narratorState?.jobId === job.id) {
+      emitNarratorLine('❌ Clone failed — see error log below for details', 'err');
+      stopNarrator();
+    }
     if (errorCard) errorCard.className = 'error-card show';
     document.getElementById('doneCard').className = 'done-card';
   } else if (job.status === 'running' || job.status === 'saving') {
     if (errorCard) errorCard.className = 'error-card';
     if (!startTime) { startTime = Date.now(); startTimer(); }
+    if (!_narratorState || _narratorState.jobId !== job.id) startNarrator(job);
   }
   if (job.status !== 'running' && job.status !== 'saving') {
     clearPolling();
