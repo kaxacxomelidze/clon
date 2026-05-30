@@ -4208,6 +4208,29 @@ async function handleRequest(req, res) {
     });
   }
 
+  // Preview-asset fallback: when a cloned page references an absolute path
+  // (e.g. /figma/abc.svg, /assets/img/foo.png, /video.mp4) that we didn't
+  // capture, transparently redirect to the original site so the preview
+  // still shows the asset. Uses Referer to find which clone is being viewed.
+  if (req.method === 'GET' && isPageRead) {
+    try {
+      const refOutDir = await previewOutDirFromReferer(req);
+      if (refOutDir) {
+        const manifestData = await readCloneFile(refOutDir, 'manifest.json').catch(() => null);
+        if (manifestData) {
+          const manifest = safeJsonParse(manifestData.toString('utf8'), null);
+          const targetOrigin = String(manifest?.targetOrigin || '').replace(/\/$/, '');
+          if (targetOrigin && /^https?:\/\//.test(targetOrigin)) {
+            const redirectTo = targetOrigin + url.pathname + (url.search || '');
+            res.writeHead(302, { Location: redirectTo, 'Cache-Control': 'public, max-age=300' });
+            res.end();
+            return;
+          }
+        }
+      }
+    } catch {}
+  }
+
   const p404 = join(__dirname, 'public', '404.html');
   if (existsSync(p404)) {
     res.writeHead(404, { 'Content-Type': 'text/html' });
