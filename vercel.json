@@ -1,10 +1,11 @@
 {
   "version": 2,
+  "buildCommand": "npm install --prefix packages/cloner --omit=dev && npm run build --prefix packages/cloner",
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,db.js",
-      "excludeFiles": "output/**,packages/cloner/node_modules/**"
+      "includeFiles": "public/**,templates/**,packages/cloner/dist/**,packages/cloner/templates/**,packages/cloner/node_modules/**,db.js",
+      "excludeFiles": "output/**,packages/cloner/node_modules/**/chromium-*/**,packages/cloner/node_modules/**/.cache/**,packages/cloner/node_modules/**/test/**,packages/cloner/node_modules/**/tests/**,packages/cloner/node_modules/**/.bin/**,packages/cloner/node_modules/**/*.md,packages/cloner/node_modules/**/*.ts,packages/cloner/node_modules/**/*.map"
     }
   },
   "rewrites": [
