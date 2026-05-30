@@ -1293,6 +1293,16 @@ async function previewOutDirFromReferer(req) {
 async function rewritePreviewAssetUrls(html, outDir) {
   const prefix = `/api/asset?outDir=${encodeURIComponent(outDir)}&assetToken=${cloneAssetToken(outDir)}&path=`;
   let out = String(html).replace(/(["'(])\/_assets\//g, (_, lead) => `${lead}${prefix}${encodeURIComponent('_assets/')}`);
+  // Force-show body even if the original site relies on JS hydration to reveal
+  // content. Many SSG/SPA sites ship initial HTML with opacity:0 / visibility:hidden
+  // and only reveal once React hydrates — but in a clone the hydration JS often
+  // fails (CORS, missing chunks), leaving the page invisible. Inject a tiny CSS
+  // override that forces visible state, and a tiny script that strips common
+  // "loading" classes from <html>.
+  const visibilityFix = `<style id="__clonyfy_visibility_fix__">html,body,#__next,#root,main,header,nav,footer,section,article{opacity:1!important;visibility:visible!important;display:revert!important}html.js,html.no-js,body.preload,body.loading,body.no-js{opacity:1!important;visibility:visible!important}[data-loading],[data-skeleton],[hidden]{display:revert!important}</style><script id="__clonyfy_visibility_script__">(function(){try{var h=document.documentElement;['loading','no-js','is-loading','preload'].forEach(function(c){h.classList.remove(c)});h.classList.add('js','clonyfy-preview');document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('[style*="opacity:0"],[style*="opacity: 0"],[style*="visibility:hidden"],[style*="visibility: hidden"]').forEach(function(el){if(el.tagName==='BODY'||el.tagName==='HTML'||el.id==='__next'||el.id==='root'){el.style.opacity='1';el.style.visibility='visible';}});}); }catch(e){}})();</script>`;
+  if (out.includes('</head>')) out = out.replace('</head>', `${visibilityFix}</head>`);
+  else if (out.includes('<head>')) out = out.replace('<head>', `<head>${visibilityFix}`);
+  else out = visibilityFix + out;
   let targetOrigin = '';
   if (!out.includes('data-clonyfy-preview-replay')) {
     const context = await buildPreviewAssetContext(outDir);
