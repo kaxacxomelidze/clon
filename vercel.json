@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm install --prefix packages/cloner --omit=dev && npm run build --prefix packages/cloner",
+  "buildCommand": "npm install --prefix packages/cloner --omit=dev",
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
