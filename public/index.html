@@ -7040,34 +7040,29 @@ function showDeployErr(msg) {
      FULL PAGE SCROLL — body scrolls naturally on Clone/Build/Preview tabs
      ════════════════════════════════════════════════════════════════════ -->
 <style id="__clonyfy_desktop_scroll__">
-/* Unlock global body scroll on all viewports for non-editor tabs */
-html { height: auto !important; min-height: 100% !important; overflow: hidden auto !important; }
-body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: auto !important; display: block !important; }
+/* ── Full-page scroll (desktop) — never touch tab-panel `display`, switchTab owns it ──
+   Targeting tabs by ID keeps the editor's `display:grid` IDE layout intact. */
+html { height: auto !important; min-height: 100% !important; overflow: hidden auto !important; scrollbar-width: thin !important; scrollbar-color: rgba(255,255,255,.18) transparent !important; }
+body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: auto !important; }
 .titlebar { position: sticky !important; top: 0 !important; z-index: 100 !important; }
-.app-body { display: flex !important; min-height: calc(100vh - 44px) !important; height: auto !important; overflow: visible !important; align-items: stretch !important; }
+.app-body { min-height: calc(100vh - 44px) !important; height: auto !important; overflow: visible !important; align-items: stretch !important; }
 .sidebar { height: auto !important; min-height: calc(100vh - 44px) !important; max-height: none !important; position: sticky !important; top: 44px !important; align-self: flex-start !important; overflow-y: auto !important; }
-.sb-list { max-height: calc(100vh - 200px) !important; overflow-y: auto !important; }
-/* Clone / Build / Preview tabs flow naturally — but only when visible */
-.tab-panel:not([style*="display: none"]):not([style*="display:none"]) { overflow: visible !important; height: auto !important; min-height: calc(100vh - 44px) !important; display: flex !important; flex-direction: column !important; }
-.tab-panel[style*="display: none"], .tab-panel[style*="display:none"] { display: none !important; }
-.tab-panel#tab-clone .detail,
-.tab-panel#tab-build .build-root,
-.tab-panel#tab-preview .preview-root { overflow: visible !important; height: auto !important; flex: 1 1 auto !important; }
-.tab-panel#tab-clone #jobView { overflow: visible !important; height: auto !important; flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; }
-.tab-panel#tab-clone .log-area { overflow: visible !important; flex: 0 0 auto !important; min-height: 240px !important; margin-bottom: 24px !important; }
-.tab-panel#tab-clone .log-body { max-height: 420px !important; overflow-y: auto !important; }
-.tab-panel#tab-clone .done-card { flex-shrink: 0 !important; }
-/* Editor stays IDE-style (its own pages/canvas/props scroll), but allow body scroll if it overflows */
-.tab-panel#tab-editor { min-height: calc(100vh - 44px) !important; height: auto !important; }
-.ed-pages { max-height: calc(100vh - 92px) !important; overflow-y: auto !important; }
-.ed-props { max-height: calc(100vh - 92px) !important; overflow-y: auto !important; position: sticky !important; top: 44px !important; align-self: flex-start !important; }
-.frame-area { min-height: 60vh !important; overflow: auto !important; }
+.sidebar .sb-list { max-height: calc(100vh - 200px) !important; overflow-y: auto !important; }
+/* Clone / Build / Preview: content flows, body scrolls */
+#tab-clone, #tab-build, #tab-preview { overflow: visible !important; height: auto !important; min-height: calc(100vh - 44px) !important; }
+#tab-clone .detail, #tab-build .build-root, #tab-preview .preview-root { overflow: visible !important; height: auto !important; }
+#tab-clone #jobView { overflow: visible !important; height: auto !important; }
+#tab-clone .log-area { overflow: visible !important; min-height: 240px !important; margin-bottom: 24px !important; }
+#tab-clone .log-body { max-height: 420px !important; overflow-y: auto !important; }
+/* Editor keeps its fixed-height grid IDE; panels scroll internally */
+#tab-editor { height: calc(100vh - 44px) !important; min-height: 0 !important; max-height: calc(100vh - 44px) !important; overflow: hidden !important; }
+#tab-editor .ed-pages, #tab-editor .ed-props { overflow-y: auto !important; }
+#tab-editor .frame-area { overflow: auto !important; }
 /* Visible scrollbars across the app */
 ::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
 ::-webkit-scrollbar-track { background: rgba(255,255,255,.02) !important; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14) !important; border-radius: 6px !important; border: 2px solid transparent !important; background-clip: padding-box !important; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28) !important; background-clip: padding-box !important; }
-html { scrollbar-width: thin !important; scrollbar-color: rgba(255,255,255,.18) transparent !important; }
 </style>
 
 <!-- ════════════════════════════════════════════════════════════════════
@@ -7076,17 +7071,18 @@ html { scrollbar-width: thin !important; scrollbar-color: rgba(255,255,255,.18) 
 <style id="__clonyfy_mobile_override__">
 @media (max-width: 900px) {
   html, body { height: auto !important; min-height: 100% !important; overflow: hidden auto !important; -webkit-text-size-adjust: 100% !important; -webkit-overflow-scrolling: touch !important; }
-  body { display: block !important; touch-action: manipulation; overscroll-behavior-y: contain; padding: 0 !important; margin: 0 !important; }
-  /* Kill desktop IDE viewport lock — but DO NOT override inline display:none from switchTab() */
-  .app-body, .build-root, .clone-tab, .templates-root, .builder-root, .editor-root, .ed-center, .frame-area, .detail, #jobView, .preview-root {
-    display: block !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; flex: none !important; grid-template-columns: none !important; grid-template-rows: none !important; width: 100% !important;
+  body { overflow-y: auto !important; touch-action: manipulation; overscroll-behavior-y: contain; padding: 0 !important; margin: 0 !important; }
+  /* Stack sidebar + active panel vertically. Never touch tab-panel `display`
+     (switchTab + base @media .editor-root already control it) — only unlock
+     overflow/height so the desktop IDE viewport-lock no longer clips content. */
+  .app-body { display: flex !important; flex-direction: column !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; align-items: stretch !important; width: 100% !important; }
+  #tab-clone, #tab-build, #tab-preview, #tab-editor { overflow: visible !important; height: auto !important; min-height: 0 !important; max-height: none !important; width: 100% !important; }
+  .build-root, .clone-tab, .templates-root, .builder-root, .ed-center, .frame-area, .detail, #jobView, .preview-root {
+    height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; width: 100% !important;
   }
-  /* Tab panels: only force block when actually visible (avoids overriding inline display:none) */
-  .tab-panel:not([style*="display: none"]):not([style*="display:none"]) {
-    display: block !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; flex: none !important; width: 100% !important;
-  }
-  .tab-panel[style*="display: none"], .tab-panel[style*="display:none"] {
-    display: none !important;
+  /* Editor stacks: kill grid, flow as column */
+  .editor-root, .editor-root.pages-collapsed, .editor-root.props-collapsed {
+    grid-template-columns: none !important; grid-template-rows: none !important; height: auto !important; min-height: 0 !important; overflow: visible !important;
   }
   /* Titlebar — wraps */
   .titlebar { height: auto !important; min-height: 44px !important; padding: 4px 8px !important; gap: 4px !important; flex-wrap: wrap !important; -webkit-app-region: no-drag !important; }

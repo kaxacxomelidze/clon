@@ -1303,10 +1303,42 @@ async function rewritePreviewAssetUrls(html, outDir) {
   if (out.includes('</head>')) out = out.replace('</head>', `${visibilityFix}</head>`);
   else if (out.includes('<head>')) out = out.replace('<head>', `<head>${visibilityFix}`);
   else out = visibilityFix + out;
-  let targetOrigin = '';
+
+  // Resolve the clone's original origin once (used for media rewrite + replay/nav patches).
+  const context = await buildPreviewAssetContext(outDir);
+  const targetOrigin = context.targetOrigin;
+
+  // Point un-captured root-relative media/asset paths back to the original origin.
+  // This works in BOTH the preview iframe (`/api/page` src) and the editor iframe
+  // (`about:srcdoc`, where the Referer-based proxy fallback can't fire). We only
+  // touch file-looking paths (known media/asset extensions) and never `/_assets/`,
+  // `/api/`, protocol-relative `//`, or HTML routes — so navigation links are safe.
+  if (targetOrigin && /^https?:\/\//.test(targetOrigin)) {
+    const MEDIA_EXT = 'mp4|webm|ogg|ogv|mov|m4v|mp3|wav|m4a|flac|jpg|jpeg|png|gif|svg|webp|avif|ico|bmp|woff2?|ttf|eot|otf|pdf|css';
+    const attrRe = new RegExp(
+      `(\\b(?:src|href|poster|data-src|data-lazy-src|data-original|data-bg|data-image)\\s*=\\s*["'])(/(?!_assets/|api/|/)[^"'?#\\s]*\\.(?:${MEDIA_EXT}))`,
+      'gi',
+    );
+    out = out.replace(attrRe, (_m, attr, path) => `${attr}${targetOrigin}${path}`);
+    // srcset can carry several comma-separated candidates with width descriptors.
+    const extTest = new RegExp(`\\.(?:${MEDIA_EXT})$`, 'i');
+    out = out.replace(/(\bsrcset\s*=\s*["'])([^"']+)(["'])/gi, (_m, pre, val, post) => {
+      const fixed = val.split(',').map((part) => {
+        const seg = part.trim();
+        if (!seg) return seg;
+        const sp = seg.search(/\s/);
+        const url = sp === -1 ? seg : seg.slice(0, sp);
+        const desc = sp === -1 ? '' : seg.slice(sp);
+        if (/^\/(?!_assets\/|api\/|\/)/.test(url) && extTest.test(url.split(/[?#]/)[0])) {
+          return `${targetOrigin}${url}${desc}`;
+        }
+        return seg;
+      }).join(', ');
+      return `${pre}${fixed}${post}`;
+    });
+  }
+
   if (!out.includes('data-clonyfy-preview-replay')) {
-    const context = await buildPreviewAssetContext(outDir);
-    targetOrigin = context.targetOrigin;
     if (targetOrigin) {
       out = out
         .replace(/([("'=\s,])\/_next\/image\?/g, `$1${targetOrigin}/_next/image?`)
@@ -1318,10 +1350,6 @@ async function rewritePreviewAssetUrls(html, outDir) {
     else out = patch + out;
   }
   if (!out.includes('data-clonyfy-preview-nav')) {
-    if (!targetOrigin) {
-      const context = await buildPreviewAssetContext(outDir);
-      targetOrigin = context.targetOrigin;
-    }
     const navPatch = previewNavigationPatch(outDir, targetOrigin);
     if (out.includes('</body>')) out = out.replace('</body>', `${navPatch}</body>`);
     else out += navPatch;
