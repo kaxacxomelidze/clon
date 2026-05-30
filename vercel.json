@@ -9,19 +9,19 @@
     }
   },
   "rewrites": [
-    { "source": "/((?!_next/|favicon\\.|icon\\.|clonyfy-logo|brand-|.*\\.(?:css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf|eot|mp4|webm|txt|json|map|xml)$).*)", "destination": "/api/index" }
+    { "source": "/((?!_next/|favicon\\.|icon\\.png|icon\\.svg|clonyfy-logo\\.png|brand-mark\\.svg|brand-wordmark\\.svg).*)", "destination": "/api/index" }
   ],
   "headers": [
     {
-      "source": "/(.*\\.(?:css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf|eot|mp4|webm))",
+      "source": "/_next/static/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/_next/static/(.*)",
+      "source": "/(clonyfy-logo\\.png|icon\\.(png|svg)|favicon\\.(ico|png)|brand-(mark|wordmark)\\.svg)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]
     }
   ]
