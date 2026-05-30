@@ -537,11 +537,22 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   .tab-btn{padding:6px 11px;font-size:11px;white-space:nowrap;flex-shrink:0}
 }
 @media(max-width:768px){
-  html,body{overflow:auto;-webkit-text-size-adjust:100%;touch-action:manipulation}
-  body{overscroll-behavior-y:contain}
-  /* Layout: stack everything vertically */
-  .app-body{flex-direction:column}
-  .sidebar{width:100%;height:auto;max-height:160px;border-right:none;border-bottom:1px solid var(--border);flex-shrink:0}
+  /* CRITICAL: unlock global scroll — desktop IDE locks the viewport */
+  html,body{height:auto!important;min-height:100%;overflow:auto!important;overflow-x:hidden!important;-webkit-text-size-adjust:100%;touch-action:manipulation;-webkit-overflow-scrolling:touch}
+  body{display:block!important;overscroll-behavior-y:contain}
+  /* Allow main containers to grow with content */
+  .app-body{flex-direction:column;display:block!important;overflow:visible!important;height:auto!important;min-height:0;flex:none!important}
+  .tab-panel{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;min-width:0}
+  .build-root,.clone-tab,.templates-root,.builder-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
+  .editor-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
+  .ed-center{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;min-height:50vh}
+  .frame-area{overflow:visible!important;height:auto!important;min-height:50vh}
+  /* Detail / job view containers — let them grow */
+  .detail{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;padding-bottom:40px}
+  #jobView{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
+  .detail-empty{padding:40px 20px;min-height:auto;flex:none!important}
+  /* Sidebar becomes a horizontal strip at top */
+  .sidebar{width:100%;height:auto;max-height:160px;border-right:none;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column}
   .sb-list{display:flex;flex-direction:row;gap:6px;padding:6px 8px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
   .sb-item{flex-shrink:0;min-width:150px;max-width:200px;margin-bottom:0;padding:8px 10px}
   .sb-hd{padding:8px 10px 4px;font-size:9px}
