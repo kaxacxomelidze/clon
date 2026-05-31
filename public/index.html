@@ -850,6 +850,9 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 
 #auth-screen{position:fixed;inset:0;z-index:10000;background:#06061a;display:flex;align-items:stretch;overflow:hidden;animation:authIn .3s ease}
 #auth-screen.hidden{display:none!important;animation:none}
+/* While the auth overlay is visible, hide the app behind it so it can't add
+   phantom scroll height (and so the overlay can flow normally on mobile). */
+#auth-screen:not(.hidden) ~ .app-body{display:none!important}
 #auth-screen.auth-resuming{opacity:0;pointer-events:none}
 /* Boot state: show spinner, hide the card until session check resolves */
 .auth-card{transition:opacity .28s ease,transform .28s ease}
@@ -7228,9 +7231,15 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
      The base `position:fixed; overflow:hidden` + an inner overflow:auto scroller
      is an iOS no-scroll trap. Here the overlay itself scrolls (with momentum),
      so the Sign in button / footer stay reachable on short screens. */
-  #auth-screen { display: flex !important; grid-template-columns: none !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
+  /* Take the login overlay OUT of fixed positioning on mobile so it scrolls as
+     normal document flow. Fixed-position login screens cannot scroll when the
+     on-screen keyboard opens, trapping the password field / Sign in button
+     behind the keyboard. position:static + the window scroll fixes that, and
+     the browser auto-scrolls a focused field into view. 100dvh tracks the
+     real visible viewport (mobile browser chrome + keyboard). */
+  #auth-screen { position: static !important; inset: auto !important; display: flex !important; grid-template-columns: none !important; height: auto !important; min-height: 100vh !important; min-height: 100dvh !important; overflow: visible !important; }
   .auth-left { display: none !important; }
-  .auth-right { width: 100% !important; min-height: auto !important; padding: 80px 18px 40px !important; align-items: flex-start !important; overflow: visible !important; -webkit-overflow-scrolling: touch !important; }
+  .auth-right { width: 100% !important; min-height: auto !important; padding: 56px 18px 48px !important; align-items: flex-start !important; overflow: visible !important; }
   .auth-card { width: 100% !important; max-width: 460px !important; margin: 0 auto !important; padding: 24px 18px !important; border-radius: 16px !important; }
   .auth-input { min-height: 46px !important; font-size: 14px !important; }
   .auth-submit { min-height: 46px !important; font-size: 14px !important; }
@@ -7305,7 +7314,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31c';
+  var BUILD = '2026-05-31d';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
   window.addEventListener('DOMContentLoaded', function () {
