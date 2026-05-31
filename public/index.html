@@ -7314,7 +7314,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31d';
+  var BUILD = '2026-05-31e';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
   window.addEventListener('DOMContentLoaded', function () {
@@ -7323,6 +7323,38 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       sub.insertAdjacentHTML('beforeend', ' <span style="opacity:.45">· build ' + BUILD + '</span>');
     }
   });
+
+  /* Opt-in scroll diagnostics: open the site with ?debug=1 to show a live
+     on-screen readout (so we can see the real scroll state on a specific
+     device). Tap the box to dismiss it. */
+  if (/[?&]debug=1/.test(location.search)) {
+    var box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:2147483647;background:rgba(0,0,0,.9);color:#0f0;font:11px/1.5 monospace;padding:8px 10px;border:1px solid #0f0;border-radius:8px;white-space:pre;max-height:45vh;overflow:auto;pointer-events:auto';
+    box.addEventListener('click', function () { box.remove(); });
+    var paint = function () {
+      var de = document.documentElement, b = document.body;
+      var ab = document.querySelector('.app-body');
+      var panel = document.querySelector('.tab-panel#tab-' + (window.currentTab || 'clone'));
+      box.textContent =
+        'build ' + BUILD + '  (tap to close)\n' +
+        'tab=' + (window.currentTab || '?') + '\n' +
+        'win ' + window.innerWidth + 'x' + window.innerHeight + '\n' +
+        'doc.scrollH=' + de.scrollHeight + '  scrollY=' + Math.round(window.scrollY) + '\n' +
+        'SCROLLABLE=' + (de.scrollHeight > window.innerHeight) + '\n' +
+        'html overflowY=' + getComputedStyle(de).overflowY + '\n' +
+        'body overflowY=' + getComputedStyle(b).overflowY + '\n' +
+        'app-body h=' + (ab ? Math.round(ab.getBoundingClientRect().height) : 'n/a') +
+          ' overflow=' + (ab ? getComputedStyle(ab).overflow : 'n/a') + '\n' +
+        'panel h=' + (panel ? Math.round(panel.getBoundingClientRect().height) : 'n/a') +
+          ' overflow=' + (panel ? getComputedStyle(panel).overflow : 'n/a') + '\n' +
+        'auth hidden=' + (function(){var a=document.getElementById('auth-screen');return a?a.classList.contains('hidden'):'no-el';})();
+    };
+    var add = function () { try { if (document.body && !box.isConnected) document.body.appendChild(box); paint(); } catch (e) {} };
+    if (document.body) add(); else window.addEventListener('DOMContentLoaded', add);
+    window.addEventListener('scroll', paint, { passive: true });
+    window.addEventListener('resize', paint);
+    setInterval(add, 1000);
+  }
 })();
 </script>
 
