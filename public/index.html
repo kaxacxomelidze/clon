@@ -546,8 +546,13 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
      Forcing display:block!important made every panel show at once, so tapping
      Editor/Build appeared to do nothing. Only unlock overflow/height/flex. */
   .tab-panel{overflow:visible!important;height:auto!important;flex:none!important;min-width:0}
-  .build-root,.clone-tab,.templates-root,.builder-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
-  .editor-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
+  .clone-tab,.templates-root,.builder-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
+  /* NOTE: .build-root / .editor-root are the panel elements (#tab-build /
+     #tab-editor). Do NOT force display here — on initial page load switchTab
+     hasn't run yet, so these panels rely on their inline `display:none`. A
+     `display:block!important` here overrode that and showed the Editor/Build
+     panels stacked under the Clone page. switchTab owns their display. */
+  .build-root,.editor-root{overflow:visible!important;height:auto!important;flex:none!important}
   .ed-center{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;min-height:50vh}
   .frame-area{overflow:visible!important;height:auto!important;min-height:50vh}
   /* Detail / job view containers — let them grow */
