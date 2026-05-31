@@ -7186,8 +7186,13 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
   .health-val { font-size: 16px !important; }
   .error-card { padding: 14px 12px !important; }
   .retry-btn { width: 100% !important; min-height: 42px !important; justify-content: center !important; }
-  .log-area { margin-bottom: 16px !important; }
-  .log-body { max-height: 240px !important; font-size: 10.5px !important; padding: 8px 10px !important; }
+  /* Mobile: the job log must NOT be a fixed-height inner scroller. A nested
+     overflow box steals touch-scroll from the page and can trap you above the
+     results. Let the log expand and the whole page scroll as one. Uses the
+     #tab-clone prefix to beat the higher-specificity desktop rule. */
+  #tab-clone .log-area { display: block !important; flex: none !important; min-height: 0 !important; overflow: visible !important; margin-bottom: 16px !important; }
+  #tab-clone .log-body { max-height: none !important; overflow: visible !important; flex: none !important; font-size: 10.5px !important; padding: 8px 10px !important; }
+  #tab-clone .detail { display: block !important; overflow: visible !important; height: auto !important; }
   /* Editor — vertical stack */
   .ed-studio-bar { flex-wrap: wrap !important; padding: 8px 10px !important; gap: 8px !important; min-height: 0 !important; height: auto !important; }
   .ed-studio-title { flex: 1 1 100% !important; gap: 6px !important; flex-wrap: wrap !important; }
@@ -7314,7 +7319,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31e';
+  var BUILD = '2026-05-31f';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
   window.addEventListener('DOMContentLoaded', function () {
