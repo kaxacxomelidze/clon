@@ -7300,6 +7300,29 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
   .canvas-zoom-hud { transform: scale(.75) !important; }
   .tool-btn { min-width: 32px !important; min-height: 32px !important; padding: 5px !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   TOUCH-DEVICE SCROLL SAFEGUARD — keyed on the input device, not width.
+   The width media queries (<=900px) don't apply when Chrome's "Desktop
+   site" mode reports a ~980px viewport, which left phones stuck in the
+   locked desktop IDE layout (fixed height + overflow:hidden = no scroll,
+   content cut off). pointer:coarse targets real touch devices regardless
+   of reported width and forces the whole page to grow + scroll.
+   ════════════════════════════════════════════════════════════════════ */
+@media (pointer: coarse) {
+  html { height: auto !important; min-height: 100% !important; overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
+  body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: visible !important; }
+  .app-body { display: flex !important; flex-direction: column !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; }
+  .tab-panel, #tab-clone, #tab-preview, #tab-build {
+    height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important;
+  }
+  .detail, #jobView, .clone-tab, .build-root, .templates-root, .builder-root, .preview-root, .ed-center {
+    height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important;
+  }
+  #tab-clone .log-area, #tab-clone .log-body, #tab-clone .detail {
+    height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; display: block !important;
+  }
+}
 </style>
 
 <script>
@@ -7319,9 +7342,37 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31f';
+  var BUILD = '2026-05-31g';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
+
+  /* Touch-device runtime scroll failsafe. Belt-and-suspenders to the
+     @media(pointer:coarse) CSS: if any container is still clipping the page
+     (inline locks, specificity, Desktop-site mode), forcibly unlock the
+     non-editor scroll chain so the document can grow and scroll. */
+  try {
+    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+      var unlockScroll = function () {
+        try {
+          var de = document.documentElement, b = document.body;
+          de.style.setProperty('height', 'auto', 'important');
+          de.style.setProperty('overflow-y', 'auto', 'important');
+          if (b) { b.style.setProperty('height', 'auto', 'important'); b.style.setProperty('overflow-y', 'visible', 'important'); }
+          var sel = '.app-body,.tab-panel,#tab-clone,#tab-preview,#tab-build,.detail,#jobView,.log-area,.log-body,.clone-tab,.build-root,.templates-root,.preview-root';
+          document.querySelectorAll(sel).forEach(function (el) {
+            var cs = getComputedStyle(el);
+            if (cs.overflowY === 'hidden' || cs.overflowY === 'clip') el.style.setProperty('overflow-y', 'visible', 'important');
+            el.style.setProperty('max-height', 'none', 'important');
+            if (cs.height !== 'auto' && el.scrollHeight > el.clientHeight + 1) el.style.setProperty('height', 'auto', 'important');
+          });
+        } catch (e) {}
+      };
+      window.addEventListener('DOMContentLoaded', unlockScroll);
+      window.addEventListener('load', unlockScroll);
+      [400, 1200, 3000].forEach(function (t) { setTimeout(unlockScroll, t); });
+      window.addEventListener('touchstart', unlockScroll, { passive: true, once: true });
+    }
+  } catch (e) {}
   window.addEventListener('DOMContentLoaded', function () {
     var sub = document.querySelector('.clone-sub');
     if (sub && sub.textContent.indexOf('build') === -1) {
