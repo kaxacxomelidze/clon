@@ -7137,8 +7137,13 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
      known iOS Safari trap that makes the page feel unscrollable. We also avoid
      the `overflow: hidden auto` shorthand (mis-parsed by some iOS versions) in
      favor of explicit longhand. */
-  html { height: auto !important; min-height: 100% !important; overflow-x: hidden !important; overflow-y: auto !important; -webkit-text-size-adjust: 100% !important; -webkit-overflow-scrolling: touch !important; }
-  body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: visible !important; touch-action: manipulation; overscroll-behavior-y: contain; padding: 0 !important; margin: 0 !important; }
+  /* Natural viewport scrolling on mobile. Do NOT put overflow:auto/scroll on the
+     root (<html>) — that breaks viewport scroll propagation on some mobile
+     browsers (Android Chrome). overflow-y:visible keeps the normal page scroll;
+     overflow-x:clip prevents sideways scroll WITHOUT coercing overflow-y to auto
+     (which `overflow-x:hidden` would). */
+  html { height: auto !important; min-height: 100% !important; overflow-x: clip !important; overflow-y: visible !important; -webkit-text-size-adjust: 100% !important; }
+  body { height: auto !important; min-height: 100vh !important; overflow-x: clip !important; overflow-y: visible !important; touch-action: manipulation; overscroll-behavior-y: contain; padding: 0 !important; margin: 0 !important; }
   /* Stack sidebar + active panel vertically. Never touch tab-panel `display`
      (switchTab + base @media .editor-root already control it) — only unlock
      overflow/height so the desktop IDE viewport-lock no longer clips content. */
@@ -7346,8 +7351,8 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
    of reported width and forces the whole page to grow + scroll.
    ════════════════════════════════════════════════════════════════════ */
 @media (pointer: coarse) {
-  html { height: auto !important; min-height: 100% !important; overflow-x: hidden !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
-  body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: visible !important; }
+  html { height: auto !important; min-height: 100% !important; overflow-x: clip !important; overflow-y: visible !important; }
+  body { height: auto !important; min-height: 100vh !important; overflow-x: clip !important; overflow-y: visible !important; }
   .app-body { display: flex !important; flex-direction: column !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; }
   .tab-panel, #tab-clone, #tab-preview, #tab-build {
     height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important;
@@ -7378,7 +7383,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31k';
+  var BUILD = '2026-05-31l';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
@@ -7392,8 +7397,9 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
         try {
           var de = document.documentElement, b = document.body;
           de.style.setProperty('height', 'auto', 'important');
-          de.style.setProperty('overflow-y', 'auto', 'important');
-          if (b) { b.style.setProperty('height', 'auto', 'important'); b.style.setProperty('overflow-y', 'visible', 'important'); }
+          de.style.setProperty('overflow-x', 'clip', 'important');
+          de.style.setProperty('overflow-y', 'visible', 'important');
+          if (b) { b.style.setProperty('height', 'auto', 'important'); b.style.setProperty('overflow-x', 'clip', 'important'); b.style.setProperty('overflow-y', 'visible', 'important'); }
           var sel = '.app-body,.tab-panel,#tab-clone,#tab-preview,#tab-build,.detail,#jobView,.log-area,.log-body,.clone-tab,.build-root,.templates-root,.preview-root';
           document.querySelectorAll(sel).forEach(function (el) {
             var cs = getComputedStyle(el);
