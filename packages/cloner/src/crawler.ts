@@ -582,7 +582,8 @@ export async function crawl(
               if (typeof value !== 'string' && !(value instanceof URL)) return;
               const href = new URL(String(value), window.location.href).href;
               const key = '__clonyfyNavs';
-              const current = ((window as Window & Record<string, string[]>)[key] ||= []);
+              const store = window as unknown as Record<string, string[]>;
+              const current = (store[key] ||= []);
               current.push(href);
               window.dispatchEvent(new CustomEvent('__cloner_nav__', { detail: href }));
             } catch {
