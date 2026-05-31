@@ -542,7 +542,10 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   body{display:block!important;overscroll-behavior-y:contain}
   /* Allow main containers to grow with content */
   .app-body{flex-direction:column;display:block!important;overflow:visible!important;height:auto!important;min-height:0;flex:none!important}
-  .tab-panel{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;min-width:0}
+  /* NOTE: do NOT set `display` here — switchTab owns tab-panel visibility.
+     Forcing display:block!important made every panel show at once, so tapping
+     Editor/Build appeared to do nothing. Only unlock overflow/height/flex. */
+  .tab-panel{overflow:visible!important;height:auto!important;flex:none!important;min-width:0}
   .build-root,.clone-tab,.templates-root,.builder-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
   .editor-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
   .ed-center{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;min-height:50vh}
@@ -3428,12 +3431,20 @@ function switchTab(tab) {
   // Editor is free to use in-browser. Paywall is enforced only on actions that
   // take work outside the browser (Export ZIP, GitHub, Share, Deploy, Copy).
   currentTab = tab;
-  document.getElementById('tab-clone').style.display = tab === 'clone' ? 'flex' : 'none';
-  document.getElementById('tab-preview').style.display = tab === 'preview' ? 'flex' : 'none';
-  document.getElementById('tab-editor').style.display = tab === 'editor'
-    ? (window.matchMedia('(max-width: 900px)').matches ? 'flex' : 'grid')
-    : 'none';
-  document.getElementById('tab-build').style.display = tab === 'build' ? 'flex' : 'none';
+  // Use setProperty(...,'important') so switchTab's visibility wins over the
+  // mobile stylesheet rules that put `display:block!important` on .editor-root /
+  // .build-root (those classes sit on the panel elements themselves). Without
+  // !important here, hidden Editor/Build panels stayed visible on mobile and
+  // tapping their tabs appeared to do nothing.
+  const setPanel = (id, show, shownValue) => {
+    const el = document.getElementById(id);
+    if (el) el.style.setProperty('display', show ? shownValue : 'none', 'important');
+  };
+  setPanel('tab-clone', tab === 'clone', 'flex');
+  setPanel('tab-preview', tab === 'preview', 'flex');
+  setPanel('tab-editor', tab === 'editor',
+    window.matchMedia('(max-width: 900px)').matches ? 'flex' : 'grid');
+  setPanel('tab-build', tab === 'build', 'flex');
   document.getElementById('t-clone').classList.toggle('active', tab === 'clone');
   document.getElementById('t-preview').classList.toggle('active', tab === 'preview');
   document.getElementById('t-editor').classList.toggle('active', tab === 'editor');
@@ -7102,8 +7113,13 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
   .titlebar-user .user-name { display: none !important; }
   .titlebar-user .user-avatar { width: 22px !important; height: 22px !important; font-size: 10px !important; }
   .titlebar-user .logout-btn { font-size: 10px !important; padding: 4px 8px !important; }
-  /* Sidebar = horizontal strip */
-  .sidebar { width: 100% !important; max-height: 130px !important; border-right: none !important; border-bottom: 1px solid var(--border) !important; }
+  /* Sidebar = horizontal strip.
+     IMPORTANT: must override the desktop-scroll block's
+     `.sidebar{min-height:calc(100vh-44px)!important}` (applies at all widths).
+     min-height beats max-height in CSS, so without these resets the sidebar
+     stays full viewport-height on mobile/tablet and pushes the active tab panel
+     below the fold — making tab switches look like they do nothing. */
+  .sidebar { width: 100% !important; height: auto !important; min-height: 0 !important; max-height: 130px !important; position: static !important; align-self: stretch !important; border-right: none !important; border-bottom: 1px solid var(--border) !important; }
   .sb-search-wrap { padding: 4px 8px !important; }
   .sb-search { font-size: 12px !important; padding: 6px 9px !important; min-height: 32px !important; }
   .sb-hd { padding: 6px 10px 2px !important; font-size: 9px !important; }
