@@ -7288,5 +7288,34 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
 }
 </style>
 
+<script>
+/* ── Stale cache / service-worker cleanup + build stamp ──────────────────────
+   If an older deploy ever registered a service worker, it can keep serving a
+   cached (broken) page on mobile no matter how many times you reload. This
+   unregisters any such worker and clears its caches. The visible build stamp
+   lets us confirm which version a device is actually running. */
+(function () {
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations()
+        .then(function (regs) { regs.forEach(function (r) { r.unregister(); }); })
+        .catch(function () {});
+    }
+    if (window.caches && caches.keys) {
+      caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
+    }
+  } catch (e) {}
+  var BUILD = '2026-05-31c';
+  window.__CLONYFY_BUILD__ = BUILD;
+  try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
+  window.addEventListener('DOMContentLoaded', function () {
+    var sub = document.querySelector('.clone-sub');
+    if (sub && sub.textContent.indexOf('build') === -1) {
+      sub.insertAdjacentHTML('beforeend', ' <span style="opacity:.45">· build ' + BUILD + '</span>');
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
