@@ -1948,7 +1948,7 @@ input[type=checkbox]{accent-color:#fff!important}
       </div>
       <div class="ed-studio-actions">
         <button class="ed-studio-btn" type="button" onclick="openSectionModal()">Blocks</button>
-        <button class="ed-studio-btn primary" type="button" onclick="savePage()">Save page</button>
+        <button class="ed-studio-btn primary" type="button" onclick="saveAndExportCode()">Save &amp; export code</button>
       </div>
     </div>
 
@@ -6916,6 +6916,15 @@ async function savePage() {
   btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save`;
 }
 
+// Save the page, then export the full project as a ZIP. Exporting code is a
+// paid feature: free-plan users are sent to the pricing/payment section;
+// paid plans get the ZIP download. (Editing/saving in-browser stays free.)
+async function saveAndExportCode() {
+  await savePage();
+  if (!requirePaid('Exporting code')) return;
+  await exportZip();
+}
+
 // ── Themes ───────────────────────────────────────────────────────────────────
 const THEMES = [
   { id: 'original', name: 'Original', colors: ['#5b8def','#a855f7','#ffffff'], filter: '' },
@@ -7342,7 +7351,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31g';
+  var BUILD = '2026-05-31h';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
