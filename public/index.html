@@ -4421,6 +4421,7 @@ function showGithubErr(msg) {
   el.classList.add('show');
 }
 async function connectGithub() {
+  if (!requirePaid('GitHub connect')) return;
   const token = githubToken();
   if (!token) { showGithubErr('Enter a GitHub token first'); return; }
   const btn = document.getElementById('github-connect-btn');
@@ -4479,6 +4480,7 @@ async function onGithubRepoPicked() {
   }
 }
 async function pushToGithub() {
+  if (!requirePaid('GitHub push')) return;
   const outDir = activeOutDir();
   if (!outDir) { showGithubErr('No clone output is selected'); return; }
   const repo = document.getElementById('github-repo').value.trim();
@@ -6887,6 +6889,10 @@ function restoreEditorOnlyAttrs(removed) {
 
 async function savePage() {
   if (!editorOutDir || !editorRoute) return;
+  // Persisting edits to the server is paid-only (server returns 403 for free).
+  // Gate here so the toolbar Save button and Ctrl+S also send free users to the
+  // pricing section cleanly instead of failing with a 403 toast.
+  if (!requirePaid('Saving pages')) return;
   const doc = document.getElementById('ed-frame').contentDocument;
   if (!doc) return;
   finishInlineTextEdit();
@@ -6920,8 +6926,10 @@ async function savePage() {
 // paid feature: free-plan users are sent to the pricing/payment section;
 // paid plans get the ZIP download. (Editing/saving in-browser stays free.)
 async function saveAndExportCode() {
-  await savePage();
+  // Exporting code (and saving to the server) is paid-only — gate first so free
+  // users go straight to the pricing section instead of hitting a 403.
   if (!requirePaid('Exporting code')) return;
+  await savePage();
   await exportZip();
 }
 
@@ -7012,6 +7020,7 @@ function closeDeployModal() {
 }
 
 async function deployToProvider() {
+  if (!requirePaid('Deploy')) return;
   if (deployProvider === 'vercel') {
     toast('Vercel deployment coming soon — use Netlify for now', 'warn'); return;
   }
@@ -7351,7 +7360,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31h';
+  var BUILD = '2026-05-31i';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
