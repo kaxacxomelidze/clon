@@ -5,6 +5,7 @@ import { resolve, join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync, createReadStream, copyFileSync } from 'fs';
 import { request as httpsRequest } from 'https';
+import { lookup as dnsLookup } from 'dns/promises';
 import { createRequire } from 'module';
 import 'dotenv/config';
 import { runClone } from './packages/cloner/dist/runClone.js';
@@ -1900,6 +1901,57 @@ function normalizeTargetUrl(input) {
   return parsed;
 }
 
+// ── SSRF protection ──────────────────────────────────────────────────────────
+// Block clone targets that resolve to private, loopback, link-local (incl. the
+// 169.254.169.254 cloud-metadata endpoint) or other reserved address space, and
+// obvious internal hostnames. Prevents using the cloner to reach internal
+// services or steal cloud credentials.
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  ip = String(ip).toLowerCase().trim();
+  if (ip.includes(':')) {
+    if (ip === '::1' || ip === '::') return true;                 // loopback / unspecified
+    if (ip.startsWith('fe80') || ip.startsWith('fc') || ip.startsWith('fd')) return true; // link-local / unique-local
+    const mapped = ip.match(/(?:::ffff:)(\d+\.\d+\.\d+\.\d+)$/);  // IPv4-mapped IPv6
+    if (mapped) return isPrivateIp(mapped[1]);
+    return false;                                                 // global IPv6
+  }
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(p => Number.isNaN(p) || p < 0 || p > 255)) return true; // malformed → block
+  const [a, b] = parts;
+  if (a === 0 || a === 10 || a === 127) return true;              // this-network / 10/8 / loopback
+  if (a === 169 && b === 254) return true;                        // link-local incl. 169.254.169.254 metadata
+  if (a === 172 && b >= 16 && b <= 31) return true;               // 172.16/12
+  if (a === 192 && b === 168) return true;                        // 192.168/16
+  if (a === 100 && b >= 64 && b <= 127) return true;              // CGNAT 100.64/10
+  if (a === 192 && b === 0) return true;                          // 192.0.0/24 + 192.0.2/24 (test)
+  if (a >= 224) return true;                                      // multicast / reserved
+  return false;
+}
+function isBlockedHostname(host) {
+  host = String(host || '').toLowerCase().replace(/\.$/, '');
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (['.local', '.internal', '.lan', '.home', '.intranet', '.corp'].some(s => host.endsWith(s))) return true;
+  if (host === 'metadata.google.internal' || host === 'metadata') return true;
+  return false;
+}
+async function assertPublicTarget(parsedUrl) {
+  const rawHost = parsedUrl.hostname.replace(/^\[|\]$/g, ''); // strip IPv6 brackets
+  if (isBlockedHostname(parsedUrl.hostname)) throw new Error('That address is not allowed');
+  const looksLikeIp = /^[0-9.]+$/.test(rawHost) || rawHost.includes(':');
+  if (looksLikeIp) {
+    if (isPrivateIp(rawHost)) throw new Error('That address is not allowed');
+    return;
+  }
+  let addrs;
+  try { addrs = await dnsLookup(rawHost, { all: true }); } catch { throw new Error('Could not resolve that domain'); }
+  if (!addrs || !addrs.length) throw new Error('Could not resolve that domain');
+  for (const { address } of addrs) {
+    if (isPrivateIp(address)) throw new Error('That address is not allowed');
+  }
+}
+
 function listOutputFiles(outDir) {
   const files = [];
   const walk = (dir) => {
@@ -2434,6 +2486,8 @@ async function handleRequest(req, res) {
       try { parsed = JSON.parse(body); } catch { return json(res, { error: 'bad json' }, 400); }
       let target;
       try { target = normalizeTargetUrl(parsed.url); } catch (err) { return json(res, { error: err.message || 'Invalid URL' }, 400); }
+      // SSRF guard: reject private/internal/metadata targets before cloning.
+      try { await assertPublicTarget(target); } catch (err) { return json(res, { error: err.message || 'That address is not allowed' }, 400); }
       const targetUrl = target.href;
       const { depth = '3', ignoreRobots = false } = parsed;
       let { maxPages = '20' } = parsed;
