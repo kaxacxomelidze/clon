@@ -659,10 +659,18 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   .clone-tip{font-size:10px;line-height:1.5;padding:0 6px}
   .clone-ticker-track{font-size:9px;gap:18px}
   .clone-progress{max-width:100%}
-  /* Perf: the full-size animated grain layer is the heaviest continuous repaint
-     in the loader; keep its texture but stop animating it on phones to avoid
-     jank during cloning. The rings/scan/core animations (cheap transforms) stay. */
+  /* Perf: make the loader animation smooth on phones (it stutters otherwise).
+     1) stop animating the full-size grain layer (heaviest continuous repaint);
+     2) drop the scanline overlay (extra full-cover overdraw);
+     3) promote the moving parts to their own GPU layer so they animate on the
+        compositor instead of the main thread;
+     4) shrink the core's pulsing blur shadow — animating a 60px box-shadow is a
+        big repaint cost; a smaller, GPU-friendlier glow keeps the look. */
   .clone-loader::before{animation:none !important}
+  .clone-loader::after{display:none !important}
+  .clone-rings::before,.clone-rings::after,.clone-ring-mid,
+  .clone-scan-frame .scan-h,.clone-scan-frame .scan-v,.clone-ticker-track{will-change:transform}
+  .clone-rings .clone-core{will-change:transform,opacity;box-shadow:0 0 0 1px rgba(255,255,255,.4),0 0 22px rgba(255,255,255,.14) !important}
   /* Templates/builder grid */
   .templates-grid,.builder-grid{grid-template-columns:1fr;gap:12px;padding:12px}
   /* Sidebar item buttons larger touch target */
@@ -7370,7 +7378,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31j';
+  var BUILD = '2026-05-31k';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
