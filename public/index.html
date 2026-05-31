@@ -494,6 +494,12 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .clone-ticker-track{display:flex;gap:32px;white-space:nowrap;animation:clone-ticker 22s linear infinite;font-family:'JetBrains Mono','Menlo','Consolas',ui-monospace,monospace;font-size:10px;color:rgba(255,255,255,.32);text-transform:uppercase;letter-spacing:.22em}
 .clone-ticker-track span{display:inline-flex;align-items:center;gap:6px}
 .clone-ticker-track span::before{content:'';width:4px;height:4px;background:rgba(255,255,255,.4);border-radius:50%;display:inline-block}
+/* Honor reduced-motion: drop the loader's continuous animations (battery + a11y). */
+@media (prefers-reduced-motion: reduce){
+  .clone-loader::before,.clone-rings::before,.clone-rings::after,.clone-ring-mid,.clone-rings .clone-core,
+  .clone-scan-frame .scan-h,.clone-scan-frame .scan-v,.clone-ticker-track,.clone-status .cursor{animation:none !important}
+  .clone-progress-fill{transition:none !important}
+}
 
 /* ── Build tab ──────────────────────────────────────── */
 .build-root{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
@@ -653,6 +659,10 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   .clone-tip{font-size:10px;line-height:1.5;padding:0 6px}
   .clone-ticker-track{font-size:9px;gap:18px}
   .clone-progress{max-width:100%}
+  /* Perf: the full-size animated grain layer is the heaviest continuous repaint
+     in the loader; keep its texture but stop animating it on phones to avoid
+     jank during cloning. The rings/scan/core animations (cheap transforms) stay. */
+  .clone-loader::before{animation:none !important}
   /* Templates/builder grid */
   .templates-grid,.builder-grid{grid-template-columns:1fr;gap:12px;padding:12px}
   /* Sidebar item buttons larger touch target */
@@ -7360,7 +7370,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31i';
+  var BUILD = '2026-05-31j';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
