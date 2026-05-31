@@ -19,7 +19,7 @@
       ]
     },
     {
-      "source": "/(clonyfy-logo\\.png|icon\\.(png|svg)|favicon\\.(ico|png)|brand-(mark|wordmark)\\.svg)",
+      "source": "/(clonyfy-logo\\.png|icon\\.(?:png|svg)|favicon\\.(?:ico|png)|brand-(?:mark|wordmark)\\.svg)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]

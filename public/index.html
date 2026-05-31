@@ -542,7 +542,10 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   body{display:block!important;overscroll-behavior-y:contain}
   /* Allow main containers to grow with content */
   .app-body{flex-direction:column;display:block!important;overflow:visible!important;height:auto!important;min-height:0;flex:none!important}
-  .tab-panel{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;min-width:0}
+  /* NOTE: do NOT set `display` here — switchTab owns tab-panel visibility.
+     Forcing display:block!important made every panel show at once, so tapping
+     Editor/Build appeared to do nothing. Only unlock overflow/height/flex. */
+  .tab-panel{overflow:visible!important;height:auto!important;flex:none!important;min-width:0}
   .build-root,.clone-tab,.templates-root,.builder-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
   .editor-root{display:block!important;overflow:visible!important;height:auto!important;flex:none!important}
   .ed-center{display:block!important;overflow:visible!important;height:auto!important;flex:none!important;min-height:50vh}
@@ -3428,12 +3431,20 @@ function switchTab(tab) {
   // Editor is free to use in-browser. Paywall is enforced only on actions that
   // take work outside the browser (Export ZIP, GitHub, Share, Deploy, Copy).
   currentTab = tab;
-  document.getElementById('tab-clone').style.display = tab === 'clone' ? 'flex' : 'none';
-  document.getElementById('tab-preview').style.display = tab === 'preview' ? 'flex' : 'none';
-  document.getElementById('tab-editor').style.display = tab === 'editor'
-    ? (window.matchMedia('(max-width: 900px)').matches ? 'flex' : 'grid')
-    : 'none';
-  document.getElementById('tab-build').style.display = tab === 'build' ? 'flex' : 'none';
+  // Use setProperty(...,'important') so switchTab's visibility wins over the
+  // mobile stylesheet rules that put `display:block!important` on .editor-root /
+  // .build-root (those classes sit on the panel elements themselves). Without
+  // !important here, hidden Editor/Build panels stayed visible on mobile and
+  // tapping their tabs appeared to do nothing.
+  const setPanel = (id, show, shownValue) => {
+    const el = document.getElementById(id);
+    if (el) el.style.setProperty('display', show ? shownValue : 'none', 'important');
+  };
+  setPanel('tab-clone', tab === 'clone', 'flex');
+  setPanel('tab-preview', tab === 'preview', 'flex');
+  setPanel('tab-editor', tab === 'editor',
+    window.matchMedia('(max-width: 900px)').matches ? 'flex' : 'grid');
+  setPanel('tab-build', tab === 'build', 'flex');
   document.getElementById('t-clone').classList.toggle('active', tab === 'clone');
   document.getElementById('t-preview').classList.toggle('active', tab === 'preview');
   document.getElementById('t-editor').classList.toggle('active', tab === 'editor');
@@ -7077,8 +7088,13 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
      ════════════════════════════════════════════════════════════════════ -->
 <style id="__clonyfy_mobile_override__">
 @media (max-width: 900px) {
-  html, body { height: auto !important; min-height: 100% !important; overflow: hidden auto !important; -webkit-text-size-adjust: 100% !important; -webkit-overflow-scrolling: touch !important; }
-  body { overflow-y: auto !important; touch-action: manipulation; overscroll-behavior-y: contain; padding: 0 !important; margin: 0 !important; }
+  /* Single scroll owner on mobile = the document/window (html). Using TWO
+     nested overflow:auto containers (html AND body) plus a sticky header is a
+     known iOS Safari trap that makes the page feel unscrollable. We also avoid
+     the `overflow: hidden auto` shorthand (mis-parsed by some iOS versions) in
+     favor of explicit longhand. */
+  html { height: auto !important; min-height: 100% !important; overflow-x: hidden !important; overflow-y: auto !important; -webkit-text-size-adjust: 100% !important; -webkit-overflow-scrolling: touch !important; }
+  body { height: auto !important; min-height: 100vh !important; overflow-x: hidden !important; overflow-y: visible !important; touch-action: manipulation; overscroll-behavior-y: contain; padding: 0 !important; margin: 0 !important; }
   /* Stack sidebar + active panel vertically. Never touch tab-panel `display`
      (switchTab + base @media .editor-root already control it) — only unlock
      overflow/height so the desktop IDE viewport-lock no longer clips content. */
@@ -7102,8 +7118,13 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
   .titlebar-user .user-name { display: none !important; }
   .titlebar-user .user-avatar { width: 22px !important; height: 22px !important; font-size: 10px !important; }
   .titlebar-user .logout-btn { font-size: 10px !important; padding: 4px 8px !important; }
-  /* Sidebar = horizontal strip */
-  .sidebar { width: 100% !important; max-height: 130px !important; border-right: none !important; border-bottom: 1px solid var(--border) !important; }
+  /* Sidebar = horizontal strip.
+     IMPORTANT: must override the desktop-scroll block's
+     `.sidebar{min-height:calc(100vh-44px)!important}` (applies at all widths).
+     min-height beats max-height in CSS, so without these resets the sidebar
+     stays full viewport-height on mobile/tablet and pushes the active tab panel
+     below the fold — making tab switches look like they do nothing. */
+  .sidebar { width: 100% !important; height: auto !important; min-height: 0 !important; max-height: 130px !important; position: static !important; align-self: stretch !important; border-right: none !important; border-bottom: 1px solid var(--border) !important; }
   .sb-search-wrap { padding: 4px 8px !important; }
   .sb-search { font-size: 12px !important; padding: 6px 9px !important; min-height: 32px !important; }
   .sb-hd { padding: 6px 10px 2px !important; font-size: 9px !important; }
@@ -7198,9 +7219,13 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
   .deploy-providers { grid-template-columns: 1fr !important; }
   .mpay-methods { grid-template-columns: 1fr !important; }
   /* Auth */
-  #auth-screen { display: flex !important; grid-template-columns: none !important; }
+  /* Auth/login screen: scroll the whole overlay as one unit on mobile.
+     The base `position:fixed; overflow:hidden` + an inner overflow:auto scroller
+     is an iOS no-scroll trap. Here the overlay itself scrolls (with momentum),
+     so the Sign in button / footer stay reachable on short screens. */
+  #auth-screen { display: flex !important; grid-template-columns: none !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
   .auth-left { display: none !important; }
-  .auth-right { width: 100% !important; padding: 80px 18px 40px !important; align-items: flex-start !important; }
+  .auth-right { width: 100% !important; min-height: auto !important; padding: 80px 18px 40px !important; align-items: flex-start !important; overflow: visible !important; -webkit-overflow-scrolling: touch !important; }
   .auth-card { width: 100% !important; max-width: 460px !important; margin: 0 auto !important; padding: 24px 18px !important; border-radius: 16px !important; }
   .auth-input { min-height: 46px !important; font-size: 14px !important; }
   .auth-submit { min-height: 46px !important; font-size: 14px !important; }
