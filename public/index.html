@@ -1446,6 +1446,7 @@ input[type=checkbox]{accent-color:#fff!important}
           <label class="auth-remember"><input type="checkbox" id="auth-remember-me"> Remember me</label>
           <button type="button" onclick="showForgotPassword()" style="background:none;border:none;color:rgba(255,255,255,.3);font-size:12px;cursor:pointer;font-family:inherit;padding:2px;font-weight:600;transition:color .15s" onmouseover="this.style.color='rgba(255,255,255,.55)'" onmouseout="this.style.color='rgba(255,255,255,.3)'">Forgot password?</button>
         </div>
+        <div id="auth-login-captcha" class="auth-captcha" style="display:none;margin:10px 0 4px"></div>
         <button class="auth-submit" id="auth-login-btn" type="submit">Sign in</button>
       </form>
       <!-- Register form -->
@@ -1486,6 +1487,7 @@ input[type=checkbox]{accent-color:#fff!important}
             </button>
           </div>
         </div>
+        <div id="auth-reg-captcha" class="auth-captcha" style="display:none;margin:10px 0 4px"></div>
         <button class="auth-submit" id="auth-reg-btn" type="submit">Create free account</button>
       </form>
       <!-- Forgot password form -->
@@ -2597,6 +2599,68 @@ function switchAuthTab(tab) {
     const first = activeForm.querySelector('input');
     if (first) first.focus();
   });
+  // Pre-render the CAPTCHA for the active form (no-op when unconfigured).
+  ensureCaptcha(tab === 'login' ? 'auth-login-captcha' : 'auth-reg-captcha').catch(() => {});
+}
+
+// ── CAPTCHA (Cloudflare Turnstile) ──────────────────────────────────────────
+// Activates when /api/auth/captcha-config returns a sitekey (env-configured).
+// Renders into #auth-login-captcha and #auth-reg-captcha just before the
+// submit button. Tokens are passed to /api/auth/{login,register} where the
+// server re-verifies with Cloudflare. If unconfigured, this is a no-op and
+// auth works exactly as before.
+let _captchaConfig = null;              // { sitekey, provider } | { sitekey:'' } | null = not fetched
+let _turnstileScriptLoading = null;     // Promise<void>
+const _captchaWidgets = {};             // containerId -> widgetId
+const _captchaTokens = {};              // containerId -> latest token
+async function loadCaptchaConfig() {
+  if (_captchaConfig) return _captchaConfig;
+  try {
+    const res = await fetch('/api/auth/captcha-config', { credentials: 'same-origin' });
+    _captchaConfig = await res.json();
+  } catch { _captchaConfig = { sitekey: '' }; }
+  return _captchaConfig;
+}
+function loadTurnstileScript() {
+  if (window.turnstile) return Promise.resolve();
+  if (_turnstileScriptLoading) return _turnstileScriptLoading;
+  _turnstileScriptLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true; s.defer = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load CAPTCHA script'));
+    document.head.appendChild(s);
+  });
+  return _turnstileScriptLoading;
+}
+async function ensureCaptcha(containerId) {
+  const cfg = await loadCaptchaConfig();
+  if (!cfg?.sitekey) return false;
+  const el = document.getElementById(containerId);
+  if (!el) return false;
+  el.style.display = '';
+  if (_captchaWidgets[containerId]) return true; // already rendered
+  await loadTurnstileScript();
+  // Cloudflare's `turnstile.ready()` waits for script init.
+  await new Promise((r) => window.turnstile?.ready ? window.turnstile.ready(r) : r());
+  _captchaTokens[containerId] = '';
+  _captchaWidgets[containerId] = window.turnstile.render('#' + containerId, {
+    sitekey: cfg.sitekey,
+    theme: 'dark',
+    callback: (token) => { _captchaTokens[containerId] = token; },
+    'expired-callback': () => { _captchaTokens[containerId] = ''; },
+    'error-callback': () => { _captchaTokens[containerId] = ''; },
+  });
+  return true;
+}
+function getCaptchaToken(containerId) { return _captchaTokens[containerId] || ''; }
+function resetCaptcha(containerId) {
+  const widgetId = _captchaWidgets[containerId];
+  if (widgetId && window.turnstile) {
+    try { window.turnstile.reset(widgetId); } catch {}
+  }
+  _captchaTokens[containerId] = '';
 }
 
 function showAuthError(msg) {
@@ -2618,18 +2682,27 @@ async function submitLogin(e) {
   const email = document.getElementById('auth-login-email').value.trim();
   const password = document.getElementById('auth-login-pass').value;
   const remember = document.getElementById('auth-remember-me')?.checked !== false;
+  const captchaActive = (await loadCaptchaConfig())?.sitekey;
+  if (captchaActive) {
+    await ensureCaptcha('auth-login-captcha');
+    if (!getCaptchaToken('auth-login-captcha')) { showAuthError('Please complete the human verification first'); return; }
+  }
   setAuthLoading('auth-login-btn', true);
   document.getElementById('auth-err').className = 'auth-err';
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, remember }),
+      body: JSON.stringify({ email, password, remember, turnstileToken: getCaptchaToken('auth-login-captcha') }),
     });
     const data = await readJsonBody(res, 'Login');
-    if (!res.ok || data?.error || !data?.token) { showAuthError(data?.error || `HTTP ${res.status}`); return; }
+    if (!res.ok || data?.error || !data?.token) {
+      if (captchaActive) resetCaptcha('auth-login-captcha'); // token is one-shot — refresh on failure
+      showAuthError(data?.error || `HTTP ${res.status}`); return;
+    }
     setAuthToken(data.token);
     onAuthSuccess(data.user);
   } catch (err) {
+    if (captchaActive) resetCaptcha('auth-login-captcha');
     showAuthError('Connection error — is the server running?');
   } finally {
     setAuthLoading('auth-login-btn', false);
@@ -2646,19 +2719,28 @@ async function submitRegister(e) {
     try { return (localStorage.getItem('clonyfy_referral_code') || '').trim(); } catch { return ''; }
   })();
   if (password !== password2) { showAuthError('Passwords do not match'); return; }
+  const captchaActive = (await loadCaptchaConfig())?.sitekey;
+  if (captchaActive) {
+    await ensureCaptcha('auth-reg-captcha');
+    if (!getCaptchaToken('auth-reg-captcha')) { showAuthError('Please complete the human verification first'); return; }
+  }
   setAuthLoading('auth-reg-btn', true);
   document.getElementById('auth-err').className = 'auth-err';
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, referral }),
+      body: JSON.stringify({ name, email, password, referral, turnstileToken: getCaptchaToken('auth-reg-captcha') }),
     });
     const data = await readJsonBody(res, 'Register');
-    if (!res.ok || data?.error || !data?.token) { showAuthError(data?.error || `HTTP ${res.status}`); return; }
+    if (!res.ok || data?.error || !data?.token) {
+      if (captchaActive) resetCaptcha('auth-reg-captcha');
+      showAuthError(data?.error || `HTTP ${res.status}`); return;
+    }
     setAuthToken(data.token);
     try { localStorage.removeItem('clonyfy_referral_code'); } catch {}
     onAuthSuccess(data.user);
   } catch (err) {
+    if (captchaActive) resetCaptcha('auth-reg-captcha');
     showAuthError('Connection error — is the server running?');
   } finally {
     setAuthLoading('auth-reg-btn', false);
@@ -3379,6 +3461,8 @@ async function checkExistingSession() {
     authScreen.classList.remove('auth-checking');
     // Small delay so the CSS transition has a starting frame to transition from
     setTimeout(() => document.getElementById('auth-login-email')?.focus(), 300);
+    // Render the CAPTCHA for the default (login) form. No-op when unconfigured.
+    ensureCaptcha('auth-login-captcha').catch(() => {});
   };
 
   // Handle OAuth callback token from Google sign-in redirect
@@ -7383,7 +7467,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31l';
+  var BUILD = '2026-05-31m';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
