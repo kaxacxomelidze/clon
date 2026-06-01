@@ -535,6 +535,34 @@ function envFirst(...keys) {
   }
   return '';
 }
+
+// ── Cloudflare Turnstile (CAPTCHA) ───────────────────────────────────────────
+// Enabled when TURNSTILE_SECRET_KEY is set in env. Sitekey is also read from
+// env and exposed via /api/auth/captcha-config so the client can render the
+// widget. When unconfigured, auth endpoints skip verification (back-compat).
+function turnstileSiteKey() { return envFirst('TURNSTILE_SITE_KEY', 'NEXT_PUBLIC_TURNSTILE_SITE_KEY'); }
+function turnstileSecretKey() { return envFirst('TURNSTILE_SECRET_KEY'); }
+function turnstileEnabled() { return !!(turnstileSiteKey() && turnstileSecretKey()); }
+async function verifyTurnstile(token, remoteIp) {
+  // Returns true if verification passes or CAPTCHA isn't configured.
+  if (!turnstileEnabled()) return true;
+  if (!token || typeof token !== 'string') return false;
+  try {
+    const body = new URLSearchParams();
+    body.set('secret', turnstileSecretKey());
+    body.set('response', token);
+    if (remoteIp) body.set('remoteip', String(remoteIp));
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    try {
+      const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST', body, signal: ctl.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      return !!data?.success;
+    } finally { clearTimeout(timer); }
+  } catch { return false; }
+}
 function getStripeSettings(raw = getCachedSettings()) {
   const out = { ...raw };
   out.stripe_secret_key = cleanSettingValue(raw.stripe_secret_key) || envFirst('STRIPE_SECRET_KEY', 'STRIPE_SECRET', 'STRIPE_SK', 'STRIPE_PRIVATE_KEY');
@@ -2245,6 +2273,9 @@ async function handleRequest(req, res) {
     if (!checkRateLimit(`reg:${ip}`, 5, 3600000)) return json(res, { error: 'Too many accounts created from this address. Try again later.' }, 429);
     const body = await readJsonBody(req);
     const { name, email, password } = body;
+    if (!await verifyTurnstile(body.turnstileToken, ip)) {
+      return json(res, { error: 'Please complete the human verification and try again.' }, 400);
+    }
     const referralCode = cleanReferralCode(body.referral || body.via || '');
     if (!name || !email || !password) return json(res, { error: 'Name, email and password are required' }, 400);
     if (password.length < 8) return json(res, { error: 'Password must be at least 8 characters' }, 400);
@@ -2282,6 +2313,9 @@ async function handleRequest(req, res) {
     if (!checkRateLimit(`login:${ip}`, 10, 300000)) return json(res, { error: 'Too many login attempts. Try again in 5 minutes.' }, 429);
     const body = await readJsonBody(req);
     const { email, password, remember } = body;
+    if (!await verifyTurnstile(body.turnstileToken, ip)) {
+      return json(res, { error: 'Please complete the human verification and try again.' }, 400);
+    }
     if (!email || !password) return json(res, { error: 'Email and password are required' }, 400);
     const user = await getUserByEmail(email.toLowerCase().trim());
     const ok = user ? await verifyPw(password, user) : false;
@@ -2295,6 +2329,12 @@ async function handleRequest(req, res) {
     await insertSession({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: Date.now() + ttl, impersonatedBy: null });
     audit(user.id, user.name, 'login', null, ip);
     return json(res, { token, user: userPublic(user) }); // user already in memory — no extra DB call
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/auth/captcha-config') {
+    // Public: returns the Turnstile sitekey if CAPTCHA is configured, else
+    // empty. No secrets exposed (the secret stays on the server).
+    return json(res, turnstileEnabled() ? { provider: 'turnstile', sitekey: turnstileSiteKey() } : { provider: null, sitekey: '' });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/auth/me') {
