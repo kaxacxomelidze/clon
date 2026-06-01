@@ -2688,8 +2688,28 @@ async function handleRequest(req, res) {
           job.apiRoutes = result.apiRoutes;
           await finalizeCloneJob(0);
         } catch (err) {
-          job.logs.push(`[ERROR] ${err?.message || err}`);
-          await finalizeCloneJob(1);
+          const msg = String(err?.message || err);
+          job.logs.push(`[ERROR] ${msg}`);
+          // Salvage partial results. The crawler writes captured pages and
+          // route-map.json incrementally, so a late-stage failure (e.g. ENOSPC
+          // while writing the manifest / generating the export project after the
+          // pages were already captured) can still leave a fully usable set of
+          // pages on disk. Persist those and finalize as a (partial) success
+          // instead of throwing the whole clone away.
+          let salvageable = 0;
+          try {
+            const pagesDir = join(outDir, 'captured-pages');
+            if (existsSync(join(outDir, 'route-map.json')) && existsSync(pagesDir)) {
+              salvageable = readdirSync(pagesDir).filter(f => f.endsWith('.html')).length;
+            }
+          } catch {}
+          if (salvageable > 0) {
+            const diskFull = /ENOSPC|no space left/i.test(msg);
+            job.logs.push(`[WARN] ${diskFull ? 'Ran out of temporary storage during finalization' : 'Finalization failed'} — salvaging ${salvageable} captured page(s) so your clone is still usable.`);
+            await finalizeCloneJob(0);
+          } else {
+            await finalizeCloneJob(1);
+          }
         }
       } else {
         const proc = spawn(process.execPath, [CLI, ...args], {
