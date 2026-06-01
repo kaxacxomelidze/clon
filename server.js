@@ -212,24 +212,30 @@ function getEffectivePlanLimits(plan) {
   };
 }
 
-// When a user's plan changes (upgrade/downgrade/renewal), their usage counter
-// should reset to 0/X for the new plan — they shouldn't see "last saved"
-// usage carried over from the previous plan. We don't store a plan_started_at
-// column, so we derive it from plan_renews_at - billing_interval (paid plans
-// always set plan_renews_at to "now + interval" on activation, so the derived
-// start = "now" on every plan change and at every renewal). Free users (no
-// renews_at) fall back to the calendar month start — the previous behavior.
+// Usage window: limits are MONTHLY (calendar month reloads on the 1st) AND
+// reset on plan change (after an upgrade, "previous" usage doesn't count
+// against the new plan).
+//
+// Window start = max(calendar month start, plan activation timestamp).
+//   - Free user, no plan change this month: window = month start ✅
+//   - Mid-month upgrade (e.g. 3/3 → buy 10-clone plan): activation is AFTER
+//     month start, so window = activation time → counter shows 0/10 ✅
+//   - Next calendar month after upgrade: month start is AFTER activation, so
+//     window = month start → 0/10 again, fresh monthly quota ✅
+//
+// Plan activation timestamp is derived from plan_renews_at - billing_interval
+// (set by activatePaidPlanForUser on every paid-plan change/renewal).
 function planPeriodStart(user) {
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   if (!user || !user.plan_renews_at) return monthStart;
   const renews = new Date(user.plan_renews_at);
   if (Number.isNaN(renews.getTime())) return monthStart;
-  const start = new Date(renews);
-  if (user.billing_interval === 'annual') start.setFullYear(start.getFullYear() - 1);
-  else start.setMonth(start.getMonth() - 1);
-  // Clamp to "now or earlier" so a future renews_at doesn't return a future window.
-  if (start.getTime() > Date.now()) return monthStart;
-  return start;
+  const activated = new Date(renews);
+  if (user.billing_interval === 'annual') activated.setFullYear(activated.getFullYear() - 1);
+  else activated.setMonth(activated.getMonth() - 1);
+  if (activated.getTime() > Date.now()) return monthStart; // future renews_at quirk
+  // max(monthStart, activated): later of the two — monthly reset + upgrade reset
+  return activated.getTime() > monthStart.getTime() ? activated : monthStart;
 }
 function getPlanPrices(plan) {
   return PLAN_PRICES[normalizePlan(plan)] || { monthly: 0, annual: 0 };
@@ -2558,7 +2564,7 @@ async function handleRequest(req, res) {
         if (limits.clonesPerMonth !== Infinity) {
           const used = await getCloneCountThisMonth(cloneUser.id, planPeriodStart(cloneUser).toISOString());
           if (used >= limits.clonesPerMonth) {
-            return json(res, { error: `Plan limit reached (${used}/${limits.clonesPerMonth} for ${plan} plan). Upgrade to clone more.` }, 429);
+            return json(res, { error: `Monthly limit reached (${used}/${limits.clonesPerMonth} for ${plan} plan). Upgrade to clone more.` }, 429);
           }
         }
         // Per-user hourly burst limit: free=2/hr, paid=5/hr

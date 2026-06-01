@@ -1803,7 +1803,7 @@ input[type=checkbox]{accent-color:#fff!important}
       <div class="clone-sub">Paste any URL — captures full rendered site and generates a Next.js app</div>
       <div id="usageMeter" style="display:none;align-items:center;gap:10px;margin-bottom:14px;font-size:11px;color:var(--text3)">
         <div style="flex:1;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;max-width:200px"><div id="usageBarFill" style="height:100%;background:var(--logo-grad);transition:width .4s;width:0%"></div></div>
-        <span id="usageText">0/3 this period</span>
+        <span id="usageText">0/3 this month</span>
         <button onclick="openPricing()" style="font-size:10px;font-weight:700;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:inherit">Upgrade ↗</button>
       </div>
       <div class="input-row">
@@ -3782,23 +3782,24 @@ function updateUsageMeter() {
   const pct = Math.min(100, Math.round(clonesThisPeriod / limitThisMonth * 100));
   fill.style.width = pct + '%';
   fill.style.background = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--yellow)' : 'var(--logo-grad)';
-  text.textContent = `${clonesThisPeriod}/${limitThisMonth} clones this period`;
+  text.textContent = `${clonesThisPeriod}/${limitThisMonth} clones this month`;
 }
 
-// Client-side mirror of server's planPeriodStart(): "this period" starts at
-// the most recent plan activation (renewsAt - 1 interval). Falls back to
-// calendar month for free users.
+// Usage window (mirrors server planPeriodStart): monthly quota resets on the
+// 1st of each calendar month AND on every plan change. Returns the later of
+// (calendar month start, plan activation timestamp).
 function planUsageWindowStart(user) {
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
   const renewsRaw = user?.planRenewsAt;
   if (!renewsRaw) return monthStart;
   const renews = new Date(renewsRaw);
   if (Number.isNaN(renews.getTime())) return monthStart;
-  const start = new Date(renews);
-  if (user?.billingInterval === 'annual') start.setFullYear(start.getFullYear() - 1);
-  else start.setMonth(start.getMonth() - 1);
-  if (start.getTime() > Date.now()) return monthStart;
-  return start;
+  const activated = new Date(renews);
+  if (user?.billingInterval === 'annual') activated.setFullYear(activated.getFullYear() - 1);
+  else activated.setMonth(activated.getMonth() - 1);
+  if (activated.getTime() > Date.now()) return monthStart;
+  // Later of the two — month rollover reloads, upgrade resets immediately.
+  return activated.getTime() > monthStart.getTime() ? activated : monthStart;
 }
 
 // ── Announcements ─────────────────────────────────────────────────────────────
@@ -7487,7 +7488,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31n';
+  var BUILD = '2026-05-31o';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
