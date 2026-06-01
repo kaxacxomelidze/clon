@@ -40,6 +40,11 @@ const STATIC_ASSET_TIMEOUT = IS_SERVERLESS ? 4_000 : 10_000;
 const STATIC_PAGE_TIMEOUT = IS_SERVERLESS ? 12_000 : 15_000;
 const STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
 const STATIC_ASSET_CONCURRENCY = IS_SERVERLESS ? 6 : 12;
+// On serverless (Vercel /tmp = 512 MB cap, shared across warm instances) stop
+// downloading assets once cumulative bytes approach this budget. 350 MB leaves
+// room for captured-pages HTML, manifest, and the Next.js project scaffold.
+const SERVERLESS_ASSET_BUDGET_BYTES = (IS_SERVERLESS ? 350 : Infinity) * 1024 * 1024;
+let _assetBytesWritten = 0; // process-level counter; reset each crawler run via crawl()
 const STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS ? 4_000 : 60_000;
 export function shouldUseStaticFirstServerless(
   env: NodeJS.ProcessEnv = process.env,
@@ -312,6 +317,10 @@ async function saveStaticAsset(rawUrl: string, pageUrl: string, assetsDir: strin
 
     const body = Buffer.from(await res.arrayBuffer());
     if (body.length > STATIC_ASSET_MAX_BYTES) return null;
+    if (_assetBytesWritten + body.length > SERVERLESS_ASSET_BUDGET_BYTES) {
+      logger.warn(`  [ASSET BUDGET] Skipping ${absUrl.split('/').pop()} — serverless asset budget (${Math.round(SERVERLESS_ASSET_BUDGET_BYTES / 1024 / 1024)} MB) reached`);
+      return null;
+    }
 
     const cleanUrl = absUrl.split('?')[0].split('#')[0];
     const extFromPath = extname(new URL(cleanUrl).pathname).toLowerCase();
@@ -321,7 +330,10 @@ async function saveStaticAsset(rawUrl: string, pageUrl: string, assetsDir: strin
     const localPath = join(assetsDir, filename);
     const webPath = `/_assets/${filename}`;
     mkdirSync(assetsDir, { recursive: true });
-    if (!existsSync(localPath)) writeFileSync(localPath, body);
+    if (!existsSync(localPath)) {
+      writeFileSync(localPath, body);
+      _assetBytesWritten += body.length;
+    }
 
     return { originalUrl: absUrl, localPath: webPath };
   } catch {
@@ -430,7 +442,21 @@ async function fetchStaticPage(
     }
   }
   if (!res) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr || 'Static page fetch failed'));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (res.status === 429) {
+    // Rate-limited — back off and retry once before giving up.
+    const retryAfter = Number(res.headers.get('retry-after') || '0');
+    const waitMs = retryAfter > 0 ? Math.min(retryAfter * 1000, 15_000) : 5_000;
+    logger.warn(`  [429] ${url} — backing off ${waitMs}ms then retrying`);
+    await new Promise((r) => setTimeout(r, waitMs));
+    const retry = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9' },
+      signal: AbortSignal.timeout(STATIC_PAGE_TIMEOUT),
+    });
+    if (!retry.ok) throw new Error(`HTTP ${retry.status}`);
+    res = retry;
+  } else if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   const contentType = res.headers.get('content-type') || '';
   if (contentType && !/(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
     throw new Error(`Not an HTML page (${contentType})`);
@@ -513,6 +539,7 @@ export async function crawl(
   assetsDir: string,
   onPage: (record: PageRecord) => void,
 ): Promise<PageRecord[]> {
+  _assetBytesWritten = 0; // reset per-run so repeated calls don't accumulate
   const origin = new URL(opts.url).origin;
   const visited = new Set<string>();
   const queue = new PQueue({ concurrency: opts.concurrency });
