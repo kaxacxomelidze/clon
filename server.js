@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import { randomUUID, createHash, createHmac, timingSafeEqual } from 'crypto';
 import { resolve, join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync, createReadStream, copyFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync, createReadStream, createWriteStream, copyFileSync } from 'fs';
 import { request as httpsRequest } from 'https';
 import { lookup as dnsLookup } from 'dns/promises';
 import { createRequire } from 'module';
@@ -1860,6 +1860,30 @@ async function materializeStaticWebsite(outDir) {
   }
 }
 
+// Cross-platform ZIP creation. We previously shelled out to `tar -a` / `zip` /
+// PowerShell, which produced inconsistent results: on some Linux runtimes
+// (incl. Vercel's container) `tar -a -c -f x.zip` writes a TAR archive named
+// `.zip` — the file lacks the PKZIP magic header (PK\x03\x04), so macOS
+// Archive Utility refuses to open it. archiver is a pure-JS streaming
+// implementation that always writes real PKZIP, identical on Mac/Linux/
+// Windows/Vercel, so every user's OS unzips it without complaint.
+async function createCrossPlatformZip(srcDir, zipPath) {
+  const { default: archiver } = await import('archiver');
+  await new Promise((resolvePromise, reject) => {
+    const output = createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    let settled = false;
+    const fail = (err) => { if (!settled) { settled = true; reject(err); } };
+    output.on('close', () => { if (!settled) { settled = true; resolvePromise(); } });
+    output.on('error', fail);
+    archive.on('error', fail);
+    archive.on('warning', (err) => { if (err.code !== 'ENOENT') fail(err); });
+    archive.pipe(output);
+    archive.directory(srcDir, false);
+    archive.finalize();
+  });
+}
+
 async function buildOutputZip(outDir) {
   if (!isInsideOutputDir(outDir)) throw new Error('Invalid output folder');
   const materialized = await materializeStaticWebsite(outDir);
@@ -1867,17 +1891,7 @@ async function buildOutputZip(outDir) {
   const zipPath = join(OUTPUT_DIR, zipName);
   try { rmSync(zipPath, { force: true }); } catch {}
   try {
-    await runProcess('tar', ['-a', '-c', '-f', zipPath, '-C', materialized.dir, '.']);
-  } catch {
-    if (process.platform !== 'win32') {
-      await runProcess('zip', ['-qr', zipPath, '.'], { cwd: materialized.dir });
-    } else {
-      await runProcess('powershell', [
-        '-NoProfile', '-Command',
-        'Get-ChildItem -LiteralPath $args[0] -Force | Compress-Archive -DestinationPath $args[1] -Force',
-        materialized.dir, zipPath,
-      ]);
-    }
+    await createCrossPlatformZip(materialized.dir, zipPath);
   } finally {
     materialized.cleanup();
   }
@@ -4356,19 +4370,9 @@ async function handleRequest(req, res) {
         for (const f of readdirSync(assetsDir)) copyFileSync(join(assetsDir, f), join(destAssets, f));
       }
 
-      try {
-        await runProcess('tar', ['-a', '-c', '-f', zipPath, '-C', deployTmp, '.']);
-      } catch {
-        if (process.platform !== 'win32') {
-          await runProcess('zip', ['-qr', zipPath, '.'], { cwd: deployTmp });
-        } else {
-          await runProcess('powershell', [
-            '-NoProfile', '-Command',
-            'Get-ChildItem -LiteralPath $args[0] -Force | Compress-Archive -DestinationPath $args[1] -Force',
-            deployTmp, zipPath,
-          ]);
-        }
-      }
+      // Use the same cross-platform pure-JS zipper as /api/download-zip so the
+      // deploy artifact is a real PKZIP on every host.
+      await createCrossPlatformZip(deployTmp, zipPath);
 
       const zipData = readFileSync(zipPath);
 
