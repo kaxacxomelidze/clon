@@ -1723,12 +1723,12 @@ var STATIC_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 1e4;
 var STATIC_PAGE_TIMEOUT = IS_SERVERLESS2 ? 12e3 : 15e3;
 var STATIC_ASSET_MAX_BYTES = (IS_SERVERLESS2 ? 8 : 50) * 1024 * 1024;
 var STATIC_ASSET_CONCURRENCY = IS_SERVERLESS2 ? 6 : 12;
+var SERVERLESS_ASSET_BUDGET_BYTES = (IS_SERVERLESS2 ? 350 : Infinity) * 1024 * 1024;
+var _assetBytesWritten = 0;
 var STATIC_PAGE_ASSET_TIMEOUT = IS_SERVERLESS2 ? 4e3 : 6e4;
 function shouldUseStaticFirstServerless(env = process.env, serverless = IS_SERVERLESS2) {
   if (!serverless) return false;
   if (env.CLONYFY_BROWSER_FIRST === "1") return false;
-  // Browser-first by default (better SPA support). If Chromium launch fails,
-  // crawler.ts auto-falls-back to static. Force static via CLONYFY_STATIC_FIRST=1.
   return env.CLONYFY_STATIC_FIRST === "1";
 }
 var STATIC_FIRST_SERVERLESS = shouldUseStaticFirstServerless();
@@ -1942,6 +1942,10 @@ async function saveStaticAsset(rawUrl, pageUrl, assetsDir) {
     if (len > STATIC_ASSET_MAX_BYTES) return null;
     const body = Buffer.from(await res.arrayBuffer());
     if (body.length > STATIC_ASSET_MAX_BYTES) return null;
+    if (_assetBytesWritten + body.length > SERVERLESS_ASSET_BUDGET_BYTES) {
+      logger.warn(`  [ASSET BUDGET] Skipping ${absUrl.split("/").pop()} \u2014 serverless asset budget (${Math.round(SERVERLESS_ASSET_BUDGET_BYTES / 1024 / 1024)} MB) reached`);
+      return null;
+    }
     const cleanUrl = absUrl.split("?")[0].split("#")[0];
     const extFromPath = extname3(new URL(cleanUrl).pathname).toLowerCase();
     const extFromMime = mime2.extension(contentType);
@@ -1950,7 +1954,10 @@ async function saveStaticAsset(rawUrl, pageUrl, assetsDir) {
     const localPath = join3(assetsDir, filename);
     const webPath = `/_assets/${filename}`;
     mkdirSync3(assetsDir, { recursive: true });
-    if (!existsSync2(localPath)) writeFileSync2(localPath, body);
+    if (!existsSync2(localPath)) {
+      writeFileSync2(localPath, body);
+      _assetBytesWritten += body.length;
+    }
     return { originalUrl: absUrl, localPath: webPath };
   } catch {
     return null;
@@ -2035,7 +2042,20 @@ async function fetchStaticPage(url, origin, assetsDir, options = {}) {
     }
   }
   if (!res) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr || "Static page fetch failed"));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (res.status === 429) {
+    const retryAfter = Number(res.headers.get("retry-after") || "0");
+    const waitMs = retryAfter > 0 ? Math.min(retryAfter * 1e3, 15e3) : 5e3;
+    logger.warn(`  [429] ${url} \u2014 backing off ${waitMs}ms then retrying`);
+    await new Promise((r) => setTimeout(r, waitMs));
+    const retry = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT3, "Accept": "text/html,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9" },
+      signal: AbortSignal.timeout(STATIC_PAGE_TIMEOUT)
+    });
+    if (!retry.ok) throw new Error(`HTTP ${retry.status}`);
+    res = retry;
+  } else if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   const contentType = res.headers.get("content-type") || "";
   if (contentType && !/(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
     throw new Error(`Not an HTML page (${contentType})`);
@@ -2100,6 +2120,7 @@ async function crawlStatic(opts, origin, assetsDir, visited, records, onPage, re
   return records;
 }
 async function crawl(opts, assetsDir, onPage) {
+  _assetBytesWritten = 0;
   const origin = new URL(opts.url).origin;
   const visited = /* @__PURE__ */ new Set();
   const queue = new PQueue({ concurrency: opts.concurrency });
@@ -2159,7 +2180,8 @@ async function crawl(opts, assetsDir, onPage) {
               if (typeof value !== "string" && !(value instanceof URL)) return;
               const href = new URL(String(value), window.location.href).href;
               const key = "__clonyfyNavs";
-              const current = window[key] ||= [];
+              const store = window;
+              const current = store[key] ||= [];
               current.push(href);
               window.dispatchEvent(new CustomEvent("__cloner_nav__", { detail: href }));
             } catch {
@@ -10947,4 +10969,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-F76FE6LH.js.map
+//# sourceMappingURL=chunk-FUKNKPW3.js.map
