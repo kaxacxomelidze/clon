@@ -260,7 +260,7 @@ input[type=number]{width:78px;text-align:center}
 .zoom-sel{background:#1a1a1a;border:1px solid #2a2a2a;color:var(--text2);padding:3px 6px;border-radius:5px;font-size:11px;font-weight:600;outline:none;cursor:pointer}
 .zoom-sel:hover{border-color:var(--blue)}
 .ed-page-chip{font-size:11px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 6px}
-.canvas-zoom-hud{display:flex;align-items:center;gap:4px;position:absolute;bottom:12px;left:12px;z-index:30;padding:6px 8px;pointer-events:all;background:rgba(10,10,10,.7);border:1px solid #2a2a2a;border-radius:7px;backdrop-filter:blur(6px)}
+.canvas-zoom-hud{display:flex;align-items:center;gap:4px;position:absolute;bottom:12px;left:12px;z-index:30;padding:6px 8px;pointer-events:all;background:rgba(10,10,10,.7);border:1px solid #2a2a2a;border-radius:7px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 .canvas-zoom-btn{width:24px;height:24px;border-radius:4px;background:transparent;border:none;color:var(--text2);font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .1s;font-weight:700}
 .canvas-zoom-btn:hover{background:rgba(255,255,255,.08);color:#fff}
 .canvas-zoom-label{font-size:11px;font-weight:700;color:var(--text2);min-width:36px;text-align:center;cursor:default}
@@ -375,7 +375,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .sec-use-btn{padding:4px 12px;background:var(--logo-grad);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;transition:opacity .15s}
 .sec-use-btn:hover{opacity:.85}
 /* ── Section insert modal ────────────────────────────── */
-#sec-modal{position:fixed;inset:0;z-index:9995;background:rgba(0,0,12,.88);backdrop-filter:blur(18px);display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+#sec-modal{position:fixed;inset:0;z-index:9995;background:rgba(0,0,12,.88);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
 #sec-modal.hidden{display:none}
 .sec-modal-inner{background:#0c0c14;border:1px solid #1a1a2e;border-radius:18px 18px 0 0;width:100%;max-width:980px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -24px 80px rgba(0,0,0,.7)}
 .sec-modal-hd{padding:16px 22px;border-bottom:1px solid #1a1a2e;display:flex;align-items:center;gap:12px;flex-shrink:0}
@@ -413,7 +413,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .theme-swatch-name{font-size:9px;color:var(--text3);white-space:nowrap;font-weight:600}
 .theme-swatch.on .theme-swatch-name{color:#93c5fd}
 /* ── Deploy modal ───────────────────────────────────── */
-.deploy-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.deploy-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .deploy-modal{background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:32px;width:min(480px,94vw);position:relative;box-shadow:0 24px 80px rgba(0,0,10,.7)}
 .deploy-modal-title{font-size:18px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px}
 .deploy-modal-sub{font-size:12px;color:rgba(255,255,255,.3);margin-bottom:22px;line-height:1.6}
@@ -978,11 +978,14 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
   .auth-card-heading{text-align:center}
 }
 @media(max-width:480px){
-  .auth-right{min-height:100vh;padding:40px 20px 40px}
+  /* iOS Safari URL-bar quirk: 100vh is the FULL viewport height (incl. hidden
+     URL bar) so the bottom of forms gets cut off. 100dvh tracks the visible
+     viewport; the 100vh line is a fallback for older Safari that ignores dvh. */
+  .auth-right{min-height:100vh;min-height:100dvh;padding:40px 20px 40px}
 }
 
 /* ── Pricing modal ─────────────────────────────────── */
-#pricing-modal{position:fixed;inset:0;z-index:9999;background:rgba(2,2,18,.92);backdrop-filter:blur(24px);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:48px 24px 64px}
+#pricing-modal{position:fixed;inset:0;z-index:9999;background:rgba(2,2,18,.92);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:48px 24px 64px}
 #pricing-modal.hidden{display:none}
 .pricing-close{position:fixed;top:20px;right:24px;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.35);font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;z-index:1}
 .pricing-close:hover{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)}
@@ -1015,6 +1018,15 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .plan-btn.grad{background:var(--logo-grad);color:#fff;box-shadow:0 4px 22px rgba(91,141,239,.32)}
 .plan-btn.grad:hover{opacity:.88;box-shadow:0 8px 34px rgba(91,141,239,.44);transform:translateY(-1px)}
 @media(max-width:800px){.pricing-cards{flex-direction:column;max-width:420px}.plan-card.featured{order:-1}}
+/* Tighten pricing modal on short laptop screens (≤900px tall, e.g. 1440×900
+   MacBook) so the plan cards aren't pushed below the fold. Modal still
+   scrolls vertically — this just avoids the unnecessary scroll on standard
+   laptops. */
+@media(max-height:920px){
+  #pricing-modal{padding:28px 24px 40px}
+  .pricing-hd{margin-bottom:28px}
+  .pricing-title{margin-bottom:10px;font-size:clamp(28px,3.6vw,40px)}
+}
 
 /* ── Sidebar delete / rename btns ──────────────────── */
 .sb-del{display:none;width:20px;height:20px;border-radius:4px;background:none;border:none;color:var(--text3);font-size:16px;line-height:1;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:all .15s;padding:0}
@@ -1044,7 +1056,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .font-opt:hover,.font-opt.sel{background:rgba(91,141,239,.12);color:var(--blue)}
 
 /* ── Share modal ────────────────────────────────────── */
-#share-modal{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.75);backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center}
+#share-modal{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.75);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center}
 #share-modal.hidden{display:none}
 .share-card{background:#0c0c0c;border:1px solid #1e1e1e;border-radius:20px;padding:32px;width:420px;max-width:92vw;position:relative}
 .share-card::before{content:'';position:absolute;top:0;left:60px;right:60px;height:1px;background:linear-gradient(90deg,transparent,rgba(91,141,239,.4),transparent)}
@@ -1074,7 +1086,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .user-chip:hover{background:var(--bg4);border-color:var(--border3)}
 
 /* ── Profile modal ──────────────────────────────────── */
-#profile-modal{position:fixed;inset:0;z-index:9997;background:rgba(0,0,12,.72);backdrop-filter:blur(18px);display:flex;align-items:flex-start;justify-content:flex-end;padding:52px 16px 16px 0}
+#profile-modal{position:fixed;inset:0;z-index:9997;background:rgba(0,0,12,.72);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);display:flex;align-items:flex-start;justify-content:flex-end;padding:52px 16px 16px 0}
 #profile-modal.hidden{display:none}
 .profile-panel{width:400px;max-width:96vw;background:#0c0c14;border:1px solid #1a1a2e;border-radius:18px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(91,141,239,.06);display:flex;flex-direction:column;max-height:calc(100vh - 68px)}
 .profile-panel::before{content:'';height:2px;background:var(--logo-grad);flex-shrink:0}
@@ -1114,7 +1126,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 .hist-empty{padding:28px 0;text-align:center;color:var(--text3);font-size:12px}
 
 /* ── Manual payment modal ───────────────────────────── */
-#mpay-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px)}
+#mpay-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .mpay-card{background:#090909;border:1px solid #1e1e1e;border-radius:20px;width:min(480px,96vw);max-height:90vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.9);display:flex;flex-direction:column}
 .mpay-card::before{content:'';height:3px;background:linear-gradient(90deg,#5b8def,#a855f7,#1fd17a);border-radius:20px 20px 0 0;flex-shrink:0}
 .mpay-hd{padding:20px 24px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
@@ -1264,7 +1276,7 @@ textarea.pi{resize:vertical;min-height:50px;line-height:1.5}
 @media(max-width:900px){
   #auth-screen{display:flex}
   .auth-left{display:none}
-  .auth-right{width:100%;min-height:100vh;padding:96px 28px 64px;align-items:center;justify-content:flex-start}
+  .auth-right{width:100%;min-height:100vh;min-height:100dvh;padding:96px 28px 64px;align-items:center;justify-content:flex-start}
   .auth-topbar{left:22px;right:22px;justify-content:space-between}
   .auth-topbar-logo{display:block}
   .auth-card{width:min(520px,100%);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);box-shadow:0 32px 80px rgba(0,0,0,.55);padding:32px}
@@ -7178,7 +7190,7 @@ function showDeployErr(msg) {
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
 <!-- Onboarding overlay -->
-<div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+<div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);align-items:center;justify-content:center">
   <div style="background:#18181b;border:1px solid #27272a;border-radius:16px;width:440px;max-width:calc(100vw - 32px);padding:40px 36px 32px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.6)">
     <div id="ob-icon" style="font-size:48px;line-height:1;margin-bottom:20px"></div>
     <h2 id="ob-title" style="margin:0 0 12px;font-size:22px;font-weight:700;color:#f4f4f5"></h2>
@@ -7488,7 +7500,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-05-31p';
+  var BUILD = '2026-06-03a';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
