@@ -5509,6 +5509,7 @@ function renderLayers() {
   }).join('');
   list.querySelectorAll('[data-layer-id]').forEach(btn => {
     btn.addEventListener('click', () => {
+      if (!requireEditAccess()) return;
       const doc = document.getElementById('ed-frame').contentDocument;
       const el = doc?.querySelector(`[data-clonyfy-layer-id="${CSS.escape(btn.dataset.layerId)}"]`);
       if (el) select(el);
@@ -6926,6 +6927,7 @@ function renderSectionLibrary() {
 }
 
 function openSectionModal() {
+  if (!requireEditAccess()) return;
   if (!editorOutDir) return toast('Load or create a page first', 'err');
   const frame = document.getElementById('ed-frame');
   if (!frame.contentDocument?.body) return toast('Load a page first', 'err');
@@ -7145,6 +7147,7 @@ document.addEventListener('click', e => {
 });
 
 function applyTheme(id) {
+  if (!requireEditAccess()) return;
   const theme = THEMES.find(t => t.id === id);
   if (!theme) return;
   const iframe = document.getElementById('ed-frame');
@@ -7541,7 +7544,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-06-03b';
+  var BUILD = '2026-06-03c';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
