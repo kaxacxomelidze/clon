@@ -2131,8 +2131,12 @@ async function handleRequest(req, res) {
   if (isPageRead && url.pathname === '/') {
     return serveFile(res, join(__dirname, 'public', 'landing.html'), 'text/html');
   }
-  if (isPageRead && url.pathname === '/app') {
-    return serveFile(res, join(__dirname, 'public', 'index.html'), 'text/html');
+  // The app shell lives at public/app.html (NOT index.html). If it were named
+  // index.html, Vercel's static file server would auto-serve it at "/",
+  // hijacking the homepage from the landing page. Serving it from a non-index
+  // filename lets "/" fall through to the function → landing.html.
+  if (isPageRead && (url.pathname === '/app' || url.pathname === '/index.html')) {
+    return serveFile(res, join(__dirname, 'public', 'app.html'), 'text/html');
   }
   if (isPageRead && url.pathname === '/dashboard') {
     return serveFile(res, join(__dirname, 'public', 'dashboard.html'), 'text/html');
