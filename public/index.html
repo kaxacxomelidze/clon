@@ -1537,7 +1537,6 @@ input[type=checkbox]{accent-color:#fff!important}
     <button class="tab-btn active" id="t-clone" onclick="switchTab('clone')">Clone</button>
     <button class="tab-btn" id="t-preview" onclick="switchTab('preview')">Preview</button>
     <button class="tab-btn" id="t-editor" onclick="switchTab('editor')">Editor</button>
-    <button class="tab-btn" id="t-build" onclick="switchTab('build')" style="color:var(--blue)">✦ Build</button>
   </div>
   <div class="titlebar-user" id="titlebarUser" style="display:none">
     <a href="/dashboard" style="-webkit-app-region:no-drag;color:rgba(255,255,255,.3);font-size:12px;font-weight:600;padding:4px 10px;border:1px solid rgba(255,255,255,.06);border-radius:6px;background:rgba(255,255,255,.03);text-decoration:none;transition:all .15s" onmouseover="this.style.color='rgba(255,255,255,.6)'" onmouseout="this.style.color='rgba(255,255,255,.3)'">Settings</a>
@@ -1617,6 +1616,23 @@ input[type=checkbox]{accent-color:#fff!important}
       </div>
       <button class="plan-btn soft" id="plan-btn-unlimited" onclick="handleBuy('unlimited')">Get Scale</button>
     </div>
+  </div>
+</div>
+
+<!-- Compact paywall popup (shown when a free user tries to edit or export) -->
+<div id="edit-paywall" class="hidden" onclick="if(event.target===this)closeEditPaywall()" style="position:fixed;inset:0;z-index:10001;background:rgba(2,2,18,.78);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:18px">
+  <div role="dialog" aria-modal="true" style="width:min(420px,100%);background:#0c0c14;border:1px solid #20203a;border-radius:18px;padding:26px 24px 22px;box-shadow:0 28px 80px rgba(0,0,0,.7),0 0 0 1px rgba(91,141,239,.08);position:relative;animation:authCardIn .35s cubic-bezier(.22,1,.36,1)">
+    <button onclick="closeEditPaywall()" aria-label="Close" style="position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:8px;border:none;background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);font-size:18px;cursor:pointer;line-height:1">×</button>
+    <div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,rgba(167,139,250,.22),rgba(91,141,239,.22));display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h3 id="edit-paywall-title" style="font-size:19px;font-weight:800;color:#eef0ff;margin:0 0 8px;letter-spacing:-.3px">Unlock the editor</h3>
+    <p id="edit-paywall-msg" style="font-size:13.5px;line-height:1.55;color:rgba(255,255,255,.55);margin:0 0 18px">Your clone is ready — nice! Editing text, images & styles and exporting the code are paid features. Upgrade to keep building.</p>
+    <button onclick="editPaywallUpgrade()" style="width:100%;min-height:46px;border:none;border-radius:11px;background:#fff;color:#000;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">
+      See plans &amp; upgrade
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    </button>
+    <button onclick="closeEditPaywall()" style="width:100%;margin-top:8px;background:none;border:none;color:rgba(255,255,255,.35);font-size:12.5px;font-weight:600;cursor:pointer;padding:8px;font-family:inherit">Not now</button>
   </div>
 </div>
 
@@ -1912,12 +1928,12 @@ input[type=checkbox]{accent-color:#fff!important}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Edit in Studio
             </button>
-            <button class="done-action-btn secondary" onclick="copyCmd()">Copy Commands</button>
-            <button class="done-action-btn secondary" onclick="exportZip()">Export ZIP</button>
+            <button class="done-action-btn secondary" onclick="exportZip()">Export Code</button>
             <button class="done-action-btn secondary" onclick="openGithubModal()" style="color:#e6edf3;border-color:rgba(255,255,255,.15)">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
               Push to GitHub
             </button>
+            <button class="done-action-btn secondary" onclick="copyCmd()">Copy Commands</button>
             <button class="done-action-btn secondary" onclick="openShareModal()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               Share
@@ -2382,25 +2398,6 @@ input[type=checkbox]{accent-color:#fff!important}
   </div><!-- /editor tab -->
 
   <!-- Build tab -->
-  <div class="tab-panel build-root" id="tab-build" style="display:none">
-    <div class="build-header">
-      <div class="build-header-top">
-        <div class="build-title">Build from Scratch</div>
-      </div>
-      <div class="build-sub">Choose a template or insert a pre-built section into your current page.</div>
-    </div>
-    <div class="build-subtabs">
-      <button class="build-stab active" id="stab-templates" onclick="switchBuildTab('templates')">Templates</button>
-      <button class="build-stab" id="stab-sections" onclick="switchBuildTab('sections')">Sections Library</button>
-    </div>
-    <div class="build-body" id="buildBody" style="display:flex;flex-direction:column;overflow-y:auto">
-      <div id="buildTemplatePane">
-        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px">LOADING...</div>
-      </div>
-      <div id="buildSectionsPane" style="display:none"></div>
-    </div>
-  </div><!-- /build tab -->
-
   <!-- Section insert modal (sheet from bottom) -->
   <div id="sec-modal" class="hidden" onclick="if(event.target===this)closeSectionModal()">
     <div class="sec-modal-inner">
@@ -2890,9 +2887,48 @@ function syncPaidPlanChrome() {
 
 function requirePaid(featureName) {
   if (isPaidUser()) return true;
-  toast(`${featureName} is a paid feature — upgrade to access it.`, 'warn');
-  setTimeout(() => openPricing(), 350);
+  // Show a compact popup (NOT the full-screen pricing page). The popup's CTA
+  // opens full pricing if they want to compare plans.
+  showEditPaywall(featureName);
   return false;
+}
+
+// Per-feature copy for the compact paywall popup.
+const PAYWALL_COPY = {
+  'editing':        { title: 'Unlock the editor',   msg: "Your clone is ready — nice! Editing text, images & styles is a paid feature. Upgrade to start customizing." },
+  'Exporting code': { title: 'Export your code',    msg: 'Download the full Next.js project as a ZIP. Exporting is a paid feature — upgrade to get the code.' },
+  'Export ZIP':     { title: 'Export your code',    msg: 'Download the full Next.js project as a ZIP. Exporting is a paid feature — upgrade to get the code.' },
+  'Saving pages':   { title: 'Save your edits',     msg: 'Saving changes to your clone is a paid feature. Upgrade to keep your edits.' },
+  'GitHub push':    { title: 'Push to GitHub',      msg: 'Publishing your clone to GitHub is a paid feature. Upgrade to connect a repo.' },
+  'GitHub connect': { title: 'Connect GitHub',      msg: 'Connecting GitHub is a paid feature. Upgrade to publish your clones.' },
+  'Deploy':         { title: 'Deploy your site',    msg: 'One-click deploy is a paid feature. Upgrade to publish your clone live.' },
+  'Share links':    { title: 'Share your clone',    msg: 'Shareable links are a paid feature. Upgrade to send your clone to anyone.' },
+  'Copy Commands':  { title: 'Copy the run commands', msg: 'This is a paid feature. Upgrade to copy the local run commands.' },
+};
+function showEditPaywall(featureName) {
+  const copy = PAYWALL_COPY[featureName] || { title: 'Upgrade to continue', msg: `${featureName || 'This'} is a paid feature — upgrade to access it.` };
+  const titleEl = document.getElementById('edit-paywall-title');
+  const msgEl = document.getElementById('edit-paywall-msg');
+  if (titleEl) titleEl.textContent = copy.title;
+  if (msgEl) msgEl.textContent = copy.msg;
+  document.getElementById('edit-paywall').classList.remove('hidden');
+}
+function closeEditPaywall() {
+  document.getElementById('edit-paywall').classList.add('hidden');
+}
+function editPaywallUpgrade() {
+  closeEditPaywall();
+  openPricing();
+}
+
+function openPricing() {
+  document.getElementById('pricing-modal').classList.remove('hidden');
+  updatePricingButtons();
+  document.getElementById('pricing-promo-result').style.display = 'none';
+  document.getElementById('pricing-promo-input').value = '';
+}
+function closePricing() {
+  document.getElementById('pricing-modal').classList.add('hidden');
 }
 
 function openPricing() {
@@ -3566,11 +3602,9 @@ function switchTab(tab) {
   setPanel('tab-preview', tab === 'preview', 'flex');
   setPanel('tab-editor', tab === 'editor',
     window.matchMedia('(max-width: 900px)').matches ? 'flex' : 'grid');
-  setPanel('tab-build', tab === 'build', 'flex');
   document.getElementById('t-clone').classList.toggle('active', tab === 'clone');
   document.getElementById('t-preview').classList.toggle('active', tab === 'preview');
   document.getElementById('t-editor').classList.toggle('active', tab === 'editor');
-  document.getElementById('t-build').classList.toggle('active', tab === 'build');
   if (tab === 'preview') loadPreviewPages(editorOutDir);
   if (tab === 'editor') {
     const job = allJobs.find(j => j.id === activeJobId && j.status === 'done' && j.outDir);
@@ -3580,7 +3614,6 @@ function switchTab(tab) {
       loadEditorPages(outDir);
     }
   }
-  if (tab === 'build') loadTemplates();
 }
 
 // ── Build / Templates ─────────────────────────────────────────────────────────
@@ -5292,21 +5325,28 @@ overlay.addEventListener('mouseleave', () => {
   edHovEl = null;
   updateHoverBox(null);
 });
+// Editing/interacting with elements requires a paid plan. Free users can clone
+// and look at the editor, but the first interaction shows the upgrade popup.
+function requireEditAccess() { return requirePaid('editing'); }
+
 overlay.addEventListener('click', e => {
   if (resizeState) return;
   if (edMode !== 'select' && edMode !== 'move') {
+    if (!requireEditAccess()) { setMode('select'); return; }
     addElementAt(edMode, framePoint(e));
     setMode('select');
     return;
   }
   const el = getFrameEl(e);
   if (!el) { deselect(); return; }
+  if (!requireEditAccess()) return;
   select(el);
 });
 overlay.addEventListener('mousedown', e => {
   if (edMode !== 'move') return;
   const el = getFrameEl(e);
   if (!el) return;
+  if (!requireEditAccess()) return;
   select(el);
   const p = framePoint(e);
   const cs = iframeGCS(el);
@@ -5337,6 +5377,7 @@ document.addEventListener('mouseup', () => {
 overlay.addEventListener('dblclick', e => {
   const el = getFrameEl(e);
   if (!el) return;
+  if (!requireEditAccess()) return;
   finishInlineTextEdit();
   overlay.classList.remove('on');
   const oldHtml = el.innerHTML;
@@ -7500,7 +7541,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-06-03a';
+  var BUILD = '2026-06-03b';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
