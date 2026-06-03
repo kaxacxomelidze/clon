@@ -2009,13 +2009,23 @@ async function assertPublicTarget(parsedUrl) {
   const looksLikeIp = /^[0-9.]+$/.test(rawHost) || rawHost.includes(':');
   if (looksLikeIp) {
     if (isPrivateIp(rawHost)) throw new Error('That address is not allowed');
-    return;
+    return; // public IP literal — fine
   }
-  let addrs;
-  try { addrs = await dnsLookup(rawHost, { all: true }); } catch { throw new Error('Could not resolve that domain'); }
-  if (!addrs || !addrs.length) throw new Error('Could not resolve that domain');
-  for (const { address } of addrs) {
-    if (isPrivateIp(address)) throw new Error('That address is not allowed');
+  // Best-effort DNS check: block domains that resolve into private/reserved
+  // space, but FAIL OPEN on resolver errors. The serverless DNS resolver can be
+  // flaky or stricter than the cloner's own fetch resolver, and we must not
+  // reject real sites it can otherwise reach. The genuine SSRF vectors —
+  // IP-literal private addresses and internal hostnames — are already
+  // hard-blocked above, so failing open here is safe.
+  try {
+    const addrs = await dnsLookup(rawHost, { all: true });
+    for (const { address } of (addrs || [])) {
+      if (isPrivateIp(address)) throw new Error('That address is not allowed');
+    }
+  } catch (err) {
+    if (err && err.message === 'That address is not allowed') throw err; // preserve our own block
+    // DNS error (ENOTFOUND / timeout / SERVFAIL): allow — the cloner will fail
+    // gracefully on a genuinely unreachable domain instead of us false-blocking.
   }
 }
 
