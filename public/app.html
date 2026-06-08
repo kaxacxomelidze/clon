@@ -4315,9 +4315,10 @@ function clearTimer() { if (timerInterval) { clearInterval(timerInterval); timer
 
 // ── Open editor ───────────────────────────────────────────────────────────────
 function openEditor() {
-  // Free users CAN open the editor (view + edit in-browser).
-  // Paywall is enforced separately on actions that take the work outside
-  // the browser (Export ZIP, Push to GitHub, Share, Copy Commands).
+  // Free users CAN open the editor and VIEW their clone (so they see it works).
+  // Editing is paid: the moment they try to interact with an element (select,
+  // move, edit text, themes, blocks) the upgrade popup appears — see
+  // requireEditAccess() gates. Export/GitHub/Share/Save are gated too.
   switchTab('editor');
 }
 
@@ -7565,7 +7566,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-06-03g';
+  var BUILD = '2026-06-09a';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
