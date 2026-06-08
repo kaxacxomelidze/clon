@@ -2018,7 +2018,13 @@ async function assertPublicTarget(parsedUrl) {
   // IP-literal private addresses and internal hostnames — are already
   // hard-blocked above, so failing open here is safe.
   try {
-    const addrs = await dnsLookup(rawHost, { all: true });
+    // Cap the lookup at 2.5s — dns/promises lookup has no built-in timeout, and
+    // a slow/hung resolver on serverless would otherwise stall (and time out)
+    // the whole clone request. On timeout we fail open (resolve null).
+    const addrs = await Promise.race([
+      dnsLookup(rawHost, { all: true }),
+      new Promise((r) => setTimeout(() => r(null), 2500)),
+    ]);
     for (const { address } of (addrs || [])) {
       if (isPrivateIp(address)) throw new Error('That address is not allowed');
     }
@@ -2580,7 +2586,18 @@ async function handleRequest(req, res) {
       let target;
       try { target = normalizeTargetUrl(parsed.url); } catch (err) { return json(res, { error: err.message || 'Invalid URL' }, 400); }
       // SSRF guard: reject private/internal/metadata targets before cloning.
-      try { await assertPublicTarget(target); } catch (err) { return json(res, { error: err.message || 'That address is not allowed' }, 400); }
+      // Only the explicit "not allowed" decision blocks a clone — any other
+      // (transient/internal) error in the guard must NOT fail an otherwise-valid
+      // clone, so legitimate sites never get blocked by a guard hiccup.
+      try {
+        await assertPublicTarget(target);
+      } catch (err) {
+        if (err && err.message === 'That address is not allowed') {
+          return json(res, { error: 'That address is not allowed (private or internal hosts cannot be cloned).' }, 400);
+        }
+        // unexpected guard error — log and continue; the cloner will handle a bad URL.
+        console.warn('[ssrf-guard] non-blocking error for', target.href, '-', err?.message || err);
+      }
       const targetUrl = target.href;
       const { depth = '3', ignoreRobots = false } = parsed;
       let { maxPages = '20' } = parsed;

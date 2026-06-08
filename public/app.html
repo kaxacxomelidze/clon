@@ -4249,6 +4249,23 @@ function updateJobView(job) {
       emitNarratorLine('❌ Clone failed — see error log below for details', 'err');
       stopNarrator();
     }
+    // Surface the actual failure reason instead of generic text, so the user
+    // (and support) can see WHY it failed at a glance.
+    try {
+      const logs = Array.isArray(job.logs) ? job.logs : [];
+      const isReason = l => /\[ERROR\]|\[SKIP\]|HTTP \d|ENOSPC|timeout|robots|not allowed|0 pages|could not/i.test(l);
+      // Prefer a specific cause over the generic "exited with code" wrapper line.
+      const isGeneric = l => /exited with code|clone process|process failed/i.test(l);
+      const rev = [...logs].reverse();
+      const reasonLine = rev.find(l => isReason(l) && !isGeneric(l)) || rev.find(isReason);
+      const subEl = document.querySelector('#errorCard .error-card-sub');
+      if (subEl) {
+        const reason = reasonLine ? reasonLine.replace(/^\s*\[(ERROR|WARN)\]\s*/i, '').trim().slice(0, 220) : '';
+        subEl.textContent = reason
+          ? `Reason: ${reason}`
+          : 'Check the log output above for details. Common causes: the site blocked the crawler, a network timeout, or an invalid URL.';
+      }
+    } catch {}
     if (errorCard) errorCard.className = 'error-card show';
     document.getElementById('doneCard').className = 'done-card';
   } else if (job.status === 'running' || job.status === 'saving') {
@@ -7548,7 +7565,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-06-03f';
+  var BUILD = '2026-06-03g';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
