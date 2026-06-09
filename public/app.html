@@ -3401,7 +3401,32 @@ async function createShareLink() {
 function copyShareLink() {
   const inp = document.getElementById('shareLinkInp');
   if (!inp?.value) { toast('No link to copy', 'err'); return; }
-  navigator.clipboard.writeText(inp.value).then(() => toast('Link copied!', 'ok'));
+  copyTextRobust(inp.value, inp);
+}
+// Clipboard copy that works on HTTPS, falls back to execCommand on insecure
+// contexts/webviews, and always selects the field so the user can copy manually
+// if both fail. Never throws — older code crashed when navigator.clipboard was
+// undefined (non-secure context), leaving the button silently dead.
+function copyTextRobust(text, inputEl) {
+  const done = () => toast('Link copied!', 'ok');
+  const manual = () => {
+    try { if (inputEl) { inputEl.focus(); inputEl.select(); inputEl.setSelectionRange(0, text.length); } } catch {}
+    toast('Press Ctrl/Cmd+C to copy the selected link', 'err');
+  };
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(() => { if (!legacyCopy(text, inputEl)) manual(); });
+      return;
+    }
+  } catch {}
+  if (legacyCopy(text, inputEl)) done(); else manual();
+}
+function legacyCopy(text, inputEl) {
+  try {
+    if (inputEl) { inputEl.focus(); inputEl.select(); inputEl.setSelectionRange(0, text.length); }
+    const ok = document.execCommand && document.execCommand('copy');
+    return !!ok;
+  } catch { return false; }
 }
 
 // ── Clone presets ─────────────────────────────────────────────────────────────
@@ -4482,7 +4507,7 @@ function openOutputFolder() {
 function copyCmd() {
   if (!requirePaid('Copy Commands')) return;
   const cmd = document.getElementById('doneCmd').textContent;
-  navigator.clipboard.writeText(cmd).then(() => toast('Copied!', 'ok'));
+  copyTextRobust(cmd);
 }
 function healthClass(value) { return value === 0 ? 'ok' : value < 5 ? 'warn' : 'err'; }
 function renderHealth(job) {
@@ -5927,7 +5952,7 @@ document.getElementById('act-copy-css').addEventListener('click', () => {
     const cs = iframeGCS(edSelEl);
     const props = ['color','background-color','font-size','font-weight','padding','margin','border-radius','box-shadow','opacity','display','width','height'];
     const css = props.map(p => `${p}: ${cs.getPropertyValue(p)};`).join('\n');
-    navigator.clipboard.writeText(css).then(() => toast('Computed style copied', 'ok'));
+    copyTextRobust(css);
   } catch { toast('Could not copy style', 'err'); }
 });
 
@@ -7566,7 +7591,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-06-09a';
+  var BUILD = '2026-06-09b';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
