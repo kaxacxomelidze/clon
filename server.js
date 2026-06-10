@@ -4551,7 +4551,13 @@ async function handler(req, res) {
     await ensureInit();
     return await handleRequest(req, res);
   } catch (err) {
-    console.error('[REQUEST ERROR]', err?.message || err, err?.stack || '');
+    // Client-input errors thrown by body readers should be 4xx, not 500 —
+    // a malformed JSON body or oversized payload is the caller's fault and
+    // shouldn't look like a server outage in logs or to the UI.
+    const msg = err?.message || '';
+    if (!res.headersSent && msg === 'bad json') return json(res, { error: 'Invalid JSON in request body' }, 400);
+    if (!res.headersSent && (msg === 'request too large' || msg === 'too large')) return json(res, { error: 'Request body too large' }, 413);
+    console.error('[REQUEST ERROR]', msg || err, err?.stack || '');
     if (!res.headersSent) {
       return json(res, { error: 'Internal server error' }, 500);
     }
