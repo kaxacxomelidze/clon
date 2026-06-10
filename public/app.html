@@ -3965,6 +3965,7 @@ function showCloneLoader(url) {
     i++;
   };
   tick();
+  if (ldr._iv) clearInterval(ldr._iv); // don't stack tickers on rapid re-show
   ldr._iv = setInterval(tick, 1400);
 }
 function hideCloneLoader() {
@@ -7591,7 +7592,7 @@ body { height: auto !important; min-height: 100vh !important; overflow-x: hidden
       caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
     }
   } catch (e) {}
-  var BUILD = '2026-06-09b';
+  var BUILD = '2026-06-10a';
   window.__CLONYFY_BUILD__ = BUILD;
   try { console.log('[clonyfy] build ' + BUILD); } catch (e) {}
 
