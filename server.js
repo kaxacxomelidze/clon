@@ -1693,7 +1693,7 @@ function invalidateOutputsCache() { _outputsCache = null; }
 
 function sharePasswordFormHtml(shareId, error, actionPath) {
   const formAction = actionPath && actionPath.startsWith(`/share/${shareId}`) ? actionPath : `/share/${shareId}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Protected Preview</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#07071a;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;color:#e8e8ff}.card{background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:40px 36px;width:min(400px,92vw)}.logo{width:150px;height:auto;display:block;margin-bottom:28px}.kicker{font-size:11px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}h2{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.4px}p{margin:0 0 24px;color:rgba(255,255,255,.3);font-size:13px}.err{color:#e05070;font-size:12px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.15);border-radius:8px;padding:10px 14px;margin-bottom:14px}input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e8e8ff;font-size:14px;padding:12px 16px;outline:none;font-family:inherit;margin-bottom:14px}input:focus{border-color:rgba(91,141,239,.45)}button{width:100%;padding:13px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}</style></head><body><div class="card"><img class="logo" src="/brand-wordmark.svg" alt="CLONYFY"><div class="kicker">Protected preview</div><h2>Password required</h2><p>This preview is password protected.</p>${error ? `<div class="err">${htmlEsc(error)}</div>` : ''}<form method="post" action="${htmlEsc(formAction)}"><input type="password" name="pw" placeholder="Enter password" autofocus required><button type="submit">View Preview</button></form></div></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Protected Preview</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#07071a;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;color:#e8e8ff}.card{background:#0c0c1c;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:40px 36px;width:min(400px,92vw)}.logo{width:150px;height:auto;display:block;margin-bottom:28px}.kicker{font-size:11px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}h2{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.4px}p{margin:0 0 24px;color:rgba(255,255,255,.3);font-size:13px}.err{color:#e05070;font-size:12px;background:rgba(255,69,96,.07);border:1px solid rgba(255,69,96,.15);border-radius:8px;padding:10px 14px;margin-bottom:14px}input{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#e8e8ff;font-size:14px;padding:12px 16px;outline:none;font-family:inherit;margin-bottom:14px}input:focus{border-color:rgba(91,141,239,.45)}button{width:100%;padding:13px;background:linear-gradient(135deg,#5b8def,#a855f7);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}</style></head><body><div class="card"><img class="logo" src="/clonyfy-logo.png" alt="CLONYFY"><div class="kicker">Protected preview</div><h2>Password required</h2><p>This preview is password protected.</p>${error ? `<div class="err">${htmlEsc(error)}</div>` : ''}<form method="post" action="${htmlEsc(formAction)}"><input type="password" name="pw" placeholder="Enter password" autofocus required><button type="submit">View Preview</button></form></div></body></html>`;
 }
 
 function userPublic(u) {
@@ -2091,6 +2091,15 @@ function contentSecurityPolicyForPath(pathname) {
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
+      // Shared previews execute ARBITRARY captured JavaScript from cloned
+      // sites. Without sandbox they run on the clonyfy origin and can read
+      // the logged-in viewer's localStorage auth token or make credentialed
+      // API calls. `sandbox` (no allow-same-origin) gives the document an
+      // opaque origin: scripts/forms/links still work, storage and
+      // same-origin credentials do not. Only for top-level /share/ pages —
+      // /api/page runs inside the app's own preview iframe, whose access the
+      // editor requires.
+      ...(pathname.startsWith('/share/') ? ['sandbox allow-scripts allow-forms allow-popups allow-modals'] : []),
     ].join('; ');
   }
   return [
@@ -2129,6 +2138,11 @@ async function handleRequest(req, res) {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // HSTS only when the request actually arrived over HTTPS (Vercel terminates
+  // TLS and sets x-forwarded-proto) — never on plain-HTTP local dev.
+  if (req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   res.setHeader('Content-Security-Policy', contentSecurityPolicyForPath(url.pathname));
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -3140,8 +3154,10 @@ async function handleRequest(req, res) {
       const pwAction = url.pathname + (url.search || '');
       if (!pw) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, undefined, pwAction)); return; }
       if (!checkRateLimit(`share_pw:${ip}:${shareId}`, 10, 300000)) { res.writeHead(429, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Too many attempts. Try again in 5 minutes.', pwAction)); return; }
-      const hash = createHash('sha256').update(share.salt + pw + SHARE_PASSWORD_PEPPER).digest('hex');
-      if (hash !== share.password_hash) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.', pwAction)); return; }
+      const hash = createHash('sha256').update(share.salt + pw + SHARE_PASSWORD_PEPPER).digest();
+      const expected = Buffer.from(String(share.password_hash || ''), 'hex');
+      const pwOk = hash.length === expected.length && timingSafeEqual(hash, expected);
+      if (!pwOk) { res.writeHead(200, {'Content-Type':'text/html'}); res.end(sharePasswordFormHtml(shareId, 'Wrong password, try again.', pwAction)); return; }
     }
     const map = await loadRouteMapAsync(share.out_dir) || await inferRouteMapFromCapturedPages(share.out_dir);
     if (!map) { res.writeHead(404); res.end('Clone no longer exists'); return; }
@@ -3170,7 +3186,9 @@ async function handleRequest(req, res) {
     if (!checkRateLimit(`admin_login:${ip}`, 5, 300000)) return json(res, { error: 'Too many attempts. Try again in 5 minutes.' }, 429);
     const { password } = await readJsonBody(req);
     if (!ADMIN_PASSWORD) return json(res, { error: 'Admin login is disabled because ADMIN_PASSWORD is missing on this server. Add it in your hosting environment variables, then redeploy/restart.' }, 503);
-    if (!password || password !== ADMIN_PASSWORD) return json(res, { error: 'Wrong password' }, 401);
+    const pwBuf = createHash('sha256').update(String(password || '')).digest();
+    const adminBuf = createHash('sha256').update(ADMIN_PASSWORD).digest();
+    if (!password || !timingSafeEqual(pwBuf, adminBuf)) return json(res, { error: 'Wrong password' }, 401);
     const token = createAdminToken();
     return json(res, { token });
   }
