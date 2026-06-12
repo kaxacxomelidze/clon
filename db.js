@@ -48,7 +48,10 @@ export const getAllUsers = () =>
 
 export const getUsersPage = async ({ search = '', plan = '', blocked = null, limit = 50, offset = 0 } = {}) => {
   let query = supabase.from('users').select('*', { count: 'exact' }).order('created_at', { ascending: false });
-  if (search) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+  // PostgREST .or() parses commas/parens as filter syntax — strip them so a
+  // search like "Smith, John" can't break (or inject into) the filter string.
+  const safeSearch = String(search).replace(/[,()]/g, ' ').trim();
+  if (safeSearch) query = query.or(`name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%`);
   const planAliases = { growth: ['growth', 'pro'], unlimited: ['unlimited', 'enterprise'] };
   if (plan) {
     const plans = planAliases[plan] || [plan];
@@ -256,7 +259,8 @@ export const insertPayment = async (p) => {
 };
 
 export const updatePayment = async ({ id, status, processedAt, reason }) => {
-  await supabase.from('payments').update({ status, processed_at: processedAt, reason }).eq('id', id);
+  const { error } = await supabase.from('payments').update({ status, processed_at: processedAt, reason }).eq('id', id);
+  if (error) throw new Error(error.message); // silent failure left payments stuck "pending" after admin confirmed them
 };
 
 export const getPendingPaymentByUserPlan = (userId, plan, status) =>
@@ -372,11 +376,14 @@ export const getShare = (id) =>
   one(supabase.from('shares').select('*').eq('id', id));
 
 export const insertShare = async (s) => {
-  await supabase.from('shares').insert({
+  const { error } = await supabase.from('shares').insert({
     id: s.id, out_dir: s.outDir, route: s.route,
     created_at: s.createdAt, password_hash: s.passwordHash,
     salt: s.salt, expires_at: s.expiresAt ?? null,
   });
+  // Must throw: if this silently fails, /api/share/create hands the user a
+  // share URL that 404s for everyone they send it to.
+  if (error) throw new Error(error.message);
 };
 
 export const deleteShare = async (id) => {
@@ -392,11 +399,12 @@ export const getPromoCode = (code) =>
   one(supabase.from('promo_codes').select('*').eq('code', code));
 
 export const insertPromoCode = async (c) => {
-  await supabase.from('promo_codes').insert({
+  const { error } = await supabase.from('promo_codes').insert({
     code: c.code, discount_percent: c.discountPercent, description: c.description,
     max_uses: c.maxUses, used_count: 0, plans: c.plans,
     valid_until: c.validUntil, created_at: c.createdAt,
   });
+  if (error) throw new Error(error.message); // admin saw "created" even when the code was never saved
 };
 
 export const incrementPromoUsed = async (code) => {

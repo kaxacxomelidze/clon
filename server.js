@@ -3103,7 +3103,14 @@ async function handleRequest(req, res) {
       passwordHash = createHash('sha256').update(salt + password + SHARE_PASSWORD_PEPPER).digest('hex');
     }
     const expiresAt = expiresInDays ? Date.now() + Number(expiresInDays) * 86400000 : null;
-    await insertShare({ id: shareId, outDir, route: route || '/', createdAt: new Date().toISOString(), passwordHash, salt, expiresAt });
+    try {
+      await insertShare({ id: shareId, outDir, route: route || '/', createdAt: new Date().toISOString(), passwordHash, salt, expiresAt });
+    } catch (err) {
+      // Don't hand out a URL that was never persisted — it would 404 for
+      // everyone the user sends it to.
+      console.error('[share] insert failed:', err?.message || err);
+      return json(res, { error: 'Could not save the share link. Please try again in a moment.' }, 500);
+    }
     const _appUrl = publicAppUrl(req);
     return json(res, { shareId, url: `${_appUrl}/share/${shareId}` });
   }
@@ -4327,6 +4334,11 @@ async function handleRequest(req, res) {
     } catch (err) {
       console.error('[Stripe webhook handler]', err.message);
       try { await insertError({ id: randomUUID(), userId: null, userName: 'stripe-webhook', url: '/api/stripe/webhook', errorSummary: 'Webhook handler error: ' + err.message, logs: '[]', startedAt: new Date().toISOString(), failedAt: new Date().toISOString() }); await pruneErrors(); } catch {}
+      // 500 so Stripe RETRIES the event. Returning 200 here meant a transient
+      // DB failure during checkout.session.completed left a paying customer
+      // without their plan, permanently — Stripe never resends acked events.
+      res.writeHead(500); res.end('handler error');
+      return;
     }
 
     res.writeHead(200); res.end('ok');
