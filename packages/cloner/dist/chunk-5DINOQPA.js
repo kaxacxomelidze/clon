@@ -1024,6 +1024,7 @@ var ROUTE_FETCH_TIMEOUT = IS_SERVERLESS ? 5e3 : 15e3;
 var USER_AGENT2 = "CLONYFY/0.1 (+local archival)";
 var MAX_ASSET_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024;
 var MAX_CSS_BYTES = (IS_SERVERLESS ? 5 : 25) * 1024 * 1024;
+var CSS_REF_SCAN_MAX_BYTES = 4 * 1024 * 1024;
 var TRANSPARENT_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax3p9QAAAAASUVORK5CYII=",
   "base64"
@@ -1050,6 +1051,7 @@ function isImageLikeRequest(url, resourceType) {
     return false;
   }
 }
+var IMAGE_SET_RE = /(-webkit-)?image-set\(((?:[^()]|\([^()]*\))*)\)/gi;
 function extractCssUrls(css) {
   const urls = [];
   const re = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g;
@@ -1062,7 +1064,16 @@ function extractCssUrls(css) {
   while ((m = importRe.exec(css)) !== null) {
     if (!shouldSkipAsset(m[1])) urls.push(m[1]);
   }
-  return urls;
+  while ((m = IMAGE_SET_RE.exec(css)) !== null) {
+    const inner = m[2];
+    const strRe = /(['"])([^'"]+)\1/g;
+    let sm;
+    while ((sm = strRe.exec(inner)) !== null) {
+      const u = sm[2];
+      if (u.includes("/") && !u.startsWith("image/") && !shouldSkipAsset(u)) urls.push(u);
+    }
+  }
+  return [...new Set(urls)];
 }
 function mapAssetUrl(url, assetMap, baseUrl) {
   const clean = url.split("?")[0].split("#")[0];
@@ -1085,6 +1096,13 @@ function rewriteCssUrls(css, assetMap, baseUrl) {
     const url = quotedUrl || bareUrl;
     const mapped = mapAssetUrl(url, assetMap, baseUrl);
     return mapped ? match.replace(url, mapped) : match;
+  }).replace(IMAGE_SET_RE, (match, prefix, inner) => {
+    const newInner = inner.replace(/(['"])([^'"]+)\1/g, (m, q, url) => {
+      if (!url.includes("/") || url.startsWith("image/")) return m;
+      const mapped = mapAssetUrl(url, assetMap, baseUrl);
+      return mapped ? `${q}${mapped}${q}` : m;
+    });
+    return `${prefix || ""}image-set(${newInner})`;
   });
 }
 async function capturePage(context, pageUrl, assetsDir) {
@@ -1204,7 +1222,7 @@ async function capturePage(context, pageUrl, assetsDir) {
             logger.debug(`  [CSS REF SKIP] ${absUrl}`);
             return;
           }
-          if (isCssRef && subBuf.length < 5e5) {
+          if (isCssRef && subBuf.length < CSS_REF_SCAN_MAX_BYTES) {
             enqueueCssReferences(subBuf.toString("utf8"), absUrl);
           }
         } catch (err) {
@@ -1323,7 +1341,7 @@ async function capturePage(context, pageUrl, assetsDir) {
           return;
         }
         const webPath = await saveAsset(url, buf, contentType, isCss);
-        if (webPath && isCss && buf.length < 5e5) {
+        if (webPath && isCss && buf.length < CSS_REF_SCAN_MAX_BYTES) {
           enqueueCssReferences(buf.toString("utf8"), url);
         }
       } catch (err) {
@@ -1588,6 +1606,38 @@ async function capturePage(context, pageUrl, assetsDir) {
         logger.debug(`  [TWO-PASS WARN] ${msg}`);
       }
     }
+    await page.evaluate(() => {
+      const isPlaceholder = (src) => {
+        if (!src) return true;
+        const s = src.trim();
+        if (!s) return true;
+        if (s.startsWith("data:")) return true;
+        return /(?:^|[/_-])(?:placeholder|blank|spacer|lazy|loading|transparent|pixel|1x1|grey|gray)\b/i.test(s);
+      };
+      const firstAttr = (el, names) => {
+        for (const n of names) {
+          const v = el.getAttribute(n);
+          if (v && v.trim() && !v.trim().startsWith("#")) return v.trim();
+        }
+        return null;
+      };
+      document.querySelectorAll("img,source").forEach((el) => {
+        const realSrc = firstAttr(el, ["data-src", "data-lazy-src", "data-original", "data-url"]);
+        if (realSrc && isPlaceholder(el.getAttribute("src"))) el.setAttribute("src", realSrc);
+        const realSrcset = firstAttr(el, ["data-srcset", "data-lazy-srcset"]);
+        if (realSrcset && !el.getAttribute("srcset")) el.setAttribute("srcset", realSrcset);
+        if (el.getAttribute("loading") === "lazy") el.setAttribute("loading", "eager");
+      });
+      document.querySelectorAll("[data-bg],[data-background],[data-bg-image],[data-image],[data-lazy-background]").forEach((el) => {
+        const bg = firstAttr(el, ["data-bg", "data-background", "data-bg-image", "data-image", "data-lazy-background"]);
+        const style = el.getAttribute("style") || "";
+        if (bg && !/background(-image)?\s*:/i.test(style)) {
+          el.setAttribute("style", `${style}${style && !style.trim().endsWith(";") ? ";" : ""}background-image:url("${bg}")`);
+        }
+      });
+    }).catch((err) => {
+      logger.debug(`  [LAZY PROMOTE WARN] ${err.message}`);
+    });
     const html = await page.content();
     const origin = new URL(pageUrl).origin;
     const rawLinks = await page.evaluate((origin2) => {
@@ -10342,6 +10392,12 @@ function rewriteAttrValue(name, value, assetMap, baseUrl) {
     return value.replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, url) => {
       const rewritten = rewriteUrl(url, assetMap, baseUrl);
       return `url(${quote}${rewritten}${quote})`;
+    }).replace(/(-webkit-)?image-set\(((?:[^()]|\([^()]*\))*)\)/gi, (match, prefix, inner) => {
+      const newInner = inner.replace(/(['"])([^'"]+)\1/g, (m, q, url) => {
+        if (!url.includes("/") || url.startsWith("image/")) return m;
+        return `${q}${rewriteUrl(url, assetMap, baseUrl)}${q}`;
+      });
+      return `${prefix || ""}image-set(${newInner})`;
     });
   }
   return rewriteUrl(value, assetMap, baseUrl);
@@ -10969,4 +11025,4 @@ export {
   logger,
   runClone
 };
-//# sourceMappingURL=chunk-FUKNKPW3.js.map
+//# sourceMappingURL=chunk-5DINOQPA.js.map
