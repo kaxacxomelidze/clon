@@ -130,6 +130,11 @@ const ROUTE_FETCH_TIMEOUT = IS_SERVERLESS ? 5_000 : 15_000;
 const USER_AGENT = 'CLONYFY/0.1 (+local archival)';
 const MAX_ASSET_BYTES = (IS_SERVERLESS ? 8 : 50) * 1024 * 1024; // Keep serverless clones inside Vercel limits.
 const MAX_CSS_BYTES = (IS_SERVERLESS ? 5 : 25) * 1024 * 1024; // CSS bundles can be larger than media icons/fonts.
+// Upper bound on CSS we scan for url()/image-set()/@import references. The old
+// 500KB limit silently skipped ref-extraction for big bundles (Tailwind/CMS CSS
+// routinely exceeds it), so fonts and background images they referenced never
+// downloaded. 4MB covers virtually all real stylesheets while bounding regex cost.
+const CSS_REF_SCAN_MAX_BYTES = 4 * 1024 * 1024;
 const TRANSPARENT_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax3p9QAAAAASUVORK5CYII=',
   'base64',
@@ -169,6 +174,11 @@ function isImageLikeRequest(url: string, resourceType: string): boolean {
   }
 }
 
+// Matches an image-set()/-webkit-image-set() call, capturing its inner args.
+// Tolerates one level of nested parens so url(...) and type(...) inside don't
+// truncate the match.
+const IMAGE_SET_RE = /(-webkit-)?image-set\(((?:[^()]|\([^()]*\))*)\)/gi;
+
 // Extract url() references from CSS text
 export function extractCssUrls(css: string): string[] {
   const urls: string[] = [];
@@ -183,7 +193,20 @@ export function extractCssUrls(css: string): string[] {
   while ((m = importRe.exec(css)) !== null) {
     if (!shouldSkipAsset(m[1])) urls.push(m[1]);
   }
-  return urls;
+  // image-set() bare-string candidates: image-set('a.webp' 1x, 'b.webp' 2x).
+  // The url() forms inside image-set are already captured by the url() pass
+  // above; this picks up the string-only syntax that pass misses. Skip strings
+  // that are type() hints (e.g. 'image/avif').
+  while ((m = IMAGE_SET_RE.exec(css)) !== null) {
+    const inner = m[2];
+    const strRe = /(['"])([^'"]+)\1/g;
+    let sm: RegExpExecArray | null;
+    while ((sm = strRe.exec(inner)) !== null) {
+      const u = sm[2];
+      if (u.includes('/') && !u.startsWith('image/') && !shouldSkipAsset(u)) urls.push(u);
+    }
+  }
+  return [...new Set(urls)];
 }
 
 // Rewrite url() references in CSS text
@@ -210,6 +233,16 @@ export function rewriteCssUrls(css: string, assetMap: Map<string, string>, baseU
     const url = quotedUrl || bareUrl;
     const mapped = mapAssetUrl(url, assetMap, baseUrl);
     return mapped ? match.replace(url, mapped) : match;
+  }).replace(IMAGE_SET_RE, (match, prefix, inner) => {
+    // Rewrite bare-string image-set URLs. url() forms inside were already
+    // localized by the url() pass above (mapAssetUrl returns null for an
+    // already-local path, so they pass through unchanged here).
+    const newInner = inner.replace(/(['"])([^'"]+)\1/g, (m: string, q: string, url: string) => {
+      if (!url.includes('/') || url.startsWith('image/')) return m;
+      const mapped = mapAssetUrl(url, assetMap, baseUrl);
+      return mapped ? `${q}${mapped}${q}` : m;
+    });
+    return `${prefix || ''}image-set(${newInner})`;
   });
 }
 
@@ -356,7 +389,7 @@ export async function capturePage(
             return;
           }
 
-          if (isCssRef && subBuf.length < 500_000) {
+          if (isCssRef && subBuf.length < CSS_REF_SCAN_MAX_BYTES) {
             enqueueCssReferences(subBuf.toString('utf8'), absUrl);
           }
         } catch (err) {
@@ -500,7 +533,7 @@ export async function capturePage(
         }
         const webPath = await saveAsset(url, buf, contentType, isCss);
 
-        if (webPath && isCss && buf.length < 500_000) {
+        if (webPath && isCss && buf.length < CSS_REF_SCAN_MAX_BYTES) {
           enqueueCssReferences(buf.toString('utf8'), url);
         }
 
@@ -795,6 +828,48 @@ export async function capturePage(
       logger.debug(`  [TWO-PASS WARN] ${msg}`);
     }
   }
+
+  // Promote lazy-load attributes to real src/srcset BEFORE snapshotting. Many
+  // lazy-loaders only swap data-src->src via IntersectionObserver, which never
+  // fires for below-fold images in a static snapshot — so the real image (which
+  // we DID download) would render blank. Only promote when the current src is
+  // missing or an obvious placeholder, so already-loaded images keep their value.
+  await page.evaluate(() => {
+    const isPlaceholder = (src: string | null): boolean => {
+      if (!src) return true;
+      const s = src.trim();
+      if (!s) return true;
+      if (s.startsWith('data:')) return true; // inline 1x1 / blur placeholder
+      return /(?:^|[/_-])(?:placeholder|blank|spacer|lazy|loading|transparent|pixel|1x1|grey|gray)\b/i.test(s);
+    };
+    const firstAttr = (el: Element, names: string[]): string | null => {
+      for (const n of names) {
+        const v = el.getAttribute(n);
+        if (v && v.trim() && !v.trim().startsWith('#')) return v.trim();
+      }
+      return null;
+    };
+    document.querySelectorAll('img,source').forEach((el) => {
+      const realSrc = firstAttr(el, ['data-src', 'data-lazy-src', 'data-original', 'data-url']);
+      if (realSrc && isPlaceholder(el.getAttribute('src'))) el.setAttribute('src', realSrc);
+      const realSrcset = firstAttr(el, ['data-srcset', 'data-lazy-srcset']);
+      if (realSrcset && !el.getAttribute('srcset')) el.setAttribute('srcset', realSrcset);
+      // loading="lazy" + decoding can leave native-lazy images unrendered in a
+      // static snapshot; make them eager so the clone paints everything.
+      if (el.getAttribute('loading') === 'lazy') el.setAttribute('loading', 'eager');
+    });
+    // data-bg / data-background -> inline background-image for elements whose
+    // background was meant to be injected by a lazy script.
+    document.querySelectorAll('[data-bg],[data-background],[data-bg-image],[data-image],[data-lazy-background]').forEach((el) => {
+      const bg = firstAttr(el, ['data-bg', 'data-background', 'data-bg-image', 'data-image', 'data-lazy-background']);
+      const style = el.getAttribute('style') || '';
+      if (bg && !/background(-image)?\s*:/i.test(style)) {
+        el.setAttribute('style', `${style}${style && !style.trim().endsWith(';') ? ';' : ''}background-image:url("${bg}")`);
+      }
+    });
+  }).catch((err) => {
+    logger.debug(`  [LAZY PROMOTE WARN] ${(err as Error).message}`);
+  });
 
   const html = await page.content();
 

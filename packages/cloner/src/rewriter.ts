@@ -116,10 +116,19 @@ function rewriteAttrValue(
   }
 
   if (name === 'style') {
-    return value.replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, url) => {
-      const rewritten = rewriteUrl(url, assetMap, baseUrl);
-      return `url(${quote}${rewritten}${quote})`;
-    });
+    return value
+      .replace(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/g, (match, quote, url) => {
+        const rewritten = rewriteUrl(url, assetMap, baseUrl);
+        return `url(${quote}${rewritten}${quote})`;
+      })
+      // Inline image-set() bare strings (url() forms handled above).
+      .replace(/(-webkit-)?image-set\(((?:[^()]|\([^()]*\))*)\)/gi, (match, prefix, inner) => {
+        const newInner = inner.replace(/(['"])([^'"]+)\1/g, (m: string, q: string, url: string) => {
+          if (!url.includes('/') || url.startsWith('image/')) return m;
+          return `${q}${rewriteUrl(url, assetMap, baseUrl)}${q}`;
+        });
+        return `${prefix || ''}image-set(${newInner})`;
+      });
   }
 
   return rewriteUrl(value, assetMap, baseUrl);
