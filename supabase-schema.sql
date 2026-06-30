@@ -139,6 +139,18 @@ CREATE TABLE IF NOT EXISTS contact_submissions (
   read_at TEXT
 );
 
+-- Indexes for the queries the app actually runs (lookups + the hourly
+-- session/audit cleanup sweeps, which would otherwise full-scan as the
+-- tables grow).
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_clones_user_id ON clones(user_id);
+CREATE INDEX IF NOT EXISTS idx_clones_out_dir ON clones(out_dir);
+CREATE INDEX IF NOT EXISTS idx_clones_started_at ON clones(started_at);
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_errors_failed_at ON errors(failed_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+
 -- Disable RLS for all tables (service role key bypasses anyway, but this keeps it clean)
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions DISABLE ROW LEVEL SECURITY;
