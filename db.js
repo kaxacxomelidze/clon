@@ -464,6 +464,21 @@ export const getAuditLog = async (limit, offset) => {
   return data || [];
 };
 
+// Unlike errors (pruned to 2000 on every insert) and sessions (pruned hourly),
+// audit_log had no cap at all — it logs every login/clone/admin action
+// forever, which is the most likely cause of an unbounded-growth Supabase
+// storage warning on a long-running install. Called on the same hourly timer
+// as session cleanup. Keeps the most recent 5000 rows.
+export const pruneAuditLog = async () => {
+  const { data } = await supabase.from('audit_log')
+    .select('id')
+    .order('id', { ascending: false })
+    .range(5000, 999999);
+  if (data && data.length > 0) {
+    await supabase.from('audit_log').delete().in('id', data.map(r => r.id));
+  }
+};
+
 export const getAuditCount = async () => {
   const { count } = await supabase.from('audit_log').select('*', { count: 'exact', head: true });
   return { c: count || 0 };
@@ -598,5 +613,9 @@ export async function audit(userId, userName, action, details, ip) {
       action, details: details || null, ip: ip || null,
       createdAt: new Date().toISOString(),
     });
+    // On serverless, the hourly setInterval prune may never fire (each
+    // invocation is short-lived). Piggyback an occasional prune here instead
+    // of doing it on every insert, so the table still self-bounds.
+    if (Math.random() < 0.01) pruneAuditLog().catch(() => {});
   } catch {}
 }

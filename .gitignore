@@ -12,3 +12,5 @@ browsers/
 .admin-sessions.json
 
 .vercel
+.next/
+/out/
