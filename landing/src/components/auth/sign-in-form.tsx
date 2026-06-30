@@ -91,13 +91,13 @@ export function SignInForm() {
             type="email"
             placeholder="you@company.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
             required
             autoComplete="email"
             className="w-full h-11 rounded-xl px-4 text-sm text-white placeholder-white/20 outline-none transition-all"
             style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)")}
+            onFocus={(e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)")}
+            onBlur={(e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)")}
           />
         </div>
 
@@ -119,17 +119,17 @@ export function SignInForm() {
               type={showPassword ? "text" : "password"}
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
               className="w-full h-11 rounded-xl px-4 pr-11 text-sm text-white placeholder-white/20 outline-none transition-all"
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)")}
+              onFocus={(e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.25)")}
+              onBlur={(e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.09)")}
             />
             <button
               type="button"
-              onClick={() => setShowPassword((v) => !v)}
+              onClick={() => setShowPassword((v: boolean) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
             >
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
