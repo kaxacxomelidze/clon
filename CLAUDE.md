@@ -75,6 +75,7 @@ This is an npm workspaces monorepo (`node 22.x`, ESM throughout):
 ├── server.js          # Main web UI + API backend (2,700+ LOC, vanilla JS)
 ├── db.js              # Supabase data-access layer (all DB calls go here)
 ├── templates/emails/  # 12 Handlebars email templates
+├── landing/           # Marketing landing page SOURCE (separate Next.js project, own package.json)
 └── packages/
     ├── cloner/        # CLI tool (TypeScript)
     │   ├── src/       # Pipeline source
@@ -82,6 +83,12 @@ This is an npm workspaces monorepo (`node 22.x`, ESM throughout):
     │   └── dist/      # Build output (gitignored)
     └── runtime/       # replay.js — copied verbatim into generated apps
 ```
+
+### `landing/` — marketing site source (not deployed itself)
+
+`landing/` is a self-contained Next.js project (own `package.json`, `next.config.ts`, `tsconfig.json`) used **only at dev time** to regenerate the marketing page. Run `npm run landing:build` from the repo root, then copy `landing/out/index.html` into `public/landing.html` — that static file is what `server.js` actually serves at `/`.
+
+**Keep all Next.js/React-specific files (`next.config.ts`, `tsconfig.json` with the `next` TS plugin, `components.json`, etc.) inside `landing/`, never at the repo root.** If they land at the root, Vercel's framework auto-detection on a fresh project import will assume the whole repo is a Next.js app and try to build/serve `landing/`'s source directly instead of running `server.js` — this happened once (see git history around the `fix/move-landing-source-out-of-root` branch) and produced raw RSC payload text instead of the real site on every fresh Vercel project, even though `vercel.json`'s `rewrites`/`functions` were correct.
 
 ### Two separate servers
 
